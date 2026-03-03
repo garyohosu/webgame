@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1, user-scalable=no" />
+  <title>タイトル</title>
+  <style>
+    :root { --pad: 16px; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.5;
+      touch-action: manipulation;
+      overflow: hidden;
+    }
+    .wrap { height: 100svh; display: flex; flex-direction: column; padding: var(--pad); gap: 12px; box-sizing: border-box; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    h1 { font-size: 20px; margin: 0; }
+    a { text-decoration: none; }
+    .hud { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pill { border: 1px solid #ddd; border-radius: 999px; padding: 6px 10px; font-size: 14px; }
+    .stage { flex: 1; border: 1px solid #ddd; border-radius: 14px; position: relative; overflow: hidden; }
+    .btns { display: flex; gap: 10px; }
+    button { flex: 1; font-size: 16px; padding: 12px 10px; border-radius: 14px; border: 1px solid #333; background: #fff; }
+    button:disabled { opacity: .5; }
+    .msg { font-size: 14px; color: #555; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>タイトル</h1>
+      <a href="../../">作品集へ</a>
+    </header>
+
+    <div class="hud">
+      <div class="pill">残り <span id="time">60</span>s</div>
+      <div class="pill">スコア <span id="score">0</span></div>
+      <div class="pill">ハイスコア <span id="hiscore">0</span></div>
+    </div>
+
+    <div class="stage" id="stage" aria-label="game stage"></div>
+
+    <div class="btns">
+      <button id="start">スタート</button>
+      <button id="reset">記録リセット</button>
+    </div>
+
+    <div class="msg" id="msg">準備OK。</div>
+  </div>
+
+  <script>
+    // TODO: ここに1メカニクスのゲームロジックを実装する（タップ中心）
+    const KEY = "daily-game-factory:hiscore:slug";
+    const $ = (id) => document.getElementById(id);
+
+    let hiscore = Number(localStorage.getItem(KEY) || 0);
+    let score = 0;
+    let running = false;
+    let remain = 60;
+
+    function render() {
+      $("score").textContent = String(score);
+      $("hiscore").textContent = String(hiscore);
+      $("time").textContent = String(remain);
+    }
+    function setMsg(t){ $("msg").textContent = t; }
+
+    $("start").addEventListener("pointerdown", () => {
+      if (running) return;
+      running = true;
+      score = 0;
+      remain = 60;
+      $("start").disabled = true;
+      setMsg("開始！");
+      render();
+
+      const timer = setInterval(() => {
+        if (!running) { clearInterval(timer); return; }
+        remain -= 1;
+        render();
+        if (remain <= 0) {
+          running = false;
+          $("start").disabled = false;
+          if (score > hiscore) {
+            hiscore = score;
+            localStorage.setItem(KEY, String(hiscore));
+            setMsg("新記録！");
+          } else {
+            setMsg("終了！");
+          }
+          render();
+          clearInterval(timer);
+        }
+      }, 1000);
+    });
+
+    $("reset").addEventListener("pointerdown", () => {
+      localStorage.removeItem(KEY);
+      hiscore = 0;
+      render();
+      setMsg("記録を消した。");
+    });
+
+    render();
+  </script>
+</body>
+</html>

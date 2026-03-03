@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>バブルバースト - Daily Game Factory</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+       crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #0f0c29;
+      color: #fff;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      touch-action: none;
+      overflow: hidden;
+      user-select: none;
+    }
+    #game-wrap {
+      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: rgba(0,0,0,0.4);
+      flex-shrink: 0;
+    }
+    #hud .score-block { display: flex; flex-direction: column; gap: 2px; }
+    #hud .score { font-size: 22px; font-weight: 700; color: #7ee8fa; }
+    #hud .hiscore { font-size: 12px; color: #888; }
+    #hud .timer { font-size: 26px; font-weight: 700; color: #ffd200; }
+    #arena {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15,12,41,0.88);
+      gap: 14px;
+      padding: 24px;
+    }
+    #overlay h1 { font-size: 2rem; font-weight: 900; letter-spacing: 0.03em; }
+    #overlay .tagline { font-size: 0.95rem; color: #bbb; text-align: center; line-height: 1.6; }
+    #overlay .result-score { font-size: 2rem; font-weight: 700; color: #7ee8fa; }
+    #overlay .result-hi { font-size: 0.95rem; color: #ffd200; }
+    #overlay .new-record { font-size: 1rem; color: #6bcb77; font-weight: 700; }
+    .btn {
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      color: #111;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 44px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform 0.08s;
+    }
+    .btn:active { transform: scale(0.94); }
+    .back-link {
+      font-size: 12px;
+      color: #666;
+      text-decoration: none;
+      margin-top: 4px;
+    }
+    .back-link:hover { color: #aaa; }
+  </style>
+</head>
+<body>
+
+<div id="game-wrap">
+  <div id="hud">
+    <div class="score-block">
+      <div class="score">🫧 <span id="score-val">0</span></div>
+      <div class="hiscore">ベスト: <span id="hi-val">0</span></div>
+    </div>
+    <div class="timer"><span id="timer-val">60</span>s</div>
+  </div>
+  <div id="arena">
+    <canvas id="canvas"></canvas>
+    <div id="overlay">
+      <h1>🫧 バブルバースト</h1>
+      <p class="tagline">現れるバブルをタップして割ろう！<br>60秒で何個割れるかな？</p>
+      <button class="btn" id="start-btn">スタート</button>
+      <a class="back-link" href="../../">← 作品集へ戻る</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const canvas   = document.getElementById('canvas');
+  const ctx      = canvas.getContext('2d');
+  const overlay  = document.getElementById('overlay');
+  const scoreEl  = document.getElementById('score-val');
+  const hiEl     = document.getElementById('hi-val');
+  const timerEl  = document.getElementById('timer-val');
+  const startBtn = document.getElementById('start-btn');
+
+  const STORAGE_KEY = 'bubble-burst-hi-v1';
+  const COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff922b','#da77f2','#74c0fc','#f783ac'];
+
+  let hiScore   = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+  hiEl.textContent = hiScore;
+
+  /* -------- state -------- */
+  let bubbles   = [];
+  let score     = 0;
+  let timeLeft  = 60;
+  let running   = false;
+  let lastRaf   = 0;
+  let nextSpawn = 0;
+  let elapsed   = 0;   // seconds since game start
+  let animId    = null;
+  let timerHandle = null;
+
+  /* -------- canvas resize -------- */
+  function resize() {
+    const arena = document.getElementById('arena');
+    canvas.width  = arena.clientWidth;
+    canvas.height = arena.clientHeight;
+    // Rescale existing bubble positions proportionally would be complex;
+    // just clear them on resize (rarely happens mid-game on phones)
+    if (running) bubbles = [];
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* -------- difficulty -------- */
+  function difficulty(sec) {
+    if (sec < 30) return { spawnMs: 1200, lifeMs: 2800, minR: 32, maxR: 52 };
+    if (sec < 45) return { spawnMs:  900, lifeMs: 2200, minR: 28, maxR: 48 };
+    return             { spawnMs:  650, lifeMs: 1700, minR: 24, maxR: 44 };
+  }
+
+  /* -------- spawn -------- */
+  function spawnBubble() {
+    const d = difficulty(elapsed);
+    const r = d.minR + Math.random() * (d.maxR - d.minR);
+    const margin = r + 2;
+    const x = margin + Math.random() * (canvas.width  - margin * 2);
+    const y = margin + Math.random() * (canvas.height - margin * 2);
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    bubbles.push({
+      x, y, r, color,
+      born: performance.now(),
+      life: d.lifeMs,
+      dead: false,
+      popT: -1,    // pop animation progress (0→1)
+    });
+  }
+
+  /* -------- update -------- */
+  function update(now, dt) {
+    const d = difficulty(elapsed);
+
+    // spawn
+    if (now >= nextSpawn) {
+      spawnBubble();
+      nextSpawn = now + d.spawnMs;
+    }
+
+    // update each bubble
+    const alive = [];
+    for (const b of bubbles) {
+      if (b.dead) {
+        b.popT += dt / 240;  // pop lasts ~240ms
+        if (b.popT < 1) alive.push(b);
+      } else {
+        const age = now - b.born;
+        if (age < b.life) alive.push(b);
+        // else just discard (faded out naturally)
+      }
+    }
+    bubbles = alive;
+  }
+
+  /* -------- draw -------- */
+  function draw(now) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const b of bubbles) {
+      let alpha, scale;
+
+      if (b.dead) {
+        // pop burst: expand + fade
+        alpha = 1 - b.popT;
+        scale = 1 + b.popT * 0.6;
+      } else {
+        const t = (now - b.born) / b.life;
+        if (t < 0.12) {
+          // appear
+          alpha = t / 0.12;
+          scale = t / 0.12;
+        } else if (t < 0.78) {
+          alpha = 1; scale = 1;
+        } else {
+          // disappear
+          const f = (t - 0.78) / 0.22;
+          alpha = 1 - f; scale = 1;
+        }
+      }
+
+      if (alpha <= 0) continue;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.translate(b.x, b.y);
+      ctx.scale(scale, scale);
+
+      // glow
+      ctx.shadowColor = b.color;
+      ctx.shadowBlur  = b.r * 0.6;
+
+      // bubble body
+      const grad = ctx.createRadialGradient(
+        -b.r * 0.28, -b.r * 0.28, 0,
+         0, 0, b.r
+      );
+      grad.addColorStop(0,   '#ffffff');
+      grad.addColorStop(0.25, b.color);
+      grad.addColorStop(1,   b.color + '44');
+      ctx.beginPath();
+      ctx.arc(0, 0, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // specular highlight
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.arc(-b.r * 0.27, -b.r * 0.3, b.r * 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  /* -------- game loop -------- */
+  function loop(now) {
+    if (!running) return;
+    const dt = now - lastRaf;
+    lastRaf = now;
+    update(now, dt);
+    draw(now);
+    animId = requestAnimationFrame(loop);
+  }
+
+  /* -------- start -------- */
+  function startGame() {
+    score    = 0;
+    timeLeft = 60;
+    elapsed  = 0;
+    bubbles  = [];
+    running  = true;
+
+    scoreEl.textContent = 0;
+    timerEl.textContent = 60;
+    overlay.style.display = 'none';
+
+    const now = performance.now();
+    lastRaf   = now;
+    nextSpawn = now;
+
+    clearInterval(timerHandle);
+    timerHandle = setInterval(() => {
+      timeLeft--;
+      elapsed++;
+      timerEl.textContent = timeLeft;
+      if (timeLeft <= 0) endGame();
+    }, 1000);
+
+    cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(loop);
+  }
+
+  /* -------- end -------- */
+  function endGame() {
+    running = false;
+    clearInterval(timerHandle);
+    cancelAnimationFrame(animId);
+    bubbles = [];
+
+    const isNew = score > hiScore;
+    if (isNew) {
+      hiScore = score;
+      localStorage.setItem(STORAGE_KEY, hiScore);
+      hiEl.textContent = hiScore;
+    }
+
+    overlay.innerHTML = `
+      <h1>🎉 タイムアップ！</h1>
+      ${isNew ? '<div class="new-record">★ 新記録！</div>' : ''}
+      <div class="result-score">${score} 個</div>
+      <div class="result-hi">ベスト: ${hiScore} 個</div>
+      <button class="btn" id="start-btn">もう一度</button>
+      <a class="back-link" href="../../">← 作品集へ戻る</a>
+    `;
+    overlay.style.display = 'flex';
+    document.getElementById('start-btn').addEventListener('pointerdown', startGame);
+  }
+
+  /* -------- tap detection -------- */
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!running) return;
+    e.preventDefault();
+
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width  / rect.width;
+    const sy = canvas.height / rect.height;
+    const px = (e.clientX - rect.left) * sx;
+    const py = (e.clientY - rect.top)  * sy;
+
+    // hit-test from front (last in array = drawn on top)
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      if (b.dead) continue;
+      const dx = px - b.x, dy = py - b.y;
+      if (dx * dx + dy * dy <= b.r * b.r) {
+        b.dead = true;
+        b.popT = 0;
+        score++;
+        scoreEl.textContent = score;
+        break;
+      }
+    }
+  }, { passive: false });
+
+  startBtn.addEventListener('pointerdown', startGame);
+})();
+</script>
+</body>
+</html>
