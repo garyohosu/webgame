@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>シグナルキャッチャー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root { --bg:#0a1020; --panel:#121a30; --good:#3ddc97; --bad:#ff5d73; --text:#e9eefc; --muted:#93a0be; }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at top,#1a2448,#0a1020 60%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans JP',sans-serif}
+    .app{height:100%;display:flex;flex-direction:column;padding:12px;gap:10px;max-width:480px;margin:0 auto}
+    .top{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .pill{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:10px;padding:8px;text-align:center}
+    .k{font-size:11px;color:var(--muted)} .v{font-weight:700;font-size:20px;margin-top:2px}
+    .title{display:flex;justify-content:space-between;align-items:center}
+    h1{font-size:18px;margin:0}
+    a.back{color:#9fc3ff;text-decoration:none;font-size:13px}
+    #field{position:relative;flex:1;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.18);border-radius:14px;overflow:hidden}
+    .lanes{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr)}
+    .lanes>div{border-right:1px dashed rgba(255,255,255,.15)} .lanes>div:last-child{border-right:none}
+    .chip{position:absolute;width:30%;max-width:130px;aspect-ratio:4/3;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:.04em;user-select:none}
+    .chip.good{background:var(--good);color:#032014}.chip.bad{background:var(--bad);color:#2a0810}
+    .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    .panel{pointer-events:auto;background:rgba(9,14,26,.9);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:16px;min-width:260px;text-align:center}
+    .panel p{margin:8px 0;color:var(--muted);font-size:13px;line-height:1.5}
+    button{border:0;border-radius:10px;padding:10px 14px;font-weight:700;background:#71a5ff;color:#07142c}
+    .small{font-size:12px;color:var(--muted);margin-top:8px}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="title"><h1>🎯 シグナルキャッチャー</h1><a class="back" href="../../">← 作品集へ戻る</a></div>
+  <div class="top">
+    <div class="pill"><div class="k">SCORE</div><div id="score" class="v">0</div></div>
+    <div class="pill"><div class="k">TIME</div><div id="time" class="v">60</div></div>
+    <div class="pill"><div class="k">HI</div><div id="hi" class="v">0</div></div>
+  </div>
+  <div id="field">
+    <div class="lanes"><div></div><div></div><div></div></div>
+    <div class="overlay" id="overlay">
+      <div class="panel">
+        <h2 id="ovTitle">60秒でGOODを仕分けろ</h2>
+        <p>GOOD:+10 / BAD:-8 / GOOD取り逃し:-4</p>
+        <button id="startBtn" type="button">スタート</button>
+        <div class="small">操作: パネルをタップ（pointerdown）</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(() => {
+  const KEY='signal-catcher-hi-v1';
+  const field=document.getElementById('field');
+  const overlay=document.getElementById('overlay');
+  const ovTitle=document.getElementById('ovTitle');
+  const startBtn=document.getElementById('startBtn');
+  const scoreEl=document.getElementById('score');
+  const timeEl=document.getElementById('time');
+  const hiEl=document.getElementById('hi');
+  let hi=Number(localStorage.getItem(KEY)||0); hiEl.textContent=hi;
+
+  let running=false, score=0, left=60, chips=[], last=0, spawnAcc=0, secAcc=0;
+  const laneX = i => (field.clientWidth/3)*i + field.clientWidth/6;
+
+  function diff(){ if(left>45)return {spd:85, interval:700, bad:0.35}; if(left>15)return {spd:105, interval:560, bad:0.45}; return {spd:125, interval:430, bad:0.52}; }
+
+  function spawn(){
+    const d=diff();
+    const lane=Math.floor(Math.random()*3);
+    const isBad=Math.random()<d.bad;
+    const chip=document.createElement('div');
+    chip.className='chip '+(isBad?'bad':'good');
+    chip.textContent=isBad?'BAD':'GOOD';
+    const w=Math.min(field.clientWidth*0.3,130);
+    chip.style.width=w+'px';
+    chip.style.left=(laneX(lane)-w/2)+'px';
+    chip.style.top='-56px';
+    chip.dataset.bad=String(isBad);
+    chip.addEventListener('pointerdown', (e)=>{
+      if(!running) return;
+      e.preventDefault();
+      const bad=chip.dataset.bad==='true';
+      score += bad ? -8 : 10;
+      scoreEl.textContent=score;
+      chip.remove();
+      chips = chips.filter(c=>c.el!==chip);
+    }, {passive:false});
+    field.appendChild(chip);
+    chips.push({el:chip,y:-56,spd:d.spd});
+  }
+
+  function end(){
+    running=false;
+    if(score>hi){ hi=score; localStorage.setItem(KEY,String(hi)); hiEl.textContent=hi; }
+    ovTitle.textContent='終了！ スコア: '+score;
+    startBtn.textContent='もう一回';
+    overlay.style.display='flex';
+  }
+
+  function frame(ts){
+    if(!running) return;
+    if(!last) last=ts;
+    const dt=ts-last; last=ts;
+    spawnAcc += dt; secAcc += dt;
+    const d=diff();
+    if(spawnAcc>=d.interval){ spawnAcc=0; spawn(); }
+
+    const bottom = field.clientHeight;
+    chips.forEach(c=>{ c.y += c.spd*(dt/1000); c.el.style.top=c.y+'px'; });
+    for(let i=chips.length-1;i>=0;i--){
+      const c=chips[i];
+      if(c.y>bottom){
+        if(c.el.dataset.bad!=='true'){ score -= 4; scoreEl.textContent=score; }
+        c.el.remove(); chips.splice(i,1);
+      }
+    }
+
+    while(secAcc>=1000){ secAcc-=1000; left--; timeEl.textContent=left; if(left<=0){ end(); return; } }
+    requestAnimationFrame(frame);
+  }
+
+  function start(){
+    chips.forEach(c=>c.el.remove()); chips=[];
+    score=0; left=60; last=0; spawnAcc=0; secAcc=0;
+    scoreEl.textContent='0'; timeEl.textContent='60';
+    overlay.style.display='none'; running=true;
+    requestAnimationFrame(frame);
+  }
+
+  startBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); start(); }, {passive:false});
+})();
+</script>
+</body>
+</html>
