@@ -4,25 +4,367 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Daily Game Factory</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet" />
+
+  <!-- Google AdSense -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+       crossorigin="anonymous"></script>
+
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 24px; line-height: 1.6; }
-    h1 { margin: 0 0 12px; }
-    .note { color: #555; margin-bottom: 18px; }
-    a { text-decoration: none; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
-    .meta { color: #666; font-size: 14px; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg0: #0a0a1a;
+      --bg1: #0f0c29;
+      --accent1: #7ee8fa;
+      --accent2: #ffd200;
+      --accent3: #ff6b9d;
+      --card-bg: rgba(255,255,255,0.05);
+      --card-border: rgba(255,255,255,0.12);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg0);
+      color: #e8e8f0;
+      font-family: 'Noto Sans JP', system-ui, sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Animated starfield background ── */
+    #bg-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 80px 24px 60px;
+    }
+
+    .hero-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, var(--accent1), var(--accent2));
+      color: #0a0a1a;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2rem, 8vw, 4rem);
+      font-weight: 900;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #fff 0%, var(--accent1) 50%, var(--accent2) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+      letter-spacing: 0.04em;
+    }
+
+    .hero-sub {
+      font-size: 1rem;
+      color: #8888aa;
+      max-width: 420px;
+      margin: 0 auto 40px;
+      line-height: 1.8;
+    }
+
+    .hero-stats {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-num {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent1);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #666688;
+      margin-top: 4px;
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Section ── */
+    .section {
+      position: relative;
+      z-index: 1;
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 20px 80px;
+    }
+
+    .section-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, rgba(255,210,0,0.4), transparent);
+    }
+
+    /* ── Game cards ── */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 18px 20px;
+      text-decoration: none;
+      display: block;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      cursor: pointer;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(126,232,250,0.06), rgba(255,210,0,0.04));
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(126,232,250,0.35);
+      box-shadow: 0 8px 32px rgba(126,232,250,0.12);
+    }
+
+    .card:hover::before { opacity: 1; }
+
+    .card-inner {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(126,232,250,0.15), rgba(255,107,157,0.15));
+      border: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .card-body { flex: 1; min-width: 0; }
+
+    .card-title {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .card-meta {
+      font-size: 13px;
+      color: #7777aa;
+      line-height: 1.5;
+    }
+
+    .card-date {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      color: var(--accent1);
+      opacity: 0.7;
+      margin-bottom: 2px;
+    }
+
+    .card-arrow {
+      color: #444466;
+      font-size: 20px;
+      flex-shrink: 0;
+      transition: color 0.2s, transform 0.2s;
+    }
+
+    .card:hover .card-arrow {
+      color: var(--accent1);
+      transform: translateX(4px);
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 24px;
+      font-size: 12px;
+      color: #444466;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* ── Scroll reveal ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
   </style>
 </head>
 <body>
-  <h1>Daily Game Factory</h1>
-  <div class="note">1日1個、スマホ向けミニゲームを追加していく作品集（GitHub Pages）。</div>
 
-  <h2>Games</h2>
+<canvas id="bg-canvas"></canvas>
 
-  <!-- 毎日ここにカードを1つ追加 -->
-  <div class="card">
-    <div><a href="./games/2026-03-03-bubble-burst/">2026-03-03 バブルバースト</a></div>
-    <div class="meta">現れるカラフルなバブルをタップして割る、60秒の反射神経ゲーム。</div>
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-badge">🎮 Daily Game Factory</div>
+  <h1>DAILY<br>GAME FACTORY</h1>
+  <p class="hero-sub">1日1個、スマホ向けミニゲームを作り続ける実験場。<br>タップだけで遊べる、60秒ゲームたち。</p>
+  <div class="hero-stats">
+    <div class="stat">
+      <div class="stat-num" id="game-count">1</div>
+      <div class="stat-label">GAMES</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">60</div>
+      <div class="stat-label">SEC / PLAY</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">📱</div>
+      <div class="stat-label">MOBILE FIRST</div>
+    </div>
   </div>
+</section>
+
+<!-- Games -->
+<div class="section">
+  <div class="section-title">Game List</div>
+  <div class="card-list">
+
+    <!-- 毎日ここにカードを1つ追加 -->
+    <a class="card reveal" href="./games/2026-03-03-bubble-burst/">
+      <div class="card-inner">
+        <div class="card-icon">🫧</div>
+        <div class="card-body">
+          <div class="card-date">2026-03-03</div>
+          <div class="card-title">バブルバースト</div>
+          <div class="card-meta">現れるカラフルなバブルをタップして割る、60秒の反射神経ゲーム。</div>
+        </div>
+        <div class="card-arrow">›</div>
+      </div>
+    </a>
+
+  </div>
+</div>
+
+<footer>
+  Daily Game Factory &mdash; Built with Claude Code
+</footer>
+
+<script>
+/* ── Starfield ── */
+(function () {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, stars;
+
+  function init() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    stars = Array.from({ length: 120 }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.2 + 0.2,
+      a: Math.random(),
+      da: (Math.random() - 0.5) * 0.008,
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      s.a += s.da;
+      if (s.a > 1 || s.a < 0) s.da *= -1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(180,200,255,${Math.max(0, s.a)})`;
+      ctx.fill();
+    }
+
+    // Subtle gradient overlay
+    const g = ctx.createRadialGradient(W / 2, 0, 0, W / 2, 0, H * 0.8);
+    g.addColorStop(0, 'rgba(126,232,250,0.04)');
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', init);
+  init();
+  draw();
+})();
+
+/* ── Game count ── */
+document.getElementById('game-count').textContent =
+  document.querySelectorAll('.card-list .card').length;
+
+/* ── Scroll reveal ── */
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+
 </body>
 </html>
