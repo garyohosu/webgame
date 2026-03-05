@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>レーンフリップ・ラン</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b16;
+      --panel: #121a2f;
+      --lane-a: #18233f;
+      --lane-b: #1f2d52;
+      --ok: #53f5c3;
+      --warn: #ff6f7d;
+      --coin: #ffd84d;
+      --text: #eef3ff;
+      --muted: #9aa7c7;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at top, #152448, var(--bg) 55%); color: var(--text); font-family: "Noto Sans JP", system-ui, sans-serif; }
+    body { display: grid; place-items: center; }
+    .app { width: min(100vw, 480px); height: 100dvh; max-height: 860px; padding: 12px 12px 10px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 10px; }
+    h1 { margin: 0; font-size: clamp(20px, 5vw, 28px); letter-spacing: .04em; }
+    .hud { background: rgba(16,24,44,.92); border: 1px solid #2f3c63; border-radius: 14px; padding: 10px; display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; text-align: center; }
+    .hud b { display:block; font-size: 18px; }
+    .hud small { color: var(--muted); font-size: 11px; }
+    #gameArea { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #33456f; background: linear-gradient(90deg,var(--lane-a) 0 50%, var(--lane-b) 50% 100%); }
+    .divider { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: rgba(255,255,255,.2); }
+    .player { position: absolute; bottom: 18px; width: 56px; height: 56px; border-radius: 14px; background: linear-gradient(135deg,#79ffe0,#32d1ff); box-shadow: 0 8px 24px rgba(89,219,255,.45); transform: translateX(-50%); transition: left 80ms linear; }
+    .entity { position: absolute; width: 40px; height: 40px; transform: translateX(-50%); border-radius: 10px; }
+    .coin { background: radial-gradient(circle at 30% 30%, #fff5b8, var(--coin) 60%); box-shadow: 0 0 14px rgba(255,217,96,.7); }
+    .obstacle { background: linear-gradient(135deg,#ff9aa5,#ff4a62); box-shadow: 0 0 14px rgba(255,76,100,.5); }
+    .overlay { position:absolute; inset:0; display:grid; place-items:center; background: rgba(4,8,18,.7); text-align:center; padding: 16px; }
+    .panel { background: rgba(12,18,35,.94); border: 1px solid #3a4b79; border-radius: 16px; padding: 14px; width: min(320px, 92%); }
+    button { width: 100%; border: 0; border-radius: 12px; padding: 12px; font-size: 16px; font-weight: 700; color: #061321; background: linear-gradient(135deg,#75f0ff,#5bffbf); }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.4; margin: 8px 0 10px; }
+    .bottom { display:flex; justify-content:space-between; align-items:center; color: var(--muted); font-size: 13px; }
+    a { color: #9ed3ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>レーンフリップ・ラン</h1>
+    <section class="hud">
+      <div><b id="score">0</b><small>Score</small></div>
+      <div><b id="time">60.0</b><small>Time</small></div>
+      <div><b id="life">3</b><small>Life</small></div>
+      <div><b id="high">0</b><small>High</small></div>
+    </section>
+
+    <section id="gameArea" aria-label="game area">
+      <div class="divider"></div>
+      <div id="player" class="player"></div>
+      <div id="overlay" class="overlay">
+        <div class="panel">
+          <h2 style="margin:0 0 6px;">60秒レーン反転サバイバル</h2>
+          <p class="hint">画面をタップするたびに左右レーンを切り替え。<br>障害物を避けてコインを回収しよう。</p>
+          <button id="startBtn" type="button">スタート</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="bottom">
+      <span>Tap: レーン切替</span>
+      <a href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'lane-flip-run-high-v1';
+      const gameArea = document.getElementById('gameArea');
+      const playerEl = document.getElementById('player');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const lifeEl = document.getElementById('life');
+      const highEl = document.getElementById('high');
+
+      let lane = 0, score = 0, life = 3;
+      let leftX = 0, rightX = 0;
+      let entities = [];
+      let running = false;
+      let last = 0;
+      let remainMs = 60000;
+      let spawnAcc = 0;
+      let invincibleMs = 0;
+      let raf = 0;
+      let high = Number(localStorage.getItem(KEY) || 0);
+      highEl.textContent = high;
+
+      function resizeLane() {
+        const w = gameArea.clientWidth;
+        leftX = w * 0.25;
+        rightX = w * 0.75;
+        playerEl.style.left = (lane ? rightX : leftX) + 'px';
+      }
+
+      function addEntity(type) {
+        const el = document.createElement('div');
+        el.className = 'entity ' + type;
+        const e = {
+          type,
+          lane: Math.random() < 0.5 ? 0 : 1,
+          y: -30,
+          speed: 180 + Math.random() * 70,
+          el
+        };
+        el.style.left = (e.lane ? rightX : leftX) + 'px';
+        el.style.top = '-30px';
+        gameArea.appendChild(el);
+        entities.push(e);
+      }
+
+      function start() {
+        lane = 0; score = 0; life = 3; remainMs = 60000; spawnAcc = 0; invincibleMs = 0;
+        entities.forEach(e => e.el.remove());
+        entities = [];
+        scoreEl.textContent = score;
+        lifeEl.textContent = life;
+        timeEl.textContent = '60.0';
+        overlay.style.display = 'none';
+        running = true;
+        last = performance.now();
+        resizeLane();
+        raf = requestAnimationFrame(loop);
+      }
+
+      function endGame(clear) {
+        running = false;
+        cancelAnimationFrame(raf);
+        entities.forEach(e => e.el.remove());
+        entities = [];
+        if (score > high) {
+          high = score;
+          localStorage.setItem(KEY, String(high));
+          highEl.textContent = high;
+        }
+        overlay.innerHTML = `<div class="panel"><h2 style="margin:0 0 6px;">${clear ? 'CLEAR!' : 'GAME OVER'}</h2><p class="hint">Score: ${score}<br>High: ${high}</p><button id="retryBtn" type="button">もう一度</button></div>`;
+        overlay.style.display = 'grid';
+        document.getElementById('retryBtn').addEventListener('pointerdown', start, { once: true });
+      }
+
+      function hitTest(e) {
+        if (e.lane !== lane) return false;
+        const playerBottom = gameArea.clientHeight - 18;
+        const playerTop = playerBottom - 56;
+        const eBottom = e.y + 40;
+        const eTop = e.y;
+        return eBottom >= playerTop && eTop <= playerBottom;
+      }
+
+      function loop(now) {
+        const dt = Math.min(33, now - last);
+        last = now;
+        if (!running) return;
+
+        remainMs -= dt;
+        if (remainMs <= 0) {
+          timeEl.textContent = '0.0';
+          endGame(true);
+          return;
+        }
+        timeEl.textContent = (remainMs / 1000).toFixed(1);
+
+        const elapsed = 60000 - remainMs;
+        const speedMul = elapsed > 45000 ? 1.55 : elapsed > 30000 ? 1.28 : 1;
+        const obstacleRate = elapsed > 45000 ? 0.72 : elapsed > 30000 ? 0.62 : 0.5;
+
+        spawnAcc += dt;
+        const spawnEvery = 440 - Math.min(170, elapsed / 220);
+        if (spawnAcc >= spawnEvery) {
+          spawnAcc = 0;
+          addEntity(Math.random() < obstacleRate ? 'obstacle' : 'coin');
+        }
+
+        if (invincibleMs > 0) {
+          invincibleMs -= dt;
+          playerEl.style.opacity = Math.floor(invincibleMs / 80) % 2 ? '0.45' : '1';
+        } else {
+          playerEl.style.opacity = '1';
+        }
+
+        for (let i = entities.length - 1; i >= 0; i--) {
+          const e = entities[i];
+          e.y += e.speed * speedMul * (dt / 1000);
+          e.el.style.top = e.y + 'px';
+
+          if (hitTest(e)) {
+            if (e.type === 'coin') {
+              score += 10;
+              scoreEl.textContent = score;
+            } else if (invincibleMs <= 0) {
+              life -= 1;
+              lifeEl.textContent = life;
+              invincibleMs = 650;
+              if (life <= 0) {
+                endGame(false);
+                return;
+              }
+            }
+            e.el.remove();
+            entities.splice(i, 1);
+            continue;
+          }
+
+          if (e.y > gameArea.clientHeight + 48) {
+            e.el.remove();
+            entities.splice(i, 1);
+          }
+        }
+
+        raf = requestAnimationFrame(loop);
+      }
+
+      function flipLane(ev) {
+        if (!running) return;
+        if (ev.target.closest('a')) return;
+        lane = lane ? 0 : 1;
+        playerEl.style.left = (lane ? rightX : leftX) + 'px';
+      }
+
+      window.addEventListener('resize', resizeLane);
+      gameArea.addEventListener('pointerdown', flipLane);
+      startBtn.addEventListener('pointerdown', start);
+      resizeLane();
+    })();
+  </script>
+</body>
+</html>
