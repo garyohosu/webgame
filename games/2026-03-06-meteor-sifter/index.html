@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>メテオシフター</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090c1a;
+      --panel: #111733;
+      --ink: #e8ecff;
+      --accent: #64f0ff;
+      --danger: #ff5f79;
+      --good: #9dff7a;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body {
+      background: radial-gradient(120% 80% at 50% 0%, #1c2755 0%, var(--bg) 62%);
+      color: var(--ink);
+      font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+      touch-action: manipulation;
+      display: grid;
+      place-items: center;
+    }
+    .app {
+      width: min(430px, 100vw);
+      height: min(860px, 100dvh);
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    .title { font-size: 1.35rem; font-weight: 800; letter-spacing: .04em; text-align: center; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+      font-size: .78rem;
+    }
+    .pill b { display: block; font-size: 1.1rem; margin-top: 2px; }
+    .field-wrap {
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      min-height: 380px;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(6, 9, 20, 0.66);
+      text-align: center;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 14px;
+      padding: 14px;
+      width: min(94%, 320px);
+    }
+    .panel p { margin: 0 0 12px; line-height: 1.6; font-size: .92rem; }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #041224;
+      background: linear-gradient(135deg, var(--accent), #90ffe8);
+    }
+    .lanes {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .lane-btn {
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 12px;
+      padding: 11px 4px;
+      text-align: center;
+      background: rgba(255,255,255,.06);
+      font-weight: 700;
+      user-select: none;
+    }
+    .lane-btn.active { border-color: var(--accent); box-shadow: inset 0 0 0 2px rgba(100,240,255,.35); }
+    .back {
+      text-align: center;
+      color: #b8c7ff;
+      text-decoration: none;
+      font-size: .9rem;
+      padding: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">☄️ メテオシフター</div>
+
+    <section class="hud">
+      <div class="pill">SCORE<b id="score">0</b></div>
+      <div class="pill">TIME<b id="time">60.0</b></div>
+      <div class="pill">HI<b id="hi">0</b></div>
+    </section>
+
+    <section class="field-wrap" id="fieldWrap">
+      <canvas id="game" width="390" height="540" aria-label="game field"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <p>タップでレーン移動。<br>💎を取って、☄️を避けろ。<br>60秒でハイスコア更新。</p>
+          <button id="startBtn" type="button">スタート</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="lanes" id="laneButtons">
+      <div class="lane-btn active" data-lane="0">左</div>
+      <div class="lane-btn" data-lane="1">中</div>
+      <div class="lane-btn" data-lane="2">右</div>
+    </section>
+
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'meteor-sifter-hi-v1';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const fieldWrap = document.getElementById('fieldWrap');
+      const laneButtons = [...document.querySelectorAll('.lane-btn')];
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+
+      let hiScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = hiScore;
+
+      const lanes = 3;
+      let laneX = [];
+      let catcherLane = 1;
+      let score = 0;
+      let timeLeft = 60;
+      let running = false;
+      let lastTs = 0;
+      let spawnTimer = 0;
+      let items = [];
+      let stars = [];
+
+      function resize() {
+        const r = fieldWrap.getBoundingClientRect();
+        canvas.width = Math.floor(r.width * devicePixelRatio);
+        canvas.height = Math.floor(r.height * devicePixelRatio);
+        ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        const w = r.width;
+        laneX = [w * 0.18, w * 0.5, w * 0.82];
+      }
+
+      function setLane(lane) {
+        catcherLane = lane;
+        laneButtons.forEach(btn => btn.classList.toggle('active', Number(btn.dataset.lane) === lane));
+      }
+
+      function pointerToLane(clientX) {
+        const rect = fieldWrap.getBoundingClientRect();
+        const x = clientX - rect.left;
+        if (x < rect.width / 3) return 0;
+        if (x < rect.width * 2 / 3) return 1;
+        return 2;
+      }
+
+      function difficulty(nowSec) {
+        if (nowSec < 30) return { speed: 120, spawn: 0.78, danger: 0.24 };
+        if (nowSec < 45) return { speed: 150, spawn: 0.62, danger: 0.34 };
+        return { speed: 185, spawn: 0.48, danger: 0.44 };
+      }
+
+      function spawnItem(elapsed) {
+        const d = difficulty(elapsed);
+        const lane = Math.floor(Math.random() * lanes);
+        const danger = Math.random() < d.danger;
+        items.push({
+          lane,
+          y: -20,
+          vy: d.speed + Math.random() * 30,
+          danger,
+          r: danger ? 12 : 11,
+          spin: Math.random() * Math.PI,
+        });
+      }
+
+      function resetGame() {
+        score = 0;
+        timeLeft = 60;
+        spawnTimer = 0;
+        items = [];
+        stars = Array.from({ length: 24 }, () => ({
+          x: Math.random() * fieldWrap.clientWidth,
+          y: Math.random() * fieldWrap.clientHeight,
+          r: Math.random() * 1.6 + 0.4,
+          v: Math.random() * 8 + 5,
+        }));
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        setLane(1);
+      }
+
+      function endGame() {
+        running = false;
+        overlay.style.display = 'grid';
+        if (score > hiScore) {
+          hiScore = score;
+          localStorage.setItem(STORAGE_KEY, String(hiScore));
+          hiEl.textContent = hiScore;
+        }
+        startBtn.textContent = 'もう一回';
+        overlay.querySelector('p').innerHTML = `終了！<br>スコア: <b>${score}</b><br>ハイスコア: <b>${hiScore}</b>`;
+      }
+
+      function drawBackground(w, h) {
+        ctx.clearRect(0, 0, w, h);
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, 'rgba(18, 30, 68, 0.95)');
+        g.addColorStop(1, 'rgba(5, 8, 18, 0.98)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.strokeStyle = 'rgba(255,255,255,.10)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 3; i++) {
+          const x = (w / 3) * i;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+
+        for (const s of stars) {
+          s.y += s.v * 0.016;
+          if (s.y > h) { s.y = -2; s.x = Math.random() * w; }
+          ctx.fillStyle = 'rgba(170, 210, 255, .55)';
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawCatcher(h) {
+        const x = laneX[catcherLane];
+        const y = h - 30;
+        ctx.fillStyle = 'rgba(100, 240, 255, .16)';
+        ctx.beginPath();
+        ctx.ellipse(x, y + 2, 46, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#71f6ff';
+        ctx.beginPath();
+        ctx.moveTo(x - 28, y);
+        ctx.lineTo(x + 28, y);
+        ctx.lineTo(x + 16, y - 14);
+        ctx.lineTo(x - 16, y - 14);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawItem(it) {
+        const x = laneX[it.lane];
+        ctx.save();
+        ctx.translate(x, it.y);
+        ctx.rotate(it.spin);
+        if (it.danger) {
+          ctx.fillStyle = '#ff5f79';
+          for (let i = 0; i < 8; i++) {
+            const a = (Math.PI * 2 / 8) * i;
+            const rr = i % 2 ? it.r * 0.55 : it.r;
+            const px = Math.cos(a) * rr;
+            const py = Math.sin(a) * rr;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#a4ff8b';
+          ctx.beginPath();
+          ctx.moveTo(0, -it.r);
+          ctx.lineTo(it.r * .82, 0);
+          ctx.lineTo(0, it.r);
+          ctx.lineTo(-it.r * .82, 0);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function step(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.032, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        timeLeft = Math.max(0, timeLeft - dt);
+        timeEl.textContent = timeLeft.toFixed(1);
+
+        const elapsed = 60 - timeLeft;
+        const d = difficulty(elapsed);
+        spawnTimer += dt;
+        if (spawnTimer >= d.spawn) {
+          spawnTimer = 0;
+          spawnItem(elapsed);
+        }
+
+        const h = fieldWrap.clientHeight;
+        for (let i = items.length - 1; i >= 0; i--) {
+          const it = items[i];
+          it.y += it.vy * dt;
+          it.spin += (it.danger ? 2.4 : 1.6) * dt;
+          if (it.y > h - 34) {
+            if (it.lane === catcherLane) {
+              if (it.danger) score = Math.max(0, score - 2);
+              else score += 1;
+              scoreEl.textContent = String(score);
+            }
+            items.splice(i, 1);
+          }
+        }
+
+        const w = fieldWrap.clientWidth;
+        drawBackground(w, h);
+        items.forEach(drawItem);
+        drawCatcher(h);
+
+        if (timeLeft <= 0) {
+          endGame();
+          return;
+        }
+        requestAnimationFrame(step);
+      }
+
+      function startGame() {
+        resetGame();
+        overlay.style.display = 'none';
+        overlay.querySelector('p').innerHTML = 'タップでレーン移動。<br>💎を取って、☄️を避けろ。<br>60秒でハイスコア更新。';
+        startBtn.textContent = 'スタート';
+        running = true;
+        lastTs = 0;
+        requestAnimationFrame(step);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        startGame();
+      });
+
+      laneButtons.forEach(btn => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          setLane(Number(btn.dataset.lane));
+        });
+      });
+
+      fieldWrap.addEventListener('pointerdown', (e) => {
+        if (!running) return;
+        setLane(pointerToLane(e.clientX));
+      });
+    })();
+  </script>
+</body>
+</html>
