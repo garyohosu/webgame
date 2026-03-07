@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>サテライトシールド</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090b1a;
+      --panel: #131833;
+      --text: #f2f4ff;
+      --accent: #5ce1e6;
+      --warn: #ffd166;
+      --danger: #ff5d73;
+      --lane1: #6cc6ff;
+      --lane2: #b388ff;
+      --lane3: #7ef29a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 0%, #1f2b55, var(--bg) 55%); color: var(--text); font-family: "Noto Sans JP", system-ui, sans-serif; }
+    .app {
+      height: 100%;
+      max-width: 430px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      padding: 12px 12px calc(10px + env(safe-area-inset-bottom));
+      gap: 8px;
+    }
+    .title-wrap { text-align: center; }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: .04em; }
+    .sub { margin-top: 2px; font-size: .8rem; opacity: .8; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    .pill {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      padding: 6px;
+      text-align: center;
+      font-size: .72rem;
+      line-height: 1.2;
+    }
+    .pill b { display: block; font-size: .95rem; margin-top: 2px; }
+    .arena {
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .lane-divider {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 1px;
+      background: rgba(255,255,255,.16);
+    }
+    .lane-divider.d1 { left: 33.333%; }
+    .lane-divider.d2 { left: 66.666%; }
+    .core {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 18%;
+      background: linear-gradient(180deg, rgba(92,225,230,.08), rgba(92,225,230,.22));
+      border-top: 2px solid rgba(92,225,230,.5);
+    }
+    .debris {
+      position: absolute;
+      width: 20%;
+      aspect-ratio: 1;
+      border-radius: 6px;
+      box-shadow: 0 0 12px rgba(255,255,255,.3);
+      transform: rotate(45deg);
+    }
+    .shield {
+      position: absolute;
+      bottom: 12%;
+      width: 30%;
+      height: 10%;
+      border-radius: 14px;
+      border: 2px solid var(--accent);
+      background: rgba(92,225,230,.26);
+      box-shadow: 0 0 18px rgba(92,225,230,.45);
+      opacity: 0;
+      transition: opacity .05s linear;
+      pointer-events: none;
+    }
+    .shield.on { opacity: 1; }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .lane-btn, #startBtn, .back {
+      border: none;
+      border-radius: 12px;
+      padding: 12px 6px;
+      color: #fff;
+      font-weight: 700;
+      font-size: .95rem;
+      background: #253058;
+    }
+    .lane-btn[data-lane="0"] { background: linear-gradient(180deg, #2d5d8f, #214261); }
+    .lane-btn[data-lane="1"] { background: linear-gradient(180deg, #5d3a8f, #452a68); }
+    .lane-btn[data-lane="2"] { background: linear-gradient(180deg, #2f7051, #245840); }
+    .lane-btn.cooldown { filter: saturate(.5) brightness(.8); }
+    #startBtn { background: linear-gradient(180deg, #2fca87, #239566); }
+    .bottom-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .back {
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #2a2a3f;
+    }
+    .overlay {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center;
+      background: rgba(6,9,20,.74);
+      padding: 20px;
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+    .overlay.hidden { display: none; }
+    .overlay .msg b { color: var(--warn); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="title-wrap">
+      <h1>🛰️ サテライトシールド</h1>
+      <div class="sub">迫るデブリをレーン防御で迎撃せよ</div>
+    </div>
+
+    <div class="hud">
+      <div class="pill">SCORE<b id="score">0</b></div>
+      <div class="pill">TIME<b id="time">60.0</b></div>
+      <div class="pill">HP<b id="hp">5</b></div>
+      <div class="pill">HI<b id="hi">0</b></div>
+    </div>
+
+    <div class="arena" id="arena">
+      <div class="lane-divider d1"></div>
+      <div class="lane-divider d2"></div>
+      <div class="core"></div>
+      <div class="shield" id="shield0" style="left:1.5%;"></div>
+      <div class="shield" id="shield1" style="left:35%;"></div>
+      <div class="shield" id="shield2" style="left:68.5%;"></div>
+      <div class="overlay" id="overlay">
+        <div class="msg">STARTで防衛開始<br>レーンをタップしてシールド展開</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="lane-btn" data-lane="0">LEFT</button>
+      <button class="lane-btn" data-lane="1">MID</button>
+      <button class="lane-btn" data-lane="2">RIGHT</button>
+    </div>
+
+    <div class="bottom-row">
+      <button id="startBtn">START</button>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const KEY = 'satellite-shield-hi-v1';
+      const arena = document.getElementById('arena');
+      const overlay = document.getElementById('overlay');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hpEl = document.getElementById('hp');
+      const hiEl = document.getElementById('hi');
+      const startBtn = document.getElementById('startBtn');
+      const laneBtns = [...document.querySelectorAll('.lane-btn')];
+      const shields = [
+        document.getElementById('shield0'),
+        document.getElementById('shield1'),
+        document.getElementById('shield2')
+      ];
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      const state = {
+        running: false,
+        score: 0,
+        hp: 5,
+        remain: 60,
+        lastTs: 0,
+        spawnAcc: 0,
+        debris: [],
+        shieldUntil: [0,0,0],
+        cooldownUntil: [0,0,0]
+      };
+
+      const laneColors = ['var(--lane1)','var(--lane2)','var(--lane3)'];
+      const laneCenters = [0.166, 0.5, 0.833];
+
+      function resetGame() {
+        state.running = true;
+        state.score = 0;
+        state.hp = 5;
+        state.remain = 60;
+        state.lastTs = 0;
+        state.spawnAcc = 0;
+        state.debris.forEach(d => d.el.remove());
+        state.debris = [];
+        state.shieldUntil = [0,0,0];
+        state.cooldownUntil = [0,0,0];
+        shields.forEach(s => s.classList.remove('on'));
+        laneBtns.forEach(b => b.classList.remove('cooldown'));
+        scoreEl.textContent = '0';
+        hpEl.textContent = '5';
+        timeEl.textContent = '60.0';
+        overlay.classList.add('hidden');
+        startBtn.textContent = 'RESTART';
+        requestAnimationFrame(loop);
+      }
+
+      function currentLevelSpeed(remain) {
+        if (remain > 30) return 0.20;
+        if (remain > 15) return 0.245;
+        return 0.285;
+      }
+
+      function spawnInterval(remain) {
+        if (remain > 30) return 0.72;
+        if (remain > 15) return 0.56;
+        return 0.42;
+      }
+
+      function spawnDebris() {
+        const lane = Math.floor(Math.random() * 3);
+        const el = document.createElement('div');
+        el.className = 'debris';
+        el.style.background = laneColors[lane];
+        el.style.left = `${(lane * 33.333) + 6.5}%`;
+        el.style.top = '-9%';
+        arena.appendChild(el);
+        state.debris.push({ lane, y: -0.09, el });
+      }
+
+      function useShield(lane) {
+        if (!state.running) return;
+        const now = performance.now();
+        if (now < state.cooldownUntil[lane]) return;
+
+        state.shieldUntil[lane] = now + 260;
+        state.cooldownUntil[lane] = now + 460;
+        shields[lane].classList.add('on');
+        laneBtns[lane].classList.add('cooldown');
+      }
+
+      function endGame(cleared) {
+        state.running = false;
+        state.debris.forEach(d => d.el.remove());
+        state.debris = [];
+
+        if (state.score > hi) {
+          hi = state.score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+
+        overlay.classList.remove('hidden');
+        overlay.querySelector('.msg').innerHTML = cleared
+          ? `防衛成功！<br><b>${state.score}</b> pt`
+          : `コア崩壊…<br><b>${state.score}</b> pt`;
+      }
+
+      function loop(ts) {
+        if (!state.running) return;
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min(0.05, (ts - state.lastTs) / 1000);
+        state.lastTs = ts;
+
+        state.remain = Math.max(0, state.remain - dt);
+        timeEl.textContent = state.remain.toFixed(1);
+
+        state.spawnAcc += dt;
+        const interval = spawnInterval(state.remain);
+        while (state.spawnAcc >= interval) {
+          state.spawnAcc -= interval;
+          spawnDebris();
+        }
+
+        const speed = currentLevelSpeed(state.remain);
+        const now = performance.now();
+
+        for (let lane = 0; lane < 3; lane++) {
+          const shieldOn = now < state.shieldUntil[lane];
+          if (!shieldOn) shields[lane].classList.remove('on');
+          laneBtns[lane].classList.toggle('cooldown', now < state.cooldownUntil[lane]);
+        }
+
+        for (let i = state.debris.length - 1; i >= 0; i--) {
+          const d = state.debris[i];
+          d.y += speed * dt;
+          d.el.style.top = `${d.y * 100}%`;
+
+          // shield intercept zone
+          if (d.y > 0.78 && d.y < 0.9 && now < state.shieldUntil[d.lane]) {
+            d.el.remove();
+            state.debris.splice(i,1);
+            state.score += 1;
+            scoreEl.textContent = String(state.score);
+            continue;
+          }
+
+          // core hit
+          if (d.y >= 0.94) {
+            d.el.remove();
+            state.debris.splice(i,1);
+            state.hp -= 1;
+            hpEl.textContent = String(state.hp);
+            if (state.hp <= 0) {
+              endGame(false);
+              return;
+            }
+          }
+        }
+
+        if (state.remain <= 0) {
+          endGame(state.hp > 0);
+          return;
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        resetGame();
+      });
+
+      laneBtns.forEach((btn) => {
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          useShield(Number(btn.dataset.lane));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
