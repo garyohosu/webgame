@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>オービットオーチャード</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141a2e;
+      --ink: #ebf0ff;
+      --muted: #97a3c6;
+      --good: #7ee081;
+      --bad: #ff7a9c;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 0%, #1a2240, var(--bg)); color: var(--ink); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; }
+    body { display: flex; justify-content: center; }
+    .app {
+      width: min(100vw, 440px);
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      padding: 12px;
+      gap: 10px;
+    }
+    .top { display: flex; justify-content: space-between; align-items: center; }
+    h1 { font-size: 1.1rem; margin: 0; letter-spacing: .04em; }
+    .back { color: var(--muted); text-decoration: none; font-size: .9rem; }
+    .stats {
+      background: color-mix(in srgb, var(--panel) 92%, white 8%);
+      border: 1px solid #2b355d;
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      text-align: center;
+      font-size: .78rem;
+    }
+    .stats b { display: block; font-size: 1rem; margin-top: 2px; }
+    .arena {
+      position: relative;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #1a2140 0%, #121a32 100%);
+      border: 1px solid #2b355d;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    #game { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(8,12,24,.78);
+      text-align: center;
+      padding: 20px;
+    }
+    .overlay h2 { margin: 0 0 8px; }
+    .overlay p { margin: 0 0 14px; color: var(--muted); line-height: 1.5; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #69b6ff, #8b8fff);
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 12px 24px;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="top">
+      <h1>🍎 オービットオーチャード</h1>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+
+    <section class="stats">
+      <div>Score<b id="score">0</b></div>
+      <div>Time<b id="time">60.0</b></div>
+      <div>Hi<b id="hi">0</b></div>
+      <div>Life<b id="life">3</b></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="420" height="640"></canvas>
+      <div class="overlay" id="overlay">
+        <div>
+          <h2 id="ov-title">色を合わせて収穫！</h2>
+          <p id="ov-text">画面タップでリングを回転。<br>同じ色で受けると得点、ミスでライフ減少。</p>
+          <button id="start">スタート</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(() => {
+  const KEY = 'orbit-orchard-hi-v1';
+  const colors = ['#ff6b6b', '#ffd166', '#6bcB77', '#4d96ff'];
+  const colorNames = ['RED', 'YELLOW', 'GREEN', 'BLUE'];
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const lifeEl = document.getElementById('life');
+  const hiEl = document.getElementById('hi');
+  const overlay = document.getElementById('overlay');
+  const ovTitle = document.getElementById('ov-title');
+  const ovText = document.getElementById('ov-text');
+  const startBtn = document.getElementById('start');
+  const arena = document.getElementById('arena');
+  const c = document.getElementById('game');
+  const ctx = c.getContext('2d');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = hi;
+
+  let running = false;
+  let score = 0;
+  let life = 3;
+  let time = 60;
+  let ringRot = 0;
+  let fruits = [];
+  let spawnTimer = 0;
+  let last = 0;
+
+  const core = { x: 210, y: 490, r: 64 };
+
+  function resetGame() {
+    score = 0;
+    life = 3;
+    time = 60;
+    ringRot = 0;
+    fruits = [];
+    spawnTimer = 0;
+    scoreEl.textContent = score;
+    lifeEl.textContent = life;
+    timeEl.textContent = time.toFixed(1);
+  }
+
+  function spawnFruit(hardMode = 0) {
+    const idx = Math.floor(Math.random() * 4);
+    fruits.push({
+      x: 70 + Math.random() * 280,
+      y: -20,
+      vy: 95 + Math.random() * 60 + hardMode,
+      color: idx,
+      r: 13
+    });
+
+    if (hardMode > 75 && Math.random() < 0.34) {
+      const idx2 = Math.floor(Math.random() * 4);
+      fruits.push({ x: 70 + Math.random() * 280, y: -20, vy: 110 + Math.random() * 60 + hardMode, color: idx2, r: 12 });
+    }
+  }
+
+  function loseLife() {
+    life -= 1;
+    lifeEl.textContent = life;
+    if (life <= 0) endGame('ライフ切れ');
+  }
+
+  function addScore() {
+    score += 1;
+    scoreEl.textContent = score;
+  }
+
+  function drawRing() {
+    ctx.save();
+    ctx.translate(core.x, core.y);
+    ctx.rotate(ringRot * Math.PI / 2);
+
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, core.r, i * Math.PI / 2, (i + 1) * Math.PI / 2);
+      ctx.closePath();
+      ctx.fillStyle = colors[i];
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.beginPath();
+    ctx.arc(0, 0, 26, 0, Math.PI * 2);
+    ctx.fillStyle = '#0b1020';
+    ctx.fill();
+
+    ctx.fillStyle = '#dbe6ff';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('TAP', 0, 4);
+    ctx.restore();
+  }
+
+  function drawFruit(f) {
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+    ctx.fillStyle = colors[f.color];
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(f.x, f.y - f.r);
+    ctx.lineTo(f.x + 4, f.y - f.r - 8);
+    ctx.strokeStyle = '#92a46a';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  function update(dt) {
+    if (!running) return;
+
+    time -= dt;
+    if (time <= 0) {
+      time = 0;
+      endGame('タイムアップ');
+    }
+    timeEl.textContent = time.toFixed(1);
+
+    const hard = time < 15 ? 90 : time < 30 ? 55 : 20;
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnFruit(hard);
+      const base = time < 15 ? 0.42 : time < 30 ? 0.58 : 0.75;
+      spawnTimer = base + Math.random() * 0.25;
+    }
+
+    for (let i = fruits.length - 1; i >= 0; i--) {
+      const f = fruits[i];
+      f.y += f.vy * dt;
+
+      const dx = f.x - core.x;
+      const dy = f.y - core.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist <= core.r + f.r * 0.45 && dist >= core.r - 26) {
+        let ang = Math.atan2(dy, dx); // -PI..PI
+        if (ang < 0) ang += Math.PI * 2;
+        const sector = Math.floor((ang + Math.PI * 2) / (Math.PI / 2)) % 4;
+        const mapped = (sector - ringRot + 4) % 4;
+
+        if (mapped === f.color) addScore();
+        else loseLife();
+
+        fruits.splice(i, 1);
+        continue;
+      }
+
+      if (f.y > c.height + 30) {
+        loseLife();
+        fruits.splice(i, 1);
+      }
+    }
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, c.width, c.height);
+
+    const grad = ctx.createLinearGradient(0, 0, 0, c.height);
+    grad.addColorStop(0, '#202b52');
+    grad.addColorStop(1, '#10172f');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, c.width, c.height);
+
+    ctx.fillStyle = '#8ea0d4';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('同じ色で受け止めろ', c.width / 2, 26);
+
+    fruits.forEach(drawFruit);
+    drawRing();
+  }
+
+  function loop(ts) {
+    if (!last) last = ts;
+    const dt = Math.min(0.033, (ts - last) / 1000);
+    last = ts;
+
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function endGame(reason) {
+    if (!running) return;
+    running = false;
+    if (score > hi) {
+      hi = score;
+      localStorage.setItem(KEY, String(hi));
+      hiEl.textContent = hi;
+    }
+    ovTitle.textContent = `終了: ${reason}`;
+    ovText.innerHTML = `スコア: <b>${score}</b> / ハイスコア: <b>${hi}</b><br>もう一度挑戦する？`;
+    startBtn.textContent = 'リトライ';
+    overlay.style.display = 'grid';
+  }
+
+  function startGame() {
+    resetGame();
+    running = true;
+    overlay.style.display = 'none';
+  }
+
+  arena.addEventListener('pointerdown', (e) => {
+    if (!running) return;
+    e.preventDefault();
+    ringRot = (ringRot + 1) % 4;
+  });
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startGame();
+  });
+
+  render();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
