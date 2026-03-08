@@ -216,6 +216,15 @@
       line-height: 1.5;
     }
 
+    .card-views {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #9fb8ff;
+      letter-spacing: 0.04em;
+      font-family: "Orbitron", sans-serif;
+      opacity: 0.9;
+    }
+
     .card-date {
       font-family: 'Orbitron', sans-serif;
       font-size: 10px;
@@ -425,6 +434,146 @@
   window.addEventListener('resize', init);
   init();
   draw();
+})();
+
+/* ── Sakura DB / Visitor API ── */
+const SAKURA_API_BASE = 'https://garyo.sakura.ne.jp/cgi/api';
+const DB_NAME = 'webgame';
+const DB_TABLE = 'game_views';
+let ensuredDbTable = false;
+
+async function postApi(path, body) {
+  const res = await fetch(`${SAKURA_API_BASE}/${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    mode: 'cors',
+    keepalive: true,
+  });
+  return res.json();
+}
+
+async function ensureViewsTable() {
+  if (ensuredDbTable) return true;
+  const result = await postApi('db.cgi', {
+    action: 'query',
+    database: DB_NAME,
+    operation: 'create_table',
+    table: DB_TABLE,
+    schema: {
+      id: 'INTEGER PRIMARY KEY AUTOINCREMENT',
+      game_slug: 'TEXT',
+      viewed_at: 'TEXT'
+    }
+  });
+  ensuredDbTable = !!result?.ok;
+  return ensuredDbTable;
+}
+
+function extractSlug(href) {
+  const m = href.match(/\/games\/([^/]+)\/?$/);
+  return m ? m[1] : '';
+}
+
+async function recordSiteVisit() {
+  try {
+    await postApi('visitor.cgi', {
+      action: 'visit',
+      page: window.location.pathname,
+      referrer: document.referrer || ''
+    });
+  } catch (_) {}
+}
+
+async function trackGameClick(slug) {
+  if (!slug) return;
+  try {
+    const ok = await ensureViewsTable();
+    if (!ok) return;
+    await postApi('db.cgi', {
+      action: 'query',
+      database: DB_NAME,
+      operation: 'insert',
+      table: DB_TABLE,
+      data: { game_slug: slug, viewed_at: new Date().toISOString() }
+    });
+  } catch (_) {}
+}
+
+async function loadRankingCounts() {
+  try {
+    const ok = await ensureViewsTable();
+    if (!ok) return {};
+    const result = await postApi('db.cgi', {
+      action: 'query',
+      database: DB_NAME,
+      operation: 'select',
+      table: DB_TABLE,
+      fields: ['game_slug', 'viewed_at'],
+      order_by: ['viewed_at', 'DESC'],
+      limit: 1000
+    });
+    if (!result?.ok || !Array.isArray(result?.data?.rows)) return {};
+    const counts = {};
+    for (const row of result.data.rows) {
+      const slug = String(row.game_slug || '');
+      if (!slug) continue;
+      counts[slug] = (counts[slug] || 0) + 1;
+    }
+    return counts;
+  } catch (_) {
+    return {};
+  }
+}
+
+async function applyRanking() {
+  const list = document.querySelector('.card-list');
+  if (!list) return;
+
+  const cards = [...list.querySelectorAll('.card')];
+  cards.forEach((card, i) => {
+    card.dataset.order = String(i);
+    card.dataset.slug = extractSlug(card.getAttribute('href') || '');
+  });
+
+  const counts = await loadRankingCounts();
+
+  cards.sort((a, b) => {
+    const av = counts[a.dataset.slug] || 0;
+    const bv = counts[b.dataset.slug] || 0;
+    if (bv !== av) return bv - av;
+    return Number(a.dataset.order) - Number(b.dataset.order);
+  });
+
+  for (const card of cards) {
+    const slug = card.dataset.slug;
+    const views = counts[slug] || 0;
+    let badge = card.querySelector('.card-views');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'card-views';
+      const meta = card.querySelector('.card-meta');
+      if (meta) meta.insertAdjacentElement('afterend', badge);
+    }
+    badge.textContent = `👁 ${views} views`;
+    list.appendChild(card);
+  }
+}
+
+function bindClickTracking() {
+  document.querySelectorAll('.card-list .card').forEach(card => {
+    card.addEventListener('click', () => {
+      const slug = card.dataset.slug || extractSlug(card.getAttribute('href') || '');
+      trackGameClick(slug);
+    }, { passive: true });
+  });
+}
+
+/* ── Init ── */
+(async function initPageEnhancements() {
+  await recordSiteVisit();
+  await applyRanking();
+  bindClickTracking();
 })();
 
 /* ── Game count ── */
