@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>タップトレース</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #121a35;
+      --line: #2f3f76;
+      --text: #eef3ff;
+      --accent: #5ce1e6;
+      --good: #7cf58e;
+      --bad: #ff7c9e;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #1a2350, var(--bg) 60%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+    }
+    body { display: flex; justify-content: center; }
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      padding: 14px 14px 20px;
+      display: grid;
+      grid-template-rows: auto auto auto 1fr auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.3rem; letter-spacing: .04em; }
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+      font-weight: 700;
+      font-size: .9rem;
+    }
+    .pill small { display: block; font-size: .68rem; opacity: .75; font-weight: 600; }
+    #message {
+      min-height: 22px;
+      font-size: .92rem;
+      text-align: center;
+      opacity: .9;
+    }
+    .grid {
+      background: rgba(0,0,0,.2);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 16px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      align-content: center;
+    }
+    .cell {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 14px;
+      aspect-ratio: 1 / 1;
+      box-shadow: inset 0 0 0 0 rgba(92,225,230,.45);
+      transition: transform .08s ease, background .12s ease, box-shadow .12s ease;
+    }
+    .cell.flash {
+      background: #89f5ff;
+      box-shadow: inset 0 0 0 3px #dfffff;
+    }
+    .cell.ok { background: #3bcf6f; }
+    .cell.ng { background: #d44a71; }
+    .cell:active { transform: scale(.96); }
+    #startBtn {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 1rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #5ce1e6, #72b2ff);
+      color: #07122d;
+    }
+    .links {
+      text-align: center;
+      font-size: .84rem;
+      opacity: .85;
+    }
+    .links a { color: #b8cbff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🧠 タップトレース</h1>
+    <section class="hud">
+      <div class="pill"><small>SCORE</small><span id="score">0</span></div>
+      <div class="pill"><small>TIME</small><span id="time">60.0</span></div>
+      <div class="pill"><small>HI</small><span id="hi">0</span></div>
+    </section>
+    <div id="message">スタートして光る順番を覚えてタップ</div>
+    <section id="grid" class="grid"></section>
+    <button id="startBtn" type="button">START</button>
+    <div class="links"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'tap-trace-hi-v1';
+      const grid = document.getElementById('grid');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('message');
+      const startBtn = document.getElementById('startBtn');
+
+      const cells = [];
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      let score = 0;
+      let timeLeft = 60;
+      let timerId = null;
+      let playing = false;
+      let acceptingInput = false;
+      let pattern = [];
+      let inputIdx = 0;
+      let round = 1;
+
+      for (let i = 0; i < 9; i++) {
+        const btn = document.createElement('button');
+        btn.className = 'cell';
+        btn.type = 'button';
+        btn.dataset.idx = String(i);
+        btn.addEventListener('pointerdown', onTap, { passive: false });
+        grid.appendChild(btn);
+        cells.push(btn);
+      }
+
+      function onTap(e) {
+        e.preventDefault();
+        if (!playing || !acceptingInput) return;
+        const idx = Number(e.currentTarget.dataset.idx);
+        tapFlash(idx, 'ok');
+
+        if (idx === pattern[inputIdx]) {
+          inputIdx++;
+          if (inputIdx >= pattern.length) {
+            const gain = 8 + pattern.length * 2;
+            score += gain;
+            updateHud();
+            acceptingInput = false;
+            msgEl.textContent = `正解 +${gain}`;
+            round++;
+            setTimeout(nextRound, 220);
+          }
+        } else {
+          score = Math.max(0, score - 6);
+          updateHud();
+          tapFlash(idx, 'ng');
+          acceptingInput = false;
+          msgEl.textContent = 'ミス -6';
+          setTimeout(nextRound, 260);
+        }
+      }
+
+      function tapFlash(idx, cls) {
+        const c = cells[idx];
+        c.classList.add(cls);
+        setTimeout(() => c.classList.remove(cls), 130);
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = timeLeft.toFixed(1);
+      }
+
+      function currentLength() {
+        if (timeLeft > 30) return Math.min(3, 2 + Math.floor(round / 2));
+        if (timeLeft > 15) return Math.min(4, 3 + Math.floor(round / 3));
+        return Math.min(5, 4 + Math.floor(round / 3));
+      }
+
+      function flashDelay() {
+        if (timeLeft > 30) return 460;
+        if (timeLeft > 15) return 360;
+        return 280;
+      }
+
+      function buildPattern() {
+        const len = currentLength();
+        const p = [];
+        for (let i = 0; i < len; i++) {
+          let n = Math.floor(Math.random() * 9);
+          while (i > 0 && n === p[i - 1]) n = Math.floor(Math.random() * 9);
+          p.push(n);
+        }
+        return p;
+      }
+
+      async function nextRound() {
+        if (!playing) return;
+        pattern = buildPattern();
+        inputIdx = 0;
+        msgEl.textContent = `Round ${round}: ${pattern.length}手`;
+        await showPattern(pattern);
+        if (!playing) return;
+        acceptingInput = true;
+        msgEl.textContent = '順番どおりにタップ';
+      }
+
+      function sleep(ms) {
+        return new Promise(r => setTimeout(r, ms));
+      }
+
+      async function showPattern(arr) {
+        acceptingInput = false;
+        const d = flashDelay();
+        for (const idx of arr) {
+          const c = cells[idx];
+          c.classList.add('flash');
+          await sleep(Math.floor(d * 0.6));
+          c.classList.remove('flash');
+          await sleep(Math.floor(d * 0.4));
+          if (!playing) return;
+        }
+      }
+
+      function endGame() {
+        playing = false;
+        acceptingInput = false;
+        clearInterval(timerId);
+        timerId = null;
+
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = `終了！ハイスコア更新: ${score}`;
+        } else {
+          msgEl.textContent = `終了！スコア: ${score}`;
+        }
+        startBtn.disabled = false;
+        startBtn.textContent = 'RETRY';
+      }
+
+      function startGame() {
+        score = 0;
+        timeLeft = 60;
+        round = 1;
+        playing = true;
+        acceptingInput = false;
+        updateHud();
+        startBtn.disabled = true;
+        startBtn.textContent = 'PLAYING...';
+
+        timerId = setInterval(() => {
+          timeLeft = Math.max(0, timeLeft - 0.1);
+          timeEl.textContent = timeLeft.toFixed(1);
+          if (timeLeft <= 0) endGame();
+        }, 100);
+
+        nextRound();
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!playing) startGame();
+      }, { passive: false });
+    })();
+  </script>
+</body>
+</html>
