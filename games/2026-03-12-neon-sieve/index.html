@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>ネオンシーブ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      background: radial-gradient(circle at 20% 20%, #1a2340 0%, #0c0f1f 45%, #070812 100%);
+      color: #eef3ff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .app {
+      width: min(100vw, 440px);
+      height: 100vh;
+      max-height: 900px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      padding: 14px 14px calc(16px + env(safe-area-inset-bottom));
+    }
+    h1 { margin: 2px 0 0; font-size: 1.2rem; letter-spacing: .05em; }
+    .meta { color: #99a4c8; font-size: .82rem; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .panel {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(173,205,255,.22);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .label { font-size: .68rem; color: #aab4d8; }
+    .value { font-size: 1.2rem; font-weight: 700; }
+    #field {
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border: 1px solid rgba(173,205,255,.2);
+      border-radius: 18px;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .target {
+      position: absolute;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+    }
+    .good {
+      background: radial-gradient(circle, rgba(126,232,250,.95) 0%, rgba(99,176,255,.6) 50%, rgba(99,176,255,.15) 100%);
+      box-shadow: 0 0 14px rgba(126,232,250,.7), inset 0 0 10px rgba(255,255,255,.45);
+      border: 2px solid rgba(200,250,255,.85);
+    }
+    .bad {
+      background: radial-gradient(circle, rgba(255,92,141,.95) 0%, rgba(255,92,141,.5) 52%, rgba(255,92,141,.14) 100%);
+      box-shadow: 0 0 12px rgba(255,92,141,.58);
+      border: 2px solid rgba(255,177,205,.65);
+      animation: jitter .18s steps(2, end) infinite;
+    }
+    @keyframes jitter {
+      0% { transform: translate(-50%, -50%) scale(1); filter: brightness(1); }
+      50% { transform: translate(-50%, -50%) scale(0.86); filter: brightness(1.4); }
+      100% { transform: translate(-50%, -50%) scale(1.05); filter: brightness(0.8); }
+    }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    button, a.back {
+      border: 1px solid rgba(173,205,255,.3);
+      background: rgba(255,255,255,.07);
+      color: #eff4ff;
+      border-radius: 12px;
+      min-height: 44px;
+      font-weight: 700;
+      text-decoration: none;
+      display: grid;
+      place-items: center;
+    }
+    button:active, a.back:active { transform: scale(.98); }
+    #message {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(7,8,18,.2), rgba(7,8,18,.78));
+      padding: 16px;
+      color: #dbe8ff;
+      font-weight: 700;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity .2s;
+    }
+    #message.hidden { opacity: 0; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>ネオンシーブ</h1>
+      <div class="meta">揺れるノイズを避けて、安定ネオンだけを回収せよ。</div>
+    </header>
+
+    <section class="hud">
+      <div class="panel"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div id="time" class="value">60</div></div>
+      <div class="panel"><div class="label">HI</div><div id="hi" class="value">0</div></div>
+    </section>
+
+    <section id="field" aria-label="game-field">
+      <div id="message">STARTを押して開始</div>
+    </section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">START</button>
+      <a class="back" href="../../">← 戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const DURATION = 60;
+      const KEY = 'neon-sieve-hi-v1';
+      const field = document.getElementById('field');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const startBtn = document.getElementById('startBtn');
+      const message = document.getElementById('message');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      let score = 0;
+      let timeLeft = DURATION;
+      let playing = false;
+      let spawnTimer = null;
+      let tickTimer = null;
+      hiEl.textContent = String(hi);
+
+      function difficulty() {
+        if (timeLeft > 30) return { interval: 700, life: 1500, badRate: 0.34, max: 4 };
+        if (timeLeft > 15) return { interval: 520, life: 1200, badRate: 0.44, max: 5 };
+        return { interval: 380, life: 950, badRate: 0.55, max: 6 };
+      }
+
+      function clearTargets() {
+        field.querySelectorAll('.target').forEach(el => el.remove());
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = String(timeLeft);
+        hiEl.textContent = String(hi);
+      }
+
+      function spawnTarget() {
+        const d = difficulty();
+        const current = field.querySelectorAll('.target').length;
+        if (current >= d.max) return;
+
+        const good = Math.random() > d.badRate;
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = `target ${good ? 'good' : 'bad'}`;
+        el.dataset.kind = good ? 'good' : 'bad';
+
+        const r = 16 + Math.random() * 12;
+        const pad = r + 6;
+        const x = pad + Math.random() * (field.clientWidth - pad * 2);
+        const y = pad + Math.random() * (field.clientHeight - pad * 2);
+        el.style.width = `${r * 2}px`;
+        el.style.height = `${r * 2}px`;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+
+        const born = performance.now();
+        el.addEventListener('pointerdown', (ev) => {
+          ev.preventDefault();
+          if (!playing) return;
+          if (el.dataset.kind === 'good') {
+            score += 1;
+          } else {
+            score = Math.max(0, score - 1);
+          }
+          updateHud();
+          el.remove();
+        }, { passive: false });
+
+        field.appendChild(el);
+
+        function fade(now) {
+          if (!el.isConnected) return;
+          const age = now - born;
+          const life = difficulty().life;
+          const alpha = Math.max(0.1, 1 - age / life);
+          el.style.opacity = String(alpha);
+          if (age >= life || !playing) {
+            el.remove();
+            return;
+          }
+          requestAnimationFrame(fade);
+        }
+        requestAnimationFrame(fade);
+      }
+
+      function scheduleSpawn() {
+        if (!playing) return;
+        spawnTarget();
+        spawnTimer = setTimeout(scheduleSpawn, difficulty().interval);
+      }
+
+      function endGame() {
+        playing = false;
+        clearTimeout(spawnTimer);
+        clearInterval(tickTimer);
+        clearTargets();
+
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+        }
+        updateHud();
+
+        message.innerHTML = `終了!<br>スコア: ${score}<br>ハイスコア: ${hi}<br><small>もう一回で再挑戦</small>`;
+        message.classList.remove('hidden');
+        startBtn.textContent = 'もう一回';
+      }
+
+      function startGame() {
+        score = 0;
+        timeLeft = DURATION;
+        playing = true;
+        clearTargets();
+        updateHud();
+        message.classList.add('hidden');
+        startBtn.textContent = 'プレイ中';
+
+        scheduleSpawn();
+        tickTimer = setInterval(() => {
+          timeLeft -= 1;
+          updateHud();
+          if (timeLeft <= 0) endGame();
+        }, 1000);
+      }
+
+      startBtn.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (playing) return;
+        startGame();
+      }, { passive: false });
+    })();
+  </script>
+</body>
+</html>
