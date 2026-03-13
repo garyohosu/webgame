@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>シャドウスイッチ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090b16;
+      --panel: #131a2e;
+      --line: #2a355e;
+      --good: #68e0ff;
+      --bad: #ff6b7d;
+      --text: #e8eeff;
+      --muted: #98a3cc;
+      --accent: #ffd86b;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    body { display: flex; justify-content: center; }
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      padding: 14px 12px calc(10px + env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.3rem; letter-spacing: .04em; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .pill {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .label { font-size: .72rem; color: var(--muted); }
+    .value { font-size: 1.1rem; font-weight: 700; }
+    .stage {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #0e1325, #0b1020);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      touch-action: manipulation;
+    }
+    .lane {
+      position: relative;
+      border-right: 1px solid rgba(152,163,204,.2);
+    }
+    .lane:last-child { border-right: 0; }
+    .lane.active::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,216,107,.08), rgba(255,216,107,.35));
+      pointer-events: none;
+    }
+    .judge {
+      position: absolute;
+      left: 0; right: 0; bottom: 14%;
+      height: 14%;
+      border-top: 2px dashed rgba(255,255,255,.35);
+      border-bottom: 2px dashed rgba(255,255,255,.2);
+      background: rgba(255,255,255,.03);
+      pointer-events: none;
+    }
+    .orb {
+      position: absolute;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 14px rgba(0,0,0,.35);
+    }
+    .orb.good { background: radial-gradient(circle at 30% 30%, #c9f8ff, var(--good)); }
+    .orb.bad { background: radial-gradient(circle at 30% 30%, #ffc6cf, var(--bad)); }
+    .controls { display: grid; gap: 8px; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1b1724;
+      background: linear-gradient(135deg, var(--accent), #ff9e7d);
+    }
+    .hint { text-align: center; font-size: .82rem; color: var(--muted); }
+    .back { text-align: center; color: #bcd2ff; text-decoration: none; font-size: .92rem; }
+    .back:active { opacity: .7; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(8,10,20,.72);
+      text-align: center;
+      padding: 18px;
+      z-index: 5;
+    }
+    .overlay h2 { margin: 0 0 8px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>シャドウスイッチ</h1>
+    <section class="hud">
+      <div class="pill"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="pill"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="pill"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </section>
+
+    <section id="stage" class="stage" aria-label="game area">
+      <div class="judge"></div>
+      <div class="lane" data-lane="0"></div>
+      <div class="lane" data-lane="1"></div>
+      <div class="lane" data-lane="2"></div>
+      <div id="overlay" class="overlay">
+        <div>
+          <h2 id="ov-title">暗闇の影を見極めろ</h2>
+          <p id="ov-text">青い影だけ照射して得点。赤を照らすと減点。</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="controls">
+      <button id="start">スタート</button>
+      <div class="hint">レーンをタップして照射（pointerdown）</div>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const GAME_MS = 60000;
+      const KEY = 'shadow-switch-hi-v1';
+      const stage = document.getElementById('stage');
+      const lanes = [...document.querySelectorAll('.lane')];
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const startBtn = document.getElementById('start');
+      const overlay = document.getElementById('overlay');
+      const ovTitle = document.getElementById('ov-title');
+      const ovText = document.getElementById('ov-text');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let score = 0;
+      let startAt = 0;
+      let prev = 0;
+      let spawnAcc = 0;
+      let currentActive = -1;
+      let activeUntil = 0;
+      const orbs = [];
+
+      const laneCenters = () => {
+        const rect = stage.getBoundingClientRect();
+        const w = rect.width / 3;
+        return [w * 0.5, w * 1.5, w * 2.5];
+      };
+
+      function difficulty(tSec) {
+        if (tSec < 30) return { spawn: 900, speed: 0.16, badRate: 0.22 };
+        if (tSec < 45) return { spawn: 700, speed: 0.21, badRate: 0.30 };
+        return { spawn: 520, speed: 0.26, badRate: 0.38 };
+      }
+
+      function setScore(v) {
+        score = Math.max(0, v);
+        scoreEl.textContent = score;
+      }
+
+      function flashLane(i) {
+        currentActive = i;
+        activeUntil = performance.now() + 260;
+        lanes.forEach((lane, idx) => lane.classList.toggle('active', idx === i));
+      }
+
+      function spawnOrb(elapsedSec) {
+        const d = difficulty(elapsedSec);
+        const lane = Math.floor(Math.random() * 3);
+        const isBad = Math.random() < d.badRate;
+        const el = document.createElement('div');
+        el.className = `orb ${isBad ? 'bad' : 'good'}`;
+        stage.appendChild(el);
+        orbs.push({ lane, y: -8, kind: isBad ? 'bad' : 'good', speed: d.speed, el, judged: false });
+      }
+
+      function onTap(e) {
+        if (!running) return;
+        const laneEl = e.target.closest('.lane');
+        if (!laneEl) return;
+        const lane = Number(laneEl.dataset.lane);
+        flashLane(lane);
+      }
+
+      function endGame() {
+        running = false;
+        lanes.forEach(l => l.classList.remove('active'));
+        for (const o of orbs) o.el.remove();
+        orbs.length = 0;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = hi;
+        }
+        overlay.style.display = 'grid';
+        ovTitle.textContent = '60秒終了';
+        ovText.textContent = `SCORE ${score} / HI ${hi}`;
+        startBtn.disabled = false;
+        startBtn.textContent = 'もう一回';
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!prev) prev = ts;
+        const dt = ts - prev;
+        prev = ts;
+
+        const elapsed = ts - startAt;
+        const remain = Math.max(0, GAME_MS - elapsed);
+        timeEl.textContent = (remain / 1000).toFixed(1);
+
+        if (elapsed >= GAME_MS) {
+          endGame();
+          return;
+        }
+
+        if (currentActive >= 0 && ts > activeUntil) {
+          currentActive = -1;
+          lanes.forEach(l => l.classList.remove('active'));
+        }
+
+        const centers = laneCenters();
+        const h = stage.clientHeight;
+        const judgeTop = h * 0.72;
+        const judgeBottom = h * 0.86;
+
+        spawnAcc += dt;
+        const d = difficulty(elapsed / 1000);
+        while (spawnAcc >= d.spawn) {
+          spawnAcc -= d.spawn;
+          spawnOrb(elapsed / 1000);
+        }
+
+        for (let i = orbs.length - 1; i >= 0; i--) {
+          const o = orbs[i];
+          o.y += o.speed * dt;
+          o.el.style.left = centers[o.lane] + 'px';
+          o.el.style.top = o.y + 'px';
+
+          if (!o.judged && currentActive === o.lane && o.y >= judgeTop && o.y <= judgeBottom) {
+            o.judged = true;
+            setScore(score + (o.kind === 'good' ? 1 : -2));
+            o.el.remove();
+            orbs.splice(i, 1);
+            continue;
+          }
+
+          if (o.y > judgeBottom + 20 && !o.judged) {
+            if (o.kind === 'good') setScore(score - 1);
+            o.judged = true;
+          }
+
+          if (o.y > h + 30) {
+            o.el.remove();
+            orbs.splice(i, 1);
+          }
+        }
+
+        requestAnimationFrame(frame);
+      }
+
+      function startGame() {
+        running = true;
+        setScore(0);
+        timeEl.textContent = '60.0';
+        startBtn.disabled = true;
+        overlay.style.display = 'none';
+        prev = 0;
+        spawnAcc = 0;
+        currentActive = -1;
+        activeUntil = 0;
+        for (const o of orbs) o.el.remove();
+        orbs.length = 0;
+        startAt = performance.now();
+        requestAnimationFrame(frame);
+      }
+
+      stage.addEventListener('pointerdown', onTap, { passive: true });
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!running) startGame();
+      }, { passive: false });
+    })();
+  </script>
+</body>
+</html>
