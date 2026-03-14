@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>テンポタップ・ゲート</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg:#0b1020;
+      --panel:#141a2f;
+      --line:#5de2ff;
+      --good:#66ff99;
+      --bad:#ff6b7a;
+      --text:#eaf2ff;
+      --muted:#9cb0d0;
+      --accent:#8a7dff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; margin: 0; overflow: hidden; background: radial-gradient(circle at 50% -10%, #1d2a4d 0%, var(--bg) 55%); color: var(--text); font-family: "Noto Sans JP", system-ui, sans-serif; }
+    body { display: grid; place-items: center; }
+    .game {
+      width: min(100vw, 430px);
+      height: min(100vh, 860px);
+      padding: 14px 14px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.15rem; letter-spacing: .04em; text-align: center; }
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    .chip {
+      background: color-mix(in oklab, var(--panel) 88%, white 12%);
+      border: 1px solid #2e3d69;
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+    .chip b { display:block; font-size:.72rem; color: var(--muted); margin-bottom:4px; font-weight: 700; }
+    .chip span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; }
+    .stage {
+      position: relative;
+      border-radius: 16px;
+      border: 1px solid #2a3a64;
+      background: linear-gradient(180deg, rgba(22,28,51,.85), rgba(12,17,34,.95));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .lane {
+      position: absolute;
+      inset: 10px;
+      border-radius: 12px;
+      border: 1px dashed rgba(130,160,220,.35);
+    }
+    .gate {
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 64px;
+      border-radius: 12px;
+      border: 2px solid var(--line);
+      box-shadow: 0 0 18px rgba(93,226,255,.25) inset, 0 0 18px rgba(93,226,255,.2);
+      pointer-events: none;
+    }
+    .gate::after {
+      content: 'TAP WINDOW';
+      position: absolute;
+      top: -20px;
+      right: 8px;
+      font-size: .62rem;
+      color: var(--line);
+      letter-spacing: .08em;
+    }
+    .note {
+      position: absolute;
+      left: 50%;
+      width: 64px;
+      height: 64px;
+      margin-left: -32px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fff, #9db2ff 45%, #5d69d6 75%);
+      border: 2px solid #d7ddff;
+      box-shadow: 0 0 16px rgba(154,180,255,.45);
+      pointer-events: none;
+    }
+    .feedback {
+      position: absolute;
+      left: 50%;
+      top: 54%;
+      transform: translate(-50%,-50%);
+      font-weight: 800;
+      letter-spacing: .08em;
+      opacity: 0;
+      transition: opacity .14s;
+      pointer-events:none;
+    }
+    .feedback.show { opacity: 1; }
+    .feedback.good { color: var(--good); }
+    .feedback.bad { color: var(--bad); }
+    .controls { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    button {
+      appearance: none; border: 0; border-radius: 12px; padding: 12px 14px;
+      background: linear-gradient(135deg, var(--accent), #4fb6ff);
+      color: white; font-weight: 800; letter-spacing: .04em; font-size: 1rem;
+    }
+    .note-text { font-size: .78rem; color: var(--muted); text-align: center; line-height: 1.4; min-height: 2.2em; }
+    .back { text-align: center; }
+    .back a { color: #b8c8ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>テンポタップ・ゲート</h1>
+
+    <section class="hud" aria-label="status">
+      <div class="chip"><b>SCORE</b><span id="score">0</span></div>
+      <div class="chip"><b>TIME</b><span id="time">60.0</span></div>
+      <div class="chip"><b>HI</b><span id="hi">0</span></div>
+    </section>
+
+    <section class="stage" id="stage" aria-label="play area">
+      <div class="lane"></div>
+      <div class="gate" id="gate"></div>
+      <div class="note" id="note" hidden></div>
+      <div class="feedback" id="feedback">GOOD</div>
+    </section>
+
+    <div class="controls">
+      <button id="startBtn" type="button">START 60s RUN</button>
+      <div class="note-text" id="message">ゲート帯でノーツが重なった瞬間にタップ。早押しは減点。</div>
+    </div>
+
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'tempo-tap-gate-hi-v1';
+      const state = {
+        running: false,
+        score: 0,
+        leftMs: 60000,
+        noteY: -80,
+        noteSpeed: 150,
+        noteActive: false,
+        nextSpawnMs: 400,
+        lastTs: 0,
+      };
+
+      const el = {
+        stage: document.getElementById('stage'),
+        gate: document.getElementById('gate'),
+        note: document.getElementById('note'),
+        feedback: document.getElementById('feedback'),
+        score: document.getElementById('score'),
+        time: document.getElementById('time'),
+        hi: document.getElementById('hi'),
+        msg: document.getElementById('message'),
+        startBtn: document.getElementById('startBtn'),
+      };
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      el.hi.textContent = hi;
+
+      function difficultyRatio() {
+        const t = 60000 - state.leftMs;
+        if (t < 30000) return 1;
+        if (t < 45000) return 1.2;
+        return 1.4;
+      }
+
+      function setFeedback(text, good) {
+        el.feedback.textContent = text;
+        el.feedback.className = 'feedback show ' + (good ? 'good' : 'bad');
+        setTimeout(() => el.feedback.className = 'feedback', 120);
+      }
+
+      function clampScore(v) {
+        return Math.max(0, Math.floor(v));
+      }
+
+      function spawnNote() {
+        state.noteActive = true;
+        state.noteY = -70;
+        el.note.hidden = false;
+      }
+
+      function despawnNote(missed = false) {
+        state.noteActive = false;
+        el.note.hidden = true;
+        if (missed) {
+          state.score = clampScore(state.score - 3);
+          setFeedback('MISS', false);
+        }
+      }
+
+      function updateHUD() {
+        el.score.textContent = String(state.score);
+        el.time.textContent = (state.leftMs / 1000).toFixed(1);
+      }
+
+      function tapJudge() {
+        if (!state.running) return;
+        if (!state.noteActive) {
+          state.score = clampScore(state.score - 6);
+          setFeedback('AIR', false);
+          updateHUD();
+          return;
+        }
+        const gateRect = el.gate.getBoundingClientRect();
+        const noteRect = el.note.getBoundingClientRect();
+        const noteCenter = noteRect.top + noteRect.height / 2;
+        const inGate = noteCenter >= gateRect.top && noteCenter <= gateRect.bottom;
+
+        if (inGate) {
+          state.score += 10;
+          setFeedback('GOOD', true);
+          despawnNote(false);
+        } else {
+          state.score = clampScore(state.score - 6);
+          setFeedback('BAD', false);
+        }
+        updateHUD();
+      }
+
+      function endGame() {
+        state.running = false;
+        state.leftMs = 0;
+        el.startBtn.hidden = false;
+        el.startBtn.disabled = false;
+        if (state.score > hi) {
+          hi = state.score;
+          localStorage.setItem(KEY, String(hi));
+          el.hi.textContent = hi;
+          el.msg.textContent = `ハイスコア更新: ${hi} 🎉 もう1回いく？`;
+        } else {
+          el.msg.textContent = `終了！ スコア ${state.score} / HI ${hi}`;
+        }
+        updateHUD();
+      }
+
+      function frame(ts) {
+        if (!state.running) return;
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min(32, ts - state.lastTs);
+        state.lastTs = ts;
+
+        state.leftMs -= dt;
+        if (state.leftMs <= 0) {
+          endGame();
+          return;
+        }
+
+        const ratio = difficultyRatio();
+        state.noteSpeed = 150 * ratio;
+
+        if (!state.noteActive) {
+          state.nextSpawnMs -= dt;
+          if (state.nextSpawnMs <= 0) {
+            spawnNote();
+            const base = 900;
+            state.nextSpawnMs = Math.max(350, base - (ratio - 1) * 250) + Math.random() * 250;
+          }
+        } else {
+          state.noteY += state.noteSpeed * (dt / 1000);
+          el.note.style.top = `${state.noteY}px`;
+          if (state.noteY > el.stage.clientHeight + 72) {
+            despawnNote(true);
+          }
+        }
+
+        updateHUD();
+        requestAnimationFrame(frame);
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.leftMs = 60000;
+        state.noteActive = false;
+        state.nextSpawnMs = 450;
+        state.lastTs = 0;
+        el.note.hidden = true;
+        el.startBtn.hidden = true;
+        el.msg.textContent = '中央ゲートで重なった瞬間だけタップ。';
+        updateHUD();
+        requestAnimationFrame(frame);
+      }
+
+      el.startBtn.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (!state.running) startGame();
+      });
+
+      el.stage.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        tapJudge();
+      });
+
+      updateHUD();
+    })();
+  </script>
+</body>
+</html>
