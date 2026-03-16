@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>フリップパッド・レスキュー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      background: radial-gradient(circle at 50% 20%, #1f325e, #0a0f1f 70%);
+      color: #eef3ff;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      padding: 14px 14px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .title { font-size: clamp(20px, 5.6vw, 28px); font-weight: 800; letter-spacing: 0.02em; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .panel {
+      background: rgba(255,255,255,0.09);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 10px;
+      text-align: center;
+      padding: 6px 4px;
+    }
+    .label { font-size: 11px; opacity: 0.72; }
+    .value { font-size: 20px; font-weight: 700; line-height: 1.2; }
+    .arena {
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: linear-gradient(180deg, rgba(115,175,255,0.18), rgba(8,11,24,0.6));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .guide {
+      position: absolute;
+      left: 0; right: 0;
+      top: 32%;
+      border-top: 1px dashed rgba(255,255,255,0.24);
+    }
+    .lane-mid {
+      position: absolute;
+      left: 50%; top: 0; bottom: 0;
+      width: 1px; background: rgba(255,255,255,0.1);
+      transform: translateX(-0.5px);
+    }
+    .pad {
+      position: absolute;
+      width: 42%;
+      height: 16px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #7de4ff, #8dffb0);
+      box-shadow: 0 0 14px rgba(125,228,255,0.4);
+      transition: top 120ms ease;
+    }
+    .pad.left { left: 4%; }
+    .pad.right { right: 4%; }
+    .pod {
+      position: absolute;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    .pod.good { background: #5dc0ff; box-shadow: 0 0 12px rgba(93,192,255,0.6); }
+    .pod.bad { background: #ff5c74; box-shadow: 0 0 12px rgba(255,92,116,0.58); }
+
+    .controls { display: grid; gap: 8px; }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 10px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #041226;
+      background: linear-gradient(135deg, #92e6ff, #ffe67a);
+    }
+    .hint { font-size: 12px; opacity: 0.8; text-align: center; min-height: 1.3em; }
+    .back {
+      text-align: center;
+      color: #b8ccff;
+      text-decoration: none;
+      font-size: 13px;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">🛟 フリップパッド・レスキュー</div>
+
+    <section class="hud">
+      <div class="panel"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div id="time" class="value">60</div></div>
+      <div class="panel"><div class="label">HI</div><div id="hi" class="value">0</div></div>
+    </section>
+
+    <section id="arena" class="arena" aria-label="game arena">
+      <div class="guide"></div>
+      <div class="lane-mid"></div>
+      <div id="padL" class="pad left"></div>
+      <div id="padR" class="pad right"></div>
+    </section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">START</button>
+      <div id="hint" class="hint">画面タップで左右パッドを上下フリップ</div>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'flip-pad-rescue-hi-v1';
+      const GAME_SEC = 60;
+
+      const arena = document.getElementById('arena');
+      const padL = document.getElementById('padL');
+      const padR = document.getElementById('padR');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const hintEl = document.getElementById('hint');
+      const startBtn = document.getElementById('startBtn');
+
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let score = 0;
+      let timeLeft = GAME_SEC;
+      let sideTop = false;
+      let pods = [];
+      let lastTs = 0;
+      let spawnAcc = 0;
+      let secAcc = 0;
+
+      function updatePads() {
+        const h = arena.clientHeight;
+        const topY = h * 0.28;
+        const lowY = h * 0.78;
+        const y = sideTop ? topY : lowY;
+        padL.style.top = y + 'px';
+        padR.style.top = y + 'px';
+      }
+
+      function phaseParams() {
+        const elapsed = GAME_SEC - timeLeft;
+        if (elapsed < 30) return { spawn: 0.68, speed: 120, badRate: 0.25 };
+        if (elapsed < 45) return { spawn: 0.52, speed: 165, badRate: 0.35 };
+        return { spawn: 0.39, speed: 205, badRate: 0.44 };
+      }
+
+      function addPod() {
+        const p = phaseParams();
+        const lane = Math.random() < 0.5 ? 'left' : 'right';
+        const isBad = Math.random() < p.badRate;
+        const el = document.createElement('div');
+        el.className = 'pod ' + (isBad ? 'bad' : 'good');
+        arena.appendChild(el);
+
+        const x = lane === 'left' ? arena.clientWidth * 0.24 : arena.clientWidth * 0.74;
+        pods.push({ el, x, y: -26, lane, bad: isBad, speed: p.speed });
+      }
+
+      function applyScore(delta) {
+        score += delta;
+        if (score < 0) score = 0;
+        scoreEl.textContent = score;
+      }
+
+      function clearPods() {
+        for (const p of pods) p.el.remove();
+        pods = [];
+      }
+
+      function endGame() {
+        running = false;
+        startBtn.disabled = false;
+        startBtn.textContent = 'RESTART';
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+          hiEl.textContent = hi;
+          hintEl.textContent = 'ハイスコア更新！';
+        } else {
+          hintEl.textContent = '終了！もう一度挑戦';
+        }
+      }
+
+      function resetGame() {
+        running = true;
+        score = 0;
+        timeLeft = GAME_SEC;
+        sideTop = false;
+        lastTs = 0;
+        spawnAcc = 0;
+        secAcc = 0;
+        scoreEl.textContent = score;
+        timeEl.textContent = timeLeft;
+        clearPods();
+        updatePads();
+        hintEl.textContent = '青を受ける / 赤は避ける';
+      }
+
+      function step(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        spawnAcc += dt;
+        secAcc += dt;
+
+        const p = phaseParams();
+        while (spawnAcc >= p.spawn) {
+          addPod();
+          spawnAcc -= p.spawn;
+        }
+
+        if (secAcc >= 1) {
+          const t = Math.floor(secAcc);
+          secAcc -= t;
+          timeLeft -= t;
+          if (timeLeft < 0) timeLeft = 0;
+          timeEl.textContent = timeLeft;
+          if (timeLeft <= 0) {
+            endGame();
+          }
+        }
+
+        const h = arena.clientHeight;
+        const padY = sideTop ? h * 0.28 : h * 0.78;
+        const hitBand = 20;
+
+        for (let i = pods.length - 1; i >= 0; i--) {
+          const pod = pods[i];
+          pod.y += pod.speed * dt;
+          pod.el.style.transform = `translate(${pod.x - 13}px, ${pod.y}px)`;
+
+          if (Math.abs(pod.y - padY) < hitBand) {
+            const caught = (pod.lane === 'left' && pod.x < arena.clientWidth * 0.5) ||
+                           (pod.lane === 'right' && pod.x > arena.clientWidth * 0.5);
+            if (caught) {
+              applyScore(pod.bad ? -2 : 1);
+              pod.el.remove();
+              pods.splice(i, 1);
+              continue;
+            }
+          }
+
+          if (pod.y > h + 30) {
+            if (!pod.bad) applyScore(-1);
+            pod.el.remove();
+            pods.splice(i, 1);
+          }
+        }
+
+        requestAnimationFrame(step);
+      }
+
+      function flipPads() {
+        if (!running) return;
+        sideTop = !sideTop;
+        updatePads();
+      }
+
+      arena.addEventListener('pointerdown', flipPads, { passive: true });
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (running) return;
+        startBtn.disabled = true;
+        resetGame();
+        requestAnimationFrame(step);
+      }, { passive: false });
+
+      window.addEventListener('resize', updatePads);
+      updatePads();
+    })();
+  </script>
+</body>
+</html>
