@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>パルスレーン・キーパー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090b17;
+      --panel: #121933;
+      --text: #e9efff;
+      --accent: #5be7ff;
+      --good: #59ffa1;
+      --bad: #ff5f7c;
+      --lane: #27335d;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 0%, #18244c, var(--bg) 60%); color: var(--text); font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+    body { display: grid; place-items: center; }
+    .game {
+      width: min(100vw, 440px);
+      height: min(100vh, 860px);
+      padding: 12px 12px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 8px;
+    }
+    h1 { margin: 0; font-size: 1.25rem; text-align: center; letter-spacing: .04em; }
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .stat { background: color-mix(in oklab, var(--panel), #fff 5%); border: 1px solid #2a3663; border-radius: 10px; padding: 8px; text-align: center; }
+    .label { font-size: .68rem; opacity: .75; }
+    .value { font-weight: 700; font-size: 1.05rem; }
+    .stage {
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #33457c;
+      background: linear-gradient(180deg, #111a3a 0%, #0b1128 100%);
+      touch-action: manipulation;
+    }
+    #playfield { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      background: linear-gradient(180deg, rgba(5,8,20,.30), rgba(5,8,20,.68));
+      text-align: center; padding: 16px;
+    }
+    .overlay.hidden { display: none; }
+    .panel { background: rgba(6,11,26,.84); border: 1px solid #335; border-radius: 12px; padding: 14px; }
+    .panel p { margin: 0 0 10px; font-size: .92rem; line-height: 1.5; }
+    button {
+      border: 0; border-radius: 999px; padding: 10px 18px; font-size: .95rem; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), #7cf5bf); color: #041022;
+    }
+    .guide { font-size: .8rem; opacity: .85; text-align: center; }
+    .back { text-align: center; font-size: .9rem; }
+    .back a { color: #9ed3ff; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>パルスレーン・キーパー</h1>
+    <section class="hud">
+      <div class="stat"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </section>
+
+    <section class="stage" id="stage">
+      <canvas id="playfield" width="416" height="580" aria-label="game area"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <p>タップでゲートを切替。<br>GOOD（青）を受けて、BAD（赤）は避けろ。</p>
+          <button id="startBtn" type="button">スタート</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="guide">画面タップで 左→中→右 の順に切替</div>
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'pulse-lane-hi-v1';
+      const canvas = document.getElementById('playfield');
+      const ctx = canvas.getContext('2d');
+      const stage = document.getElementById('stage');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const laneCount = 3;
+      const laneW = W / laneCount;
+      const gateY = H - 74;
+
+      let running = false;
+      let startTime = 0;
+      let lastTs = 0;
+      let spawnTimer = 0;
+      let laneIndex = 1;
+      let score = 0;
+      let pulses = [];
+
+      function phaseCfg(elapsed) {
+        if (elapsed < 30) return { spawnMs: 700, speed: 140, badRate: 0.25 };
+        if (elapsed < 45) return { spawnMs: 560, speed: 185, badRate: 0.35 };
+        return { spawnMs: 460, speed: 225, badRate: 0.42 };
+      }
+
+      function spawnPulse(elapsed) {
+        const cfg = phaseCfg(elapsed);
+        const lane = (Math.random() * laneCount) | 0;
+        const bad = Math.random() < cfg.badRate;
+        pulses.push({ lane, y: -24, bad, speed: cfg.speed, r: 12 });
+      }
+
+      function resetGame() {
+        running = true;
+        startTime = performance.now();
+        lastTs = startTime;
+        spawnTimer = 0;
+        laneIndex = 1;
+        score = 0;
+        pulses = [];
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+      }
+
+      function endGame() {
+        running = false;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+        overlay.classList.remove('hidden');
+        startBtn.textContent = 'リトライ';
+      }
+
+      function onTap() {
+        if (!running) return;
+        laneIndex = (laneIndex + 1) % laneCount;
+      }
+
+      function update(ts) {
+        if (!running) return;
+        const dt = Math.min(33, ts - lastTs);
+        lastTs = ts;
+
+        const elapsed = (ts - startTime) / 1000;
+        const remain = Math.max(0, 60 - elapsed);
+        timeEl.textContent = remain.toFixed(1);
+
+        const cfg = phaseCfg(elapsed);
+        spawnTimer += dt;
+        while (spawnTimer >= cfg.spawnMs) {
+          spawnTimer -= cfg.spawnMs;
+          spawnPulse(elapsed);
+        }
+
+        for (let i = pulses.length - 1; i >= 0; i--) {
+          const p = pulses[i];
+          p.y += p.speed * (dt / 1000);
+
+          if (p.y + p.r >= gateY) {
+            if (p.lane === laneIndex) {
+              score += p.bad ? -8 : 10;
+            } else if (p.bad) {
+              score += 2;
+            }
+            pulses.splice(i, 1);
+          } else if (p.y - p.r > H) {
+            pulses.splice(i, 1);
+          }
+        }
+
+        scoreEl.textContent = String(score);
+
+        if (remain <= 0) {
+          endGame();
+          return;
+        }
+
+        draw(elapsed);
+        requestAnimationFrame(update);
+      }
+
+      function draw(elapsed = 0) {
+        ctx.clearRect(0, 0, W, H);
+
+        for (let i = 1; i < laneCount; i++) {
+          const x = i * laneW;
+          ctx.strokeStyle = 'rgba(144,170,255,.18)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < laneCount; i++) {
+          const x = i * laneW + 6;
+          const w = laneW - 12;
+          const active = i === laneIndex;
+          ctx.fillStyle = active ? 'rgba(91,231,255,.33)' : 'rgba(39,51,93,.65)';
+          ctx.fillRect(x, gateY, w, 50);
+          if (active) {
+            ctx.strokeStyle = 'rgba(91,231,255,.9)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, gateY, w, 50);
+          }
+        }
+
+        for (const p of pulses) {
+          const x = p.lane * laneW + laneW / 2;
+          const grad = ctx.createRadialGradient(x - 3, p.y - 3, 2, x, p.y, p.r + 5);
+          if (p.bad) {
+            grad.addColorStop(0, '#ffc3d0');
+            grad.addColorStop(1, '#ff5f7c');
+          } else {
+            grad.addColorStop(0, '#d4f6ff');
+            grad.addColorStop(1, '#5be7ff');
+          }
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = 'rgba(180,205,255,.12)';
+        for (let i = 0; i < 18; i++) {
+          const y = (elapsed * 70 + i * 42) % H;
+          ctx.fillRect((i * 57) % W, y, 2, 2);
+        }
+      }
+
+      function startGame() {
+        overlay.classList.add('hidden');
+        resetGame();
+        draw(0);
+        requestAnimationFrame(update);
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); startGame(); });
+      stage.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (e.target === startBtn) return;
+        onTap();
+      }, { passive: false });
+
+      draw(0);
+    })();
+  </script>
+</body>
+</html>
