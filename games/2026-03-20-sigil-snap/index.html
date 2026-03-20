@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>シジルスナップ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, 'Noto Sans JP', sans-serif; }
+    body {
+      background: radial-gradient(circle at 20% 10%, #1f2a56, #0a0d1c 55%, #05070f);
+      color: #eef2ff;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .app {
+      width: min(100vw, 440px);
+      height: 100vh;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .topbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .panel {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 12px;
+      padding: 8px 10px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0.04em;
+      text-align: center;
+    }
+    .target-box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .target-sigil {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      font-size: 24px;
+      background: rgba(125, 211, 252, 0.18);
+      border: 1px solid rgba(125, 211, 252, 0.6);
+    }
+    #field {
+      position: relative;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.16);
+      overflow: hidden;
+    }
+    .tile {
+      position: absolute;
+      width: 54px;
+      height: 54px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #f8fbff;
+      background: rgba(30, 41, 59, 0.88);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.3);
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .tile.hit { transform: scale(0.88); opacity: 0.4; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+    }
+    button {
+      height: 44px;
+      border: 0;
+      border-radius: 999px;
+      font-weight: 800;
+      color: #021018;
+      background: linear-gradient(90deg, #67e8f9, #22d3ee);
+    }
+    #msg { font-size: 13px; opacity: 0.88; text-align: right; }
+    a.back { color: #bfdbfe; text-decoration: none; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>シジルスナップ</h1>
+
+    <section class="panel topbar">
+      <div>Score: <span id="score">0</span></div>
+      <div>Time: <span id="time">60.0</span>s</div>
+      <div>Hi: <span id="hi">0</span></div>
+      <div id="phase">Phase: 1</div>
+    </section>
+
+    <section class="panel target-box">
+      <span>TARGET</span>
+      <div class="target-sigil" id="target">✦</div>
+    </section>
+
+    <section id="field" aria-label="game field"></section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">START 60s RUN</button>
+      <div id="msg">タップで同じ紋章だけ取る</div>
+    </section>
+
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </main>
+
+<script>
+(() => {
+  const SIGILS = ['✦', '✧', '✪', '✿', '✺', '✷'];
+  const KEY = 'sigil-snap-hi-v1';
+  const field = document.getElementById('field');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const targetEl = document.getElementById('target');
+  const msgEl = document.getElementById('msg');
+  const phaseEl = document.getElementById('phase');
+  const startBtn = document.getElementById('startBtn');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = String(hi);
+
+  let running = false;
+  let score = 0;
+  let leftMs = 60000;
+  let target = SIGILS[0];
+  let tiles = [];
+  let spawnTimer = 0;
+  let targetTimer = 0;
+  let prevTs = 0;
+
+  function phaseByTime(ms) {
+    const elapsed = 60000 - ms;
+    if (elapsed < 30000) return 1;
+    if (elapsed < 45000) return 2;
+    return 3;
+  }
+
+  function phaseParams(p) {
+    if (p === 1) return { spawn: 900, speed: 58, targetShift: 6000 };
+    if (p === 2) return { spawn: 700, speed: 85, targetShift: 5000 };
+    return { spawn: 520, speed: 110, targetShift: 4000 };
+  }
+
+  function chooseTarget() {
+    const next = SIGILS[(Math.random() * SIGILS.length) | 0];
+    target = next;
+    targetEl.textContent = next;
+  }
+
+  function spawnTile() {
+    const rect = field.getBoundingClientRect();
+    const sigil = SIGILS[(Math.random() * SIGILS.length) | 0];
+    const el = document.createElement('div');
+    el.className = 'tile';
+    el.textContent = sigil;
+    const x = Math.random() * Math.max(1, rect.width - 58);
+    const y = -56;
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    const tile = { el, sigil, x, y, dead: false };
+
+    el.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      if (!running || tile.dead) return;
+      tile.dead = true;
+      el.classList.add('hit');
+      if (tile.sigil === target) {
+        score += 10;
+        msgEl.textContent = 'Nice +10';
+      } else {
+        score = Math.max(0, score - 6);
+        msgEl.textContent = 'Miss -6';
+      }
+      scoreEl.textContent = String(score);
+      setTimeout(() => el.remove(), 80);
+    }, { passive: false });
+
+    field.appendChild(el);
+    tiles.push(tile);
+  }
+
+  function endGame() {
+    running = false;
+    startBtn.disabled = false;
+    startBtn.textContent = 'RETRY';
+    tiles.forEach(t => t.el.remove());
+    tiles = [];
+    if (score > hi) {
+      hi = score;
+      localStorage.setItem(KEY, String(hi));
+      hiEl.textContent = String(hi);
+      msgEl.textContent = `NEW HI SCORE: ${score}`;
+    } else {
+      msgEl.textContent = `FINISH: ${score}`;
+    }
+  }
+
+  function frame(ts) {
+    if (!running) return;
+    if (!prevTs) prevTs = ts;
+    const dt = ts - prevTs;
+    prevTs = ts;
+
+    leftMs -= dt;
+    if (leftMs <= 0) {
+      leftMs = 0;
+      timeEl.textContent = '0.0';
+      phaseEl.textContent = 'Phase: END';
+      endGame();
+      return;
+    }
+
+    const phase = phaseByTime(leftMs);
+    const params = phaseParams(phase);
+    phaseEl.textContent = `Phase: ${phase}`;
+
+    spawnTimer += dt;
+    targetTimer += dt;
+    if (spawnTimer >= params.spawn) {
+      spawnTimer = 0;
+      spawnTile();
+    }
+    if (targetTimer >= params.targetShift) {
+      targetTimer = 0;
+      chooseTarget();
+    }
+
+    for (const t of tiles) {
+      if (t.dead) continue;
+      t.y += (params.speed * dt) / 1000;
+      t.el.style.top = `${t.y}px`;
+      if (t.y > field.clientHeight + 60) {
+        t.dead = true;
+        t.el.remove();
+      }
+    }
+    tiles = tiles.filter(t => !t.dead);
+
+    timeEl.textContent = (leftMs / 1000).toFixed(1);
+    requestAnimationFrame(frame);
+  }
+
+  function start() {
+    running = true;
+    score = 0;
+    leftMs = 60000;
+    spawnTimer = 0;
+    targetTimer = 0;
+    prevTs = 0;
+    tiles.forEach(t => t.el.remove());
+    tiles = [];
+    scoreEl.textContent = '0';
+    timeEl.textContent = '60.0';
+    msgEl.textContent = 'Go!';
+    chooseTarget();
+    startBtn.disabled = true;
+    requestAnimationFrame(frame);
+  }
+
+  startBtn.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    if (!running) start();
+  }, { passive: false });
+})();
+</script>
+</body>
+</html>
