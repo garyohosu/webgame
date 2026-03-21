@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>エコーレーン・ダッシュ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; background: #070b1b; color: #eef3ff; }
+    body { display: grid; place-items: center; }
+    .app {
+      width: min(430px, 100vw);
+      height: 100dvh;
+      max-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 8px;
+      padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+      background: radial-gradient(circle at 20% 10%, #1f2f67, #070b1b 55%);
+    }
+    .title { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; }
+    .hud { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: .82rem; }
+    .panel { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; padding: 6px 8px; text-align: center; }
+    .panel b { display: block; font-size: .95rem; color: #7ee8fa; }
+    #game {
+      position: relative;
+      overflow: hidden;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: linear-gradient(180deg, rgba(8,16,40,.8), rgba(6,10,22,.95));
+      touch-action: manipulation;
+    }
+    .lane-guide { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3,1fr); pointer-events: none; }
+    .lane-guide div { border-left: 1px solid rgba(255,255,255,.08); }
+    .lane-guide div:first-child { border-left: none; }
+    .player {
+      position: absolute; bottom: 10px; width: 26%; left: 4%; height: 24px;
+      border-radius: 12px; background: linear-gradient(90deg, #7ee8fa, #7f9dff);
+      box-shadow: 0 0 16px rgba(126,232,250,.7);
+      transition: left .08s linear;
+    }
+    .item { position: absolute; width: 22%; left: 5%; aspect-ratio: 1; border-radius: 12px; }
+    .echo { background: radial-gradient(circle at 30% 30%, #d8f7ff, #56c6ff 65%, #204198); box-shadow: 0 0 18px rgba(90,190,255,.6); }
+    .noise { background: radial-gradient(circle at 35% 30%, #ffc4d3, #ff5887 65%, #661130); box-shadow: 0 0 16px rgba(255,80,130,.55); }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    button, a.back {
+      border: none; border-radius: 12px; padding: 12px 10px; font-weight: 700; text-align: center;
+      background: linear-gradient(135deg, #ffd86e, #ff9f43); color: #161a2c; text-decoration: none;
+    }
+    a.back { background: rgba(255,255,255,.12); color: #eaf2ff; border: 1px solid rgba(255,255,255,.2); }
+    .hint { font-size: .78rem; opacity: .86; text-align: center; min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">エコーレーン・ダッシュ</div>
+    <div class="hud">
+      <div class="panel">SCORE<b id="score">0</b></div>
+      <div class="panel">TIME<b id="time">60.0</b></div>
+      <div class="panel">HI<b id="hi">0</b></div>
+      <div class="panel">COMBO<b id="combo">x1</b></div>
+    </div>
+    <section id="game" aria-label="game area">
+      <div class="lane-guide"><div></div><div></div><div></div></div>
+      <div id="player" class="player"></div>
+    </section>
+    <div class="controls">
+      <button id="startBtn" type="button">START 60s</button>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+    <div class="hint" id="hint">画面をタップしてレーン移動。青を取って赤を避ける。</div>
+  </main>
+
+<script>
+(() => {
+  const KEY = 'echo-lane-dash-hi-v1';
+  const game = document.getElementById('game');
+  const playerEl = document.getElementById('player');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const comboEl = document.getElementById('combo');
+  const hintEl = document.getElementById('hint');
+  const startBtn = document.getElementById('startBtn');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = hi;
+
+  let running = false;
+  let lane = 1;
+  let score = 0;
+  let combo = 0;
+  let leftSec = 60;
+  let lastTs = 0;
+  let spawnAcc = 0;
+  let items = [];
+
+  const laneX = () => {
+    const w = game.clientWidth;
+    return [w * 0.04, w * 0.37, w * 0.70];
+  };
+
+  function setLane(next) {
+    lane = Math.max(0, Math.min(2, next));
+    playerEl.style.left = `${laneX()[lane]}px`;
+  }
+
+  function reset() {
+    items.forEach(i => i.el.remove());
+    items = [];
+    score = 0; combo = 0; leftSec = 60; spawnAcc = 0; lastTs = 0;
+    setLane(1);
+    scoreEl.textContent = '0';
+    comboEl.textContent = 'x1';
+    timeEl.textContent = '60.0';
+  }
+
+  function spawn() {
+    const t = 60 - leftSec;
+    const pNoise = t < 30 ? 0.25 : (t < 45 ? 0.35 : 0.45);
+    const type = Math.random() < pNoise ? 'noise' : 'echo';
+    const ln = Math.floor(Math.random() * 3);
+    const el = document.createElement('div');
+    el.className = `item ${type}`;
+    el.style.left = `${laneX()[ln] + game.clientWidth * 0.02}px`;
+    el.style.top = '-34px';
+    game.appendChild(el);
+    items.push({ el, y: -34, lane: ln, type });
+  }
+
+  function endGame() {
+    running = false;
+    startBtn.disabled = false;
+    hintEl.textContent = `終了。スコア ${score} / HI ${hi}。もう一回いける。`;
+  }
+
+  function update(dt) {
+    leftSec -= dt;
+    if (leftSec <= 0) {
+      leftSec = 0;
+      timeEl.textContent = '0.0';
+      endGame();
+      return;
+    }
+    timeEl.textContent = leftSec.toFixed(1);
+
+    const t = 60 - leftSec;
+    const speed = t < 30 ? 170 : (t < 45 ? 220 : 280);
+    const spawnEvery = t < 30 ? 0.55 : (t < 45 ? 0.42 : 0.32);
+
+    spawnAcc += dt;
+    while (spawnAcc >= spawnEvery) {
+      spawnAcc -= spawnEvery;
+      spawn();
+    }
+
+    const catchY = game.clientHeight - 40;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.y += speed * dt;
+      it.el.style.top = `${it.y}px`;
+
+      const caught = it.lane === lane && it.y >= catchY - 14 && it.y <= catchY + 24;
+      const missed = it.y > game.clientHeight + 40;
+
+      if (caught) {
+        if (it.type === 'echo') {
+          combo += 1;
+          const gain = 10 + Math.min(20, combo * 2);
+          score += gain;
+          hintEl.textContent = `Echo +${gain}`;
+        } else {
+          combo = 0;
+          score = Math.max(0, score - 12);
+          hintEl.textContent = 'Noise 被弾 -12';
+        }
+        scoreEl.textContent = String(score);
+        comboEl.textContent = `x${Math.max(1, combo)}`;
+        it.el.remove();
+        items.splice(i, 1);
+        continue;
+      }
+
+      if (missed) {
+        if (it.type === 'echo') combo = 0;
+        comboEl.textContent = `x${Math.max(1, combo)}`;
+        it.el.remove();
+        items.splice(i, 1);
+      }
+    }
+
+    if (score > hi) {
+      hi = score;
+      hiEl.textContent = String(hi);
+      localStorage.setItem(KEY, String(hi));
+    }
+  }
+
+  function loop(ts) {
+    if (!running) return;
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min(0.033, (ts - lastTs) / 1000);
+    lastTs = ts;
+    update(dt);
+    requestAnimationFrame(loop);
+  }
+
+  game.addEventListener('pointerdown', (e) => {
+    if (!running) return;
+    const x = e.clientX - game.getBoundingClientRect().left;
+    const w = game.clientWidth;
+    const next = x < w / 3 ? 0 : (x < (w * 2) / 3 ? 1 : 2);
+    setLane(next);
+  }, { passive: true });
+
+  startBtn.addEventListener('pointerdown', () => {
+    reset();
+    running = true;
+    startBtn.disabled = true;
+    hintEl.textContent = '青Echo回収、赤Noise回避。45秒以降は地獄。';
+    requestAnimationFrame(loop);
+  });
+
+  window.addEventListener('resize', () => setLane(lane));
+  setLane(1);
+})();
+</script>
+</body>
+</html>
