@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>レールスイッチ・ラッシュ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #05070f;
+      --panel: #10172a;
+      --line: #233154;
+      --good: #39d98a;
+      --bad: #ff5d73;
+      --text: #eaf1ff;
+      --muted: #9fb0d9;
+      --player: #7ad7ff;
+      --accent: #ffd166;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #16213b 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      touch-action: manipulation;
+    }
+    body { display: flex; justify-content: center; }
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      padding: 12px 12px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: clamp(1.2rem, 5vw, 1.5rem);
+      letter-spacing: .04em;
+    }
+    .hud {
+      background: rgba(16, 23, 42, .86);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 8px;
+      font-size: .9rem;
+    }
+    .hud div { text-align: center; }
+    .label { color: var(--muted); font-size: .72rem; display: block; }
+
+    .field {
+      position: relative;
+      background: linear-gradient(180deg, rgba(10,14,28,.9), rgba(9,12,22,.95));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .lane-lines {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    .lane-lines > div { border-right: 1px solid rgba(90,120,190,.25); }
+    .lane-lines > div:last-child { border-right: 0; }
+
+    .hit-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 64px;
+      border-top: 2px dashed rgba(255, 209, 102, .55);
+      box-shadow: 0 0 8px rgba(255,209,102,.3);
+    }
+
+    .entity {
+      position: absolute;
+      width: calc(33.333% - 14px);
+      margin-left: 7px;
+      aspect-ratio: 1/1;
+      border-radius: 10px;
+      transform: translateY(0);
+    }
+    .entity.good {
+      background: radial-gradient(circle at 30% 28%, #8dffcf 0%, var(--good) 65%);
+      box-shadow: 0 0 14px rgba(57,217,138,.5);
+    }
+    .entity.bad {
+      background: radial-gradient(circle at 30% 28%, #ff9eaa 0%, var(--bad) 65%);
+      box-shadow: 0 0 14px rgba(255,93,115,.48);
+    }
+
+    .player {
+      position: absolute;
+      bottom: 18px;
+      width: calc(33.333% - 16px);
+      margin-left: 8px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #a4ecff, var(--player));
+      box-shadow: 0 0 14px rgba(122,215,255,.5);
+      transition: left .09s ease-out;
+      display: grid;
+      place-items: center;
+      color: #032233;
+      font-size: .72rem;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: grid;
+      gap: 8px;
+    }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #091425;
+      background: linear-gradient(135deg, #7ad7ff, #ffd166);
+    }
+    .msg {
+      min-height: 1.4em;
+      text-align: center;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    .back {
+      text-align: center;
+      color: #b8c8f2;
+      text-decoration: none;
+      font-size: .92rem;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <h1>レールスイッチ・ラッシュ</h1>
+
+    <section class="hud" aria-label="スコア情報">
+      <div><span class="label">SCORE</span><strong id="score">0</strong></div>
+      <div><span class="label">TIME</span><strong id="time">60.0</strong></div>
+      <div><span class="label">HI-SCORE</span><strong id="hi">0</strong></div>
+    </section>
+
+    <section class="field" id="field" aria-label="ゲームフィールド">
+      <div class="lane-lines"><div></div><div></div><div></div></div>
+      <div class="hit-line"></div>
+      <div class="player" id="player">YOU</div>
+    </section>
+
+    <div class="controls">
+      <button id="startBtn" type="button">START</button>
+      <div class="msg" id="msg">タップでレーン切替（左→中→右）</div>
+    </div>
+
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'rail-switch-rush-hi-v1';
+      const GAME_SEC = 60;
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+      const field = document.getElementById('field');
+      const player = document.getElementById('player');
+      const startBtn = document.getElementById('startBtn');
+
+      const hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let score = 0;
+      let playerLane = 1;
+      let entities = [];
+      let timerId = null;
+      let spawnId = null;
+      let lastTs = 0;
+      let remain = GAME_SEC;
+      const laneCount = 3;
+
+      function laneLeftPx(lane) {
+        return (field.clientWidth / laneCount) * lane;
+      }
+
+      function placePlayer() {
+        player.style.left = laneLeftPx(playerLane) + 'px';
+      }
+
+      function setScore(v) {
+        score = Math.max(0, v);
+        scoreEl.textContent = score;
+      }
+
+      function difficulty(nowRemain) {
+        const elapsed = GAME_SEC - nowRemain;
+        if (elapsed < 30) return { speed: 210, gap: [620, 860], badRate: 0.25 };
+        if (elapsed < 45) return { speed: 255, gap: [500, 700], badRate: 0.35 };
+        return { speed: 295, gap: [400, 560], badRate: 0.45 };
+      }
+
+      function spawnEntity() {
+        if (!running) return;
+        const d = difficulty(remain);
+        const lane = Math.floor(Math.random() * laneCount);
+        const bad = Math.random() < d.badRate;
+        const node = document.createElement('div');
+        node.className = 'entity ' + (bad ? 'bad' : 'good');
+        node.style.left = laneLeftPx(lane) + 'px';
+        node.style.top = '-38px';
+        field.appendChild(node);
+
+        entities.push({ lane, y: -38, speed: d.speed, bad, node, hit: false });
+        const gap = d.gap[0] + Math.random() * (d.gap[1] - d.gap[0]);
+        spawnId = setTimeout(spawnEntity, gap);
+      }
+
+      function tick(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = (ts - lastTs) / 1000;
+        lastTs = ts;
+
+        const hitY = field.clientHeight - 64;
+        const removeY = field.clientHeight + 60;
+
+        for (let i = entities.length - 1; i >= 0; i--) {
+          const e = entities[i];
+          e.y += e.speed * dt;
+          e.node.style.top = e.y + 'px';
+
+          if (!e.hit && e.lane === playerLane && e.y + 20 >= hitY && e.y - 20 <= hitY) {
+            e.hit = true;
+            if (e.bad) {
+              setScore(score - 2);
+            } else {
+              setScore(score + 1);
+            }
+            e.node.style.opacity = '0.2';
+          }
+
+          if (e.y > removeY) {
+            e.node.remove();
+            entities.splice(i, 1);
+          }
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      function endGame() {
+        running = false;
+        clearInterval(timerId);
+        clearTimeout(spawnId);
+        entities.forEach(e => e.node.remove());
+        entities = [];
+        const best = Number(localStorage.getItem(KEY) || 0);
+        if (score > best) {
+          localStorage.setItem(KEY, String(score));
+          hiEl.textContent = String(score);
+          msgEl.textContent = '新記録！ ' + score + '点';
+        } else {
+          msgEl.textContent = '終了！ スコア ' + score + '点';
+        }
+        startBtn.textContent = 'RETRY';
+        startBtn.disabled = false;
+      }
+
+      function startGame() {
+        running = true;
+        score = 0;
+        remain = GAME_SEC;
+        lastTs = 0;
+        setScore(0);
+        timeEl.textContent = remain.toFixed(1);
+        msgEl.textContent = 'タップでレーンを回して青を拾え';
+        startBtn.disabled = true;
+
+        spawnEntity();
+        requestAnimationFrame(tick);
+
+        timerId = setInterval(() => {
+          if (!running) return;
+          remain -= 0.1;
+          if (remain <= 0) {
+            remain = 0;
+            timeEl.textContent = '0.0';
+            endGame();
+            return;
+          }
+          timeEl.textContent = remain.toFixed(1);
+        }, 100);
+      }
+
+      document.getElementById('app').addEventListener('pointerdown', (ev) => {
+        if (ev.target === startBtn) return;
+        playerLane = (playerLane + 1) % laneCount;
+        placePlayer();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (running) return;
+        startGame();
+      });
+
+      window.addEventListener('resize', () => {
+        placePlayer();
+        entities.forEach(e => { e.node.style.left = laneLeftPx(e.lane) + 'px'; });
+      });
+
+      placePlayer();
+    })();
+  </script>
+</body>
+</html>
