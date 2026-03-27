@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ネオンオービット・ガード</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+       crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #050814;
+      --panel: #0e1630;
+      --line: #24315e;
+      --text: #ebf2ff;
+      --sub: #99abd6;
+      --cyan: #48e9ff;
+      --pink: #ff5a9f;
+      --good: #4dffb3;
+      --bad: #ff6a6a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 15%, #0f1f46 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Noto Sans JP", "Hiragino Sans", sans-serif;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      padding: 10px;
+    }
+    .game-shell {
+      width: min(100%, 440px);
+      height: min(100dvh - 20px, 860px);
+      background: linear-gradient(180deg, rgba(15,25,56,0.96), rgba(8,13,30,0.96));
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+    .title {
+      text-align: center;
+      font-size: clamp(20px, 5.6vw, 28px);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      margin: 2px 0;
+      text-shadow: 0 0 12px rgba(72,233,255,0.35);
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 6px;
+      text-align: center;
+      background: rgba(12,20,45,0.9);
+    }
+    .chip .label {
+      font-size: 10px;
+      color: var(--sub);
+      letter-spacing: 0.08em;
+    }
+    .chip .value {
+      margin-top: 3px;
+      font-weight: 700;
+      font-size: 18px;
+      color: #fff;
+    }
+    .arena {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: radial-gradient(circle at 50% 48%, rgba(31,65,132,0.45), rgba(7,12,27,0.95));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(180deg, rgba(5,8,20,0.62), rgba(5,8,20,0.82));
+      text-align: center;
+      padding: 20px;
+      z-index: 3;
+    }
+    .overlay.hidden { display: none; }
+    .overlay .box { max-width: 290px; }
+    .overlay p {
+      margin: 0 0 12px;
+      color: #dce7ff;
+      line-height: 1.55;
+      font-size: 14px;
+    }
+    .btn {
+      appearance: none;
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 22px;
+      font-weight: 800;
+      color: #051325;
+      background: linear-gradient(135deg, var(--cyan), #7fffd9);
+      cursor: pointer;
+      font-size: 15px;
+      box-shadow: 0 8px 20px rgba(72,233,255,0.35);
+    }
+    .hint {
+      margin-top: 8px;
+      color: var(--sub);
+      font-size: 12px;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--sub);
+      padding: 0 4px;
+    }
+    .back {
+      color: #b8ccff;
+      text-decoration: none;
+      border-bottom: 1px solid rgba(184,204,255,0.5);
+    }
+  </style>
+</head>
+<body>
+  <main class="game-shell">
+    <h1 class="title">ネオンオービット・ガード</h1>
+
+    <section class="hud" aria-label="scoreboard">
+      <div class="chip"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="chip"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="chip"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </section>
+
+    <section class="arena" id="arena" aria-label="game area">
+      <canvas id="gameCanvas"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="box">
+          <p>タップでシールドの回転方向を反転。<br>青を受けて +10、赤は -12。<br>60秒でどこまで伸ばせるか。</p>
+          <button class="btn" id="startBtn" type="button">START</button>
+          <div class="hint">操作: pointerdown（タップ）</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>1プレイ60秒 / localStorage対応</span>
+      <a class="back" href="../../">← 戻る</a>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'neon-orbit-guard-hi-v1';
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      const arena = document.getElementById('arena');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+
+      let W = 320, H = 560, cx = 160, cy = 280;
+      let orbitR = 110;
+      let shieldAngle = -Math.PI / 2;
+      let shieldDir = 1;
+      let state = 'idle';
+      let timeLeft = 60;
+      let score = 0;
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      let particles = [];
+      let lastTs = 0;
+      let spawnAcc = 0;
+      const PLAY_SECONDS = 60;
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(rect.width * dpr);
+        canvas.height = Math.floor(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        W = rect.width;
+        H = rect.height;
+        cx = W / 2;
+        cy = H / 2;
+        orbitR = Math.min(W, H) * 0.28;
+      }
+
+      function resetGame() {
+        particles = [];
+        shieldAngle = -Math.PI / 2;
+        shieldDir = 1;
+        timeLeft = PLAY_SECONDS;
+        score = 0;
+        spawnAcc = 0;
+        updateHUD();
+      }
+
+      function updateHUD() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = timeLeft.toFixed(1);
+        hiEl.textContent = String(hi);
+      }
+
+      function phaseParams() {
+        if (timeLeft > 30) return { spawn: 0.78, speed: 120, badRate: 0.25, rot: 1.8 };
+        if (timeLeft > 15) return { spawn: 0.6, speed: 145, badRate: 0.35, rot: 2.2 };
+        return { spawn: 0.45, speed: 178, badRate: 0.42, rot: 2.7 };
+      }
+
+      function spawnParticle() {
+        const p = phaseParams();
+        const ang = Math.random() * Math.PI * 2;
+        const startR = Math.max(W, H) * 0.62;
+        particles.push({
+          x: cx + Math.cos(ang) * startR,
+          y: cy + Math.sin(ang) * startR,
+          vx: -Math.cos(ang) * (p.speed + Math.random() * 28),
+          vy: -Math.sin(ang) * (p.speed + Math.random() * 28),
+          kind: Math.random() < p.badRate ? 'bad' : 'good',
+          alive: true
+        });
+      }
+
+      function shortestAngleDiff(a, b) {
+        const d = Math.atan2(Math.sin(a - b), Math.cos(a - b));
+        return Math.abs(d);
+      }
+
+      function update(dt) {
+        if (state !== 'playing') return;
+
+        timeLeft = Math.max(0, timeLeft - dt);
+        const params = phaseParams();
+        shieldAngle += shieldDir * params.rot * dt;
+
+        spawnAcc += dt;
+        while (spawnAcc >= params.spawn) {
+          spawnAcc -= params.spawn;
+          spawnParticle();
+        }
+
+        const shieldArc = 0.5;
+        for (const p of particles) {
+          if (!p.alive) continue;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+
+          const dx = p.x - cx;
+          const dy = p.y - cy;
+          const dist = Math.hypot(dx, dy);
+          const ang = Math.atan2(dy, dx);
+
+          if (Math.abs(dist - orbitR) < 8) {
+            if (shortestAngleDiff(ang, shieldAngle) < shieldArc) {
+              p.alive = false;
+              if (p.kind === 'good') score += 10;
+              else score = Math.max(0, score - 12);
+            }
+          }
+
+          if (dist < 16) p.alive = false;
+        }
+
+        particles = particles.filter(p => p.alive);
+
+        if (timeLeft <= 0) finish();
+        updateHUD();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        const gridGap = 34;
+        ctx.save();
+        ctx.globalAlpha = 0.14;
+        ctx.strokeStyle = '#89a6ff';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += gridGap) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+        for (let y = 0; y < H; y += gridGap) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(W, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, orbitR, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(72,233,255,0.35)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+        ctx.fillStyle = '#c9d8ff';
+        ctx.shadowColor = '#8db8ff';
+        ctx.shadowBlur = 12;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.save();
+        ctx.strokeStyle = '#48e9ff';
+        ctx.lineWidth = 10;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = '#48e9ff';
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(cx, cy, orbitR, shieldAngle - 0.45, shieldAngle + 0.45);
+        ctx.stroke();
+        ctx.restore();
+
+        for (const p of particles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.kind === 'good' ? 6 : 7, 0, Math.PI * 2);
+          ctx.fillStyle = p.kind === 'good' ? '#4dffb3' : '#ff6a6a';
+          ctx.shadowColor = p.kind === 'good' ? '#4dffb3' : '#ff6a6a';
+          ctx.shadowBlur = 14;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      function frame(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min((ts - lastTs) / 1000, 0.033);
+        lastTs = ts;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      function finish() {
+        state = 'ended';
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+        }
+        updateHUD();
+        overlay.classList.remove('hidden');
+        overlay.querySelector('p').innerHTML = `終了！ スコア: <strong>${score}</strong><br>ハイスコア: <strong>${hi}</strong><br>タップで逆回転させる判断が鍵。`;
+        startBtn.textContent = 'RETRY';
+      }
+
+      function start() {
+        resetGame();
+        state = 'playing';
+        overlay.classList.add('hidden');
+        startBtn.textContent = 'START';
+      }
+
+      arena.addEventListener('pointerdown', (ev) => {
+        if (state !== 'playing') return;
+        ev.preventDefault();
+        shieldDir *= -1;
+      }, { passive: false });
+
+      startBtn.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        start();
+      }, { passive: false });
+
+      window.addEventListener('resize', resize);
+      resize();
+      resetGame();
+      draw();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
