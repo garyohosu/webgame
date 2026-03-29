@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>フェーズフィッシャー</title>
+  <meta name="description" content="タップで位相を切り替え、同色ターゲットを釣り上げる60秒ゲーム" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+       crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0a1020;
+      --panel: #111a30;
+      --ink: #e8f1ff;
+      --blue: #38bdf8;
+      --red: #fb7185;
+      --good: #22c55e;
+      --bad: #f43f5e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: radial-gradient(circle at top, #152445, var(--bg)); color: var(--ink); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; }
+    body { display: grid; place-items: center; }
+    .app {
+      width: min(100vw, 440px);
+      height: min(100vh, 860px);
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: .04em; text-align: center; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(17, 26, 48, .88);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 10px;
+      padding: 6px 8px;
+      text-align: center;
+      font-size: .8rem;
+      line-height: 1.3;
+    }
+    .pill b { display: block; font-size: 1rem; margin-top: 2px; }
+    .pill.phase-blue b { color: var(--blue); }
+    .pill.phase-red b { color: var(--red); }
+
+    .game {
+      position: relative;
+      overflow: hidden;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(22,33,62,.95), rgba(14,22,42,.95));
+      border: 1px solid rgba(255,255,255,.14);
+      touch-action: manipulation;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      background: rgba(5,10,20,.62);
+      text-align: center;
+      padding: 18px;
+    }
+    .overlay.hidden { display: none; }
+    .overlay-card {
+      background: rgba(17,26,48,.92);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 14px;
+      padding: 16px;
+      width: min(100%, 320px);
+    }
+    .overlay-card p { margin: 8px 0; font-size: .95rem; line-height: 1.45; }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #05101f;
+      background: linear-gradient(135deg, #67e8f9, #a7f3d0);
+    }
+    .footer { display: flex; justify-content: space-between; align-items: center; font-size: .9rem; }
+    a { color: #93c5fd; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🎣 フェーズフィッシャー</h1>
+
+    <section class="hud">
+      <div class="pill">SCORE<b id="score">0</b></div>
+      <div class="pill">TIME<b id="time">60.0</b></div>
+      <div class="pill">HI<b id="hi">0</b></div>
+      <div class="pill phase-blue" id="phasePill">PHASE<b id="phase">BLUE</b></div>
+    </section>
+
+    <section class="game" id="game" aria-label="game field">
+      <canvas id="cv" width="400" height="560"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <p>タップでフック位相を切替。<br>同色ターゲットで加点、異色で減点。</p>
+          <p>60秒でどこまで伸ばせるか。</p>
+          <button id="startBtn" type="button">スタート</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span id="msg">Tap to swap phase</span>
+      <a href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+      const KEY = 'phase-fisher-hi-v1';
+      const cv = document.getElementById('cv');
+      const ctx = cv.getContext('2d');
+      const gameEl = document.getElementById('game');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const phaseEl = document.getElementById('phase');
+      const phasePill = document.getElementById('phasePill');
+      const msgEl = document.getElementById('msg');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      const state = {
+        running: false,
+        score: 0,
+        phase: 'blue',
+        left: 60,
+        lastTs: 0,
+        spawnCd: 0,
+        hooksY: cv.height - 54,
+        fish: [],
+        raf: 0
+      };
+
+      function reset() {
+        state.running = true;
+        state.score = 0;
+        state.phase = 'blue';
+        state.left = 60;
+        state.lastTs = 0;
+        state.spawnCd = 0;
+        state.fish = [];
+        updateHud();
+        msgEl.textContent = 'Blue/Red を見てタップ切替';
+        overlay.classList.add('hidden');
+      }
+
+      function addFish() {
+        const t = 60 - state.left;
+        const speedMul = t > 45 ? 1.45 : t > 30 ? 1.2 : 1;
+        const isBlue = Math.random() < (t > 30 ? 0.52 : 0.62);
+        state.fish.push({
+          x: 26 + Math.random() * (cv.width - 52),
+          y: -20,
+          r: 11 + Math.random() * 7,
+          vy: (95 + Math.random() * 90) * speedMul,
+          type: isBlue ? 'blue' : 'red'
+        });
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.max(0, Math.round(state.score));
+        timeEl.textContent = state.left.toFixed(1);
+        phaseEl.textContent = state.phase.toUpperCase();
+        phasePill.classList.toggle('phase-blue', state.phase === 'blue');
+        phasePill.classList.toggle('phase-red', state.phase === 'red');
+      }
+
+      function endGame() {
+        state.running = false;
+        cancelAnimationFrame(state.raf);
+        if (state.score > hi) {
+          hi = Math.round(state.score);
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = hi;
+          msgEl.textContent = 'ハイスコア更新!';
+        } else {
+          msgEl.textContent = '終了。もう1回いける。';
+        }
+        overlay.classList.remove('hidden');
+      }
+
+      function tick(ts) {
+        if (!state.running) return;
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min((ts - state.lastTs) / 1000, 0.033);
+        state.lastTs = ts;
+
+        state.left -= dt;
+        if (state.left <= 0) {
+          state.left = 0;
+          updateHud();
+          draw();
+          endGame();
+          return;
+        }
+
+        const t = 60 - state.left;
+        const baseSpawn = t > 45 ? 0.38 : t > 30 ? 0.48 : 0.62;
+        state.spawnCd -= dt;
+        if (state.spawnCd <= 0) {
+          addFish();
+          if (t > 45 && Math.random() < 0.5) addFish();
+          state.spawnCd = baseSpawn;
+        }
+
+        for (let i = state.fish.length - 1; i >= 0; i--) {
+          const f = state.fish[i];
+          f.y += f.vy * dt;
+          if (f.y - f.r > cv.height) state.fish.splice(i, 1);
+        }
+
+        const hookR = 34;
+        for (let i = state.fish.length - 1; i >= 0; i--) {
+          const f = state.fish[i];
+          const dx = f.x - cv.width / 2;
+          const dy = f.y - state.hooksY;
+          if (dx * dx + dy * dy <= (hookR + f.r) * (hookR + f.r)) {
+            state.score += f.type === state.phase ? 10 : -8;
+            state.fish.splice(i, 1);
+          }
+        }
+
+        updateHud();
+        draw();
+        state.raf = requestAnimationFrame(tick);
+      }
+
+      function drawHook() {
+        const isBlue = state.phase === 'blue';
+        const c = isBlue ? '#38bdf8' : '#fb7185';
+        ctx.strokeStyle = 'rgba(220,235,255,.55)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cv.width / 2, 0);
+        ctx.lineTo(cv.width / 2, state.hooksY - 16);
+        ctx.stroke();
+
+        ctx.fillStyle = c;
+        ctx.beginPath();
+        ctx.arc(cv.width / 2, state.hooksY, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = c;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(cv.width / 2, state.hooksY + 8, 16, Math.PI * 0.15, Math.PI * 1.2);
+        ctx.stroke();
+      }
+
+      function drawFish() {
+        for (const f of state.fish) {
+          const c = f.type === 'blue' ? '#38bdf8' : '#fb7185';
+          ctx.fillStyle = c;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,.7)';
+          ctx.beginPath();
+          ctx.arc(f.x - f.r * .35, f.y - f.r * .3, Math.max(2, f.r * .18), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawBg() {
+        const g = ctx.createLinearGradient(0, 0, 0, cv.height);
+        g.addColorStop(0, '#0f1f3f');
+        g.addColorStop(1, '#0a162d');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, cv.width, cv.height);
+
+        ctx.strokeStyle = 'rgba(255,255,255,.08)';
+        ctx.lineWidth = 1;
+        for (let y = 40; y < cv.height; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(cv.width, y);
+          ctx.stroke();
+        }
+      }
+
+      function draw() {
+        drawBg();
+        drawFish();
+        drawHook();
+      }
+
+      gameEl.addEventListener('pointerdown', () => {
+        if (!state.running) return;
+        state.phase = state.phase === 'blue' ? 'red' : 'blue';
+        draw();
+        updateHud();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        reset();
+        draw();
+        state.raf = requestAnimationFrame(tick);
+      });
+
+      draw();
+    })();
+  </script>
+</body>
+</html>
