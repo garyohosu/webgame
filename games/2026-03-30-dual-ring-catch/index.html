@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>デュアルリング・キャッチ</title>
+  <meta name="description" content="タップで内外リングを切り替え、対応レーンの青パルスだけを拾う60秒ゲーム" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+       crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #07111f;
+      --panel: rgba(12, 25, 46, 0.9);
+      --ink: #e7f2ff;
+      --cyan: #5eead4;
+      --blue: #60a5fa;
+      --amber: #fbbf24;
+      --red: #fb7185;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background:
+        radial-gradient(circle at top, rgba(96, 165, 250, 0.28), transparent 35%),
+        radial-gradient(circle at bottom, rgba(251, 191, 36, 0.16), transparent 30%),
+        var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .app {
+      width: min(100vw, 440px);
+      height: min(100vh, 860px);
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: 1.3rem;
+      letter-spacing: 0.04em;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .pill {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 6px 8px;
+      text-align: center;
+      font-size: 0.78rem;
+      line-height: 1.3;
+      backdrop-filter: blur(10px);
+    }
+    .pill b {
+      display: block;
+      margin-top: 2px;
+      font-size: 1rem;
+    }
+    .pill.ring-outer b { color: var(--amber); }
+    .pill.ring-inner b { color: var(--cyan); }
+    .game {
+      position: relative;
+      overflow: hidden;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: linear-gradient(180deg, rgba(10, 18, 34, 0.96), rgba(7, 13, 26, 0.96));
+      touch-action: manipulation;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(4, 8, 18, 0.64);
+    }
+    .overlay.hidden { display: none; }
+    .overlay-card {
+      width: min(100%, 320px);
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(10, 20, 38, 0.92);
+      border: 1px solid rgba(255,255,255,0.16);
+      text-align: center;
+    }
+    .overlay-card p {
+      margin: 8px 0;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #08111f;
+      background: linear-gradient(135deg, var(--amber), var(--cyan));
+    }
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 0.9rem;
+    }
+    #msg {
+      color: rgba(231, 242, 255, 0.78);
+      min-width: 0;
+    }
+    a {
+      color: #93c5fd;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🪐 デュアルリング・キャッチ</h1>
+
+    <section class="hud">
+      <div class="pill">SCORE<b id="score">0</b></div>
+      <div class="pill">TIME<b id="time">60.0</b></div>
+      <div class="pill">HI<b id="hi">0</b></div>
+      <div class="pill ring-outer" id="ringPill">RING<b id="ringLabel">OUTER</b></div>
+    </section>
+
+    <section class="game" id="game" aria-label="game field">
+      <canvas id="cv" width="400" height="560"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <p>タップでアクティブリングを内外で切替。</p>
+          <p>青パルスを受け、赤ノイズは避けて60秒で稼ぐ。</p>
+          <button id="startBtn" type="button">スタート</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span id="msg">Tap to swap ring</span>
+      <a href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const KEY = 'dual-ring-catch-hi-v1';
+      const cv = document.getElementById('cv');
+      const ctx = cv.getContext('2d');
+      const overlay = document.getElementById('overlay');
+      const gameEl = document.getElementById('game');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const ringPill = document.getElementById('ringPill');
+      const ringLabelEl = document.getElementById('ringLabel');
+      const msgEl = document.getElementById('msg');
+
+      const cx = cv.width / 2;
+      const cy = cv.height / 2 + 8;
+      const innerRing = 84;
+      const outerRing = 154;
+      const spawnRing = 268;
+      const centerCore = 28;
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      const state = {
+        running: false,
+        score: 0,
+        left: 60,
+        activeRing: 'outer',
+        pulses: [],
+        lastTs: 0,
+        spawnCd: 0,
+        flash: 0,
+        flashColor: '#5eead4',
+        raf: 0
+      };
+
+      function updateHud() {
+        scoreEl.textContent = Math.max(0, Math.round(state.score));
+        timeEl.textContent = state.left.toFixed(1);
+        ringLabelEl.textContent = state.activeRing.toUpperCase();
+        ringPill.classList.toggle('ring-outer', state.activeRing === 'outer');
+        ringPill.classList.toggle('ring-inner', state.activeRing === 'inner');
+      }
+
+      function reset() {
+        state.running = true;
+        state.score = 0;
+        state.left = 60;
+        state.activeRing = 'outer';
+        state.pulses = [];
+        state.lastTs = 0;
+        state.spawnCd = 0;
+        state.flash = 0;
+        msgEl.textContent = '青を拾い、赤は通す';
+        overlay.classList.add('hidden');
+        updateHud();
+      }
+
+      function difficulty(elapsed) {
+        if (elapsed > 45) return { speed: 1.45, spawn: 0.42, badRate: 0.42, burstRate: 0.58 };
+        if (elapsed > 30) return { speed: 1.2, spawn: 0.58, badRate: 0.34, burstRate: 0.32 };
+        return { speed: 1, spawn: 0.76, badRate: 0.22, burstRate: 0.1 };
+      }
+
+      function addPulse(speedMul) {
+        const angle = Math.random() * Math.PI * 2;
+        const lane = Math.random() < 0.5 ? 'outer' : 'inner';
+        const isBad = Math.random() < difficulty(60 - state.left).badRate;
+        state.pulses.push({
+          angle,
+          dist: spawnRing,
+          speed: (110 + Math.random() * 55) * speedMul,
+          lane,
+          type: isBad ? 'bad' : 'good',
+          radius: lane === 'outer' ? 10 : 8
+        });
+      }
+
+      function ringRadius(lane) {
+        return lane === 'outer' ? outerRing : innerRing;
+      }
+
+      function setFlash(color) {
+        state.flash = 0.22;
+        state.flashColor = color;
+      }
+
+      function endGame() {
+        state.running = false;
+        cancelAnimationFrame(state.raf);
+        if (state.score > hi) {
+          hi = Math.round(state.score);
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = hi;
+          msgEl.textContent = 'ハイスコア更新!';
+          setFlash('#fbbf24');
+        } else {
+          msgEl.textContent = '終了。もう一回。';
+        }
+        overlay.classList.remove('hidden');
+      }
+
+      function update(ts) {
+        if (!state.running) return;
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min((ts - state.lastTs) / 1000, 0.033);
+        state.lastTs = ts;
+
+        state.left -= dt;
+        if (state.left <= 0) {
+          state.left = 0;
+          updateHud();
+          draw();
+          endGame();
+          return;
+        }
+
+        const elapsed = 60 - state.left;
+        const diff = difficulty(elapsed);
+        state.spawnCd -= dt;
+        if (state.spawnCd <= 0) {
+          addPulse(diff.speed);
+          if (Math.random() < diff.burstRate) addPulse(diff.speed);
+          state.spawnCd = diff.spawn;
+        }
+
+        state.flash = Math.max(0, state.flash - dt);
+
+        for (let i = state.pulses.length - 1; i >= 0; i--) {
+          const pulse = state.pulses[i];
+          pulse.dist -= pulse.speed * dt;
+          const target = ringRadius(pulse.lane);
+          if (pulse.dist <= target) {
+            if (state.activeRing === pulse.lane) {
+              if (pulse.type === 'good') {
+                state.score += 10;
+                msgEl.textContent = pulse.lane === 'outer' ? 'OUTER GET +10' : 'INNER GET +10';
+                setFlash('#5eead4');
+              } else {
+                state.score -= 12;
+                msgEl.textContent = 'RED NOISE -12';
+                setFlash('#fb7185');
+              }
+              state.pulses.splice(i, 1);
+              continue;
+            }
+          }
+          if (pulse.dist <= centerCore) {
+            state.pulses.splice(i, 1);
+          }
+        }
+
+        updateHud();
+        draw();
+        state.raf = requestAnimationFrame(update);
+      }
+
+      function drawBackground() {
+        const bg = ctx.createLinearGradient(0, 0, 0, cv.height);
+        bg.addColorStop(0, '#0c1730');
+        bg.addColorStop(1, '#07101d');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, cv.width, cv.height);
+
+        for (let i = 0; i < 28; i++) {
+          const x = (i * 57) % cv.width;
+          const y = (i * 97) % cv.height;
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawRings() {
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        for (let r = 48; r <= 220; r += 34) {
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.setLineDash([10, 10]);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = state.activeRing === 'outer' ? 'rgba(251,191,36,0.95)' : 'rgba(255,255,255,0.18)';
+        ctx.beginPath();
+        ctx.arc(0, 0, outerRing, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = state.activeRing === 'inner' ? 'rgba(94,234,212,0.95)' : 'rgba(255,255,255,0.18)';
+        ctx.beginPath();
+        ctx.arc(0, 0, innerRing, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const activeRadius = state.activeRing === 'outer' ? outerRing : innerRing;
+        const activeColor = state.activeRing === 'outer' ? '#fbbf24' : '#5eead4';
+        ctx.strokeStyle = activeColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, activeRadius, -Math.PI / 8, Math.PI / 8);
+        ctx.stroke();
+
+        const core = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
+        core.addColorStop(0, '#ffffff');
+        core.addColorStop(0.4, '#60a5fa');
+        core.addColorStop(1, 'rgba(96,165,250,0.12)');
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(0, 0, 34, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawPulse(pulse) {
+        const x = cx + Math.cos(pulse.angle) * pulse.dist;
+        const y = cy + Math.sin(pulse.angle) * pulse.dist;
+        const color = pulse.type === 'good' ? '#5eead4' : '#fb7185';
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(0, 0, pulse.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = pulse.lane === 'outer' ? 'rgba(251,191,36,0.8)' : 'rgba(96,165,250,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, pulse.radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.arc(-pulse.radius * 0.3, -pulse.radius * 0.3, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawFlash() {
+        if (state.flash <= 0) return;
+        const alpha = state.flash * 0.25;
+        ctx.fillStyle = state.flashColor === '#fb7185'
+          ? `rgba(251, 113, 133, ${alpha})`
+          : state.flashColor === '#fbbf24'
+            ? `rgba(251, 191, 36, ${alpha})`
+            : `rgba(94, 234, 212, ${alpha})`;
+        ctx.fillRect(0, 0, cv.width, cv.height);
+      }
+
+      function draw() {
+        drawBackground();
+        drawRings();
+        for (const pulse of state.pulses) drawPulse(pulse);
+        drawFlash();
+      }
+
+      gameEl.addEventListener('pointerdown', () => {
+        if (!state.running) return;
+        state.activeRing = state.activeRing === 'outer' ? 'inner' : 'outer';
+        msgEl.textContent = state.activeRing === 'outer' ? 'OUTER READY' : 'INNER READY';
+        updateHud();
+        draw();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        reset();
+        draw();
+        state.raf = requestAnimationFrame(update);
+      });
+
+      draw();
+    })();
+  </script>
+</body>
+</html>
