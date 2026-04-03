@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>グラビティゲート</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #101a35;
+      --line: #26335f;
+      --text: #e8efff;
+      --sub: #9bb0df;
+      --good: #5cd8ff;
+      --bad: #ff6f8f;
+      --accent: #ffe082;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 0%, #17234d, var(--bg) 55%); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .app {
+      height: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+    }
+    .top h1 { margin: 0; font-size: clamp(1.2rem, 5vw, 1.7rem); letter-spacing: .04em; }
+    .sub { color: var(--sub); font-size: .85rem; margin-top: 4px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 8px;
+    }
+    .chip {
+      background: rgba(16,26,53,.78);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .chip .k { font-size: .62rem; color: var(--sub); }
+    .chip .v { font-size: 1.06rem; font-weight: 700; margin-top: 2px; }
+    .stage {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(20,30,63,.7), rgba(8,12,24,.8));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .lane {
+      position: absolute; left: 0; right: 0;
+      height: 50%;
+      border-top: 1px dashed rgba(155,176,223,.2);
+      border-bottom: 1px dashed rgba(155,176,223,.2);
+    }
+    .lane.top { top: 0; }
+    .lane.bottom { bottom: 0; }
+    .gate {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 110px; height: 110px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      border: 2px solid rgba(255,224,130,.65);
+      box-shadow: 0 0 0 6px rgba(255,224,130,.08), 0 0 30px rgba(255,224,130,.15);
+      display: grid; place-items: center;
+      pointer-events: none;
+    }
+    .gate::after {
+      content: '';
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,224,130,.85), rgba(255,224,130,.1));
+    }
+    .state-arrow {
+      position: absolute;
+      left: 50%; transform: translateX(-50%);
+      font-size: 1.7rem;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: 0 0 10px rgba(255,224,130,.4);
+      pointer-events: none;
+    }
+    .state-arrow.up { top: calc(50% - 92px); }
+    .state-arrow.down { top: calc(50% + 58px); }
+    .orb {
+      position: absolute;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: .75rem; font-weight: 700;
+      color: #0b1226;
+      pointer-events: none;
+    }
+    .orb.good { background: radial-gradient(circle at 30% 30%, #d8f7ff, var(--good)); }
+    .orb.bad { background: radial-gradient(circle at 30% 30%, #ffdce5, var(--bad)); }
+    .controls { display: grid; gap: 8px; }
+    button, a.back {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #1a2958;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 12px;
+      text-align: center;
+      text-decoration: none;
+    }
+    button:active, a.back:active { transform: scale(.99); }
+    .note { text-align: center; color: var(--sub); font-size: .78rem; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <h1>🌀 グラビティゲート</h1>
+      <div class="sub">タップで重力反転。青を通して、赤を拒め。</div>
+    </header>
+
+    <section class="hud">
+      <div class="chip"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="chip"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="chip"><div class="k">BEST</div><div class="v" id="best">0</div></div>
+      <div class="chip"><div class="k">GRAVITY</div><div class="v" id="gravity">DOWN</div></div>
+    </section>
+
+    <main class="stage" id="stage" aria-label="game stage">
+      <div class="lane top"></div>
+      <div class="lane bottom"></div>
+      <div class="gate"></div>
+      <div class="state-arrow up" id="arrowUp">↑</div>
+      <div class="state-arrow down" id="arrowDown" hidden>↓</div>
+    </main>
+
+    <div class="controls">
+      <button id="startBtn" type="button">START 60s</button>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <div class="note" id="note">待機中。ステージをタップして重力を反転できます。</div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const GAME_SECONDS = 60;
+      const KEY = 'gravity-gate-hi-v1';
+      const stage = document.getElementById('stage');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const bestEl = document.getElementById('best');
+      const gravEl = document.getElementById('gravity');
+      const noteEl = document.getElementById('note');
+      const arrowUp = document.getElementById('arrowUp');
+      const arrowDown = document.getElementById('arrowDown');
+      const startBtn = document.getElementById('startBtn');
+
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let running = false;
+      let gravityDown = true;
+      let score = 0;
+      let orbs = [];
+      let remain = GAME_SECONDS;
+      let lastTs = 0;
+      let spawnAcc = 0;
+      let rafId = 0;
+
+      bestEl.textContent = String(best);
+
+      function updateGravityUI() {
+        gravEl.textContent = gravityDown ? 'DOWN' : 'UP';
+        arrowUp.hidden = gravityDown;
+        arrowDown.hidden = !gravityDown;
+      }
+
+      function flipGravity() {
+        gravityDown = !gravityDown;
+        updateGravityUI();
+      }
+
+      stage.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!running) return;
+        flipGravity();
+      });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (running) return;
+        startGame();
+      });
+
+      function rand(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function currentLevel() {
+        if (remain > 30) return { speed: 145, spawn: 0.62, badRate: 0.35 };
+        if (remain > 15) return { speed: 185, spawn: 0.5, badRate: 0.45 };
+        return { speed: 225, spawn: 0.4, badRate: 0.55 };
+      }
+
+      function spawnOrb() {
+        const level = currentLevel();
+        const bad = Math.random() < level.badRate;
+        const orb = {
+          x: rand(24, stage.clientWidth - 24),
+          y: -26,
+          vy: level.speed * rand(0.93, 1.12),
+          kind: bad ? 'bad' : 'good',
+          hooked: false,
+          laneTarget: gravityDown ? 'bottom' : 'top',
+          el: document.createElement('div')
+        };
+        orb.el.className = `orb ${orb.kind}`;
+        orb.el.textContent = bad ? '−' : '+';
+        stage.appendChild(orb.el);
+        orbs.push(orb);
+      }
+
+      function scoreHit(kind) {
+        if (kind === 'good') score += 1;
+        else score = Math.max(0, score - 2);
+        scoreEl.textContent = String(score);
+      }
+
+      function clearOrbs() {
+        for (const o of orbs) o.el.remove();
+        orbs = [];
+      }
+
+      function startGame() {
+        running = true;
+        gravityDown = true;
+        score = 0;
+        remain = GAME_SECONDS;
+        spawnAcc = 0;
+        lastTs = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = remain.toFixed(1);
+        clearOrbs();
+        updateGravityUI();
+        noteEl.textContent = 'プレイ中：ステージをタップして重力を反転';
+        startBtn.textContent = 'RUNNING...';
+        startBtn.disabled = true;
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        startBtn.disabled = false;
+        startBtn.textContent = 'RETRY 60s';
+        if (score > best) {
+          best = score;
+          localStorage.setItem(KEY, String(best));
+          bestEl.textContent = String(best);
+          noteEl.textContent = `終了！ 新記録 ${score} 点`; 
+        } else {
+          noteEl.textContent = `終了！ スコア ${score} 点（BEST ${best}）`;
+        }
+      }
+
+      function loop(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        remain -= dt;
+        if (remain <= 0) {
+          remain = 0;
+          timeEl.textContent = '0.0';
+          endGame();
+          return;
+        }
+        timeEl.textContent = remain.toFixed(1);
+
+        const level = currentLevel();
+        spawnAcc += dt;
+        while (spawnAcc >= level.spawn) {
+          spawnAcc -= level.spawn;
+          spawnOrb();
+          if (Math.random() < 0.32) spawnOrb();
+        }
+
+        const gateY = stage.clientHeight * 0.5;
+        const topY = stage.clientHeight * 0.25;
+        const bottomY = stage.clientHeight * 0.75;
+
+        for (let i = orbs.length - 1; i >= 0; i--) {
+          const o = orbs[i];
+
+          if (!o.hooked && o.y >= gateY - 32 && o.y <= gateY + 20) {
+            o.hooked = true;
+            o.laneTarget = gravityDown ? 'bottom' : 'top';
+            o.vy = 0;
+          }
+
+          if (o.hooked) {
+            const targetY = o.laneTarget === 'bottom' ? bottomY : topY;
+            o.y += (targetY - o.y) * 0.16;
+            o.x += (stage.clientWidth * 0.5 - o.x) * 0.12;
+
+            if (Math.abs(targetY - o.y) < 4) {
+              scoreHit(o.kind);
+              o.el.remove();
+              orbs.splice(i, 1);
+              continue;
+            }
+          } else {
+            o.y += o.vy * dt;
+          }
+
+          if (o.y > stage.clientHeight + 30) {
+            o.el.remove();
+            orbs.splice(i, 1);
+            continue;
+          }
+
+          o.el.style.transform = `translate(${o.x - 12}px, ${o.y - 12}px)`;
+        }
+
+        rafId = requestAnimationFrame(loop);
+      }
+
+      updateGravityUI();
+    })();
+  </script>
+</body>
+</html>
