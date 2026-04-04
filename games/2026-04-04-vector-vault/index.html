@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>ベクトルヴォルト</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070d1f;
+      --panel: #121c3a;
+      --line: #2a3769;
+      --text: #ecf2ff;
+      --sub: #98acd9;
+      --good: #6ce8ff;
+      --bad: #ff6f98;
+      --accent: #ffe28b;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 0%, #1b2b5f, var(--bg) 56%); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .app {
+      height: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+    }
+    .top h1 { margin: 0; font-size: clamp(1.2rem, 5vw, 1.7rem); letter-spacing: .04em; }
+    .sub { color: var(--sub); font-size: .84rem; margin-top: 4px; }
+    .hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .chip { background: rgba(18, 28, 58, .82); border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; }
+    .chip .k { font-size: .62rem; color: var(--sub); }
+    .chip .v { font-size: 1.04rem; font-weight: 700; margin-top: 2px; }
+
+    .stage {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(22, 34, 72, .92), rgba(8, 12, 26, .92));
+      touch-action: manipulation;
+    }
+    .lane {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 33.3334%;
+      border-right: 1px dashed rgba(152, 172, 217, .2);
+    }
+    .lane:nth-child(1) { left: 0; }
+    .lane:nth-child(2) { left: 33.3334%; }
+    .lane:nth-child(3) { left: 66.6668%; border-right: none; }
+
+    .catcher {
+      position: absolute;
+      bottom: 8px;
+      width: calc(33.3334% - 10px);
+      height: 16px;
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(255,226,139,.5), rgba(108,232,255,.75));
+      box-shadow: 0 0 0 1px rgba(255,255,255,.24), 0 0 18px rgba(108,232,255,.35);
+      transition: left .08s linear;
+      pointer-events: none;
+    }
+
+    .cube {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-size: .72rem;
+      font-weight: 700;
+      color: #0b1430;
+      pointer-events: none;
+    }
+    .cube.good { background: linear-gradient(180deg, #dfffff, var(--good)); }
+    .cube.bad { background: linear-gradient(180deg, #ffdce7, var(--bad)); }
+
+    .controls { display: grid; gap: 8px; }
+    button, a.back {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #1a2a5a;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 12px;
+      text-align: center;
+      text-decoration: none;
+    }
+    button:active, a.back:active { transform: scale(.99); }
+    .note { text-align: center; color: var(--sub); font-size: .78rem; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="top">
+      <h1>🧊 ベクトルヴォルト</h1>
+      <div class="sub">タップした列を開放。青回収、赤回避で60秒。</div>
+    </header>
+
+    <section class="hud">
+      <div class="chip"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="chip"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="chip"><div class="k">BEST</div><div class="v" id="best">0</div></div>
+      <div class="chip"><div class="k">LANE</div><div class="v" id="lane">L</div></div>
+    </section>
+
+    <main class="stage" id="stage" aria-label="game stage">
+      <div class="lane"></div>
+      <div class="lane"></div>
+      <div class="lane"></div>
+      <div class="catcher" id="catcher"></div>
+    </main>
+
+    <div class="controls">
+      <button id="startBtn" type="button">START 60s</button>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <div class="note" id="note">待機中。ステージの列をタップして開放ラインを切り替え。</div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const GAME_SECONDS = 60;
+      const KEY = 'vector-vault-hi-v1';
+      const stage = document.getElementById('stage');
+      const catcher = document.getElementById('catcher');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const bestEl = document.getElementById('best');
+      const laneEl = document.getElementById('lane');
+      const noteEl = document.getElementById('note');
+      const startBtn = document.getElementById('startBtn');
+
+      let best = Number(localStorage.getItem(KEY) || 0);
+      let running = false;
+      let score = 0;
+      let remain = GAME_SECONDS;
+      let activeLane = 0;
+      let cubes = [];
+      let spawnAcc = 0;
+      let lastTs = 0;
+      let rafId = 0;
+
+      bestEl.textContent = String(best);
+
+      function levelForRemain(sec) {
+        if (sec > 30) return { speed: 185, spawn: 0.72, badRate: 0.25 };
+        if (sec > 15) return { speed: 230, spawn: 0.58, badRate: 0.35 };
+        return { speed: 275, spawn: 0.47, badRate: 0.45 };
+      }
+
+      function laneX(lane) {
+        return (stage.clientWidth / 3) * lane + stage.clientWidth / 6;
+      }
+
+      function updateLaneUI() {
+        const labels = ['L', 'C', 'R'];
+        laneEl.textContent = labels[activeLane];
+        const laneWidth = stage.clientWidth / 3;
+        catcher.style.left = `${laneWidth * activeLane + 5}px`;
+      }
+
+      function setLaneFromPointer(clientX) {
+        const rect = stage.getBoundingClientRect();
+        const x = Math.max(0, Math.min(rect.width - 1, clientX - rect.left));
+        activeLane = Math.min(2, Math.floor((x / rect.width) * 3));
+        updateLaneUI();
+      }
+
+      stage.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!running) return;
+        setLaneFromPointer(e.clientX);
+      });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (running) return;
+        startGame();
+      });
+
+      window.addEventListener('resize', updateLaneUI);
+
+      function spawnCube() {
+        const lv = levelForRemain(remain);
+        const lane = Math.floor(Math.random() * 3);
+        const bad = Math.random() < lv.badRate;
+        const cube = {
+          lane,
+          y: -28,
+          vy: lv.speed * (0.92 + Math.random() * 0.2),
+          kind: bad ? 'bad' : 'good',
+          el: document.createElement('div')
+        };
+        cube.el.className = `cube ${cube.kind}`;
+        cube.el.textContent = bad ? '−' : '+';
+        stage.appendChild(cube.el);
+        cubes.push(cube);
+      }
+
+      function clearCubes() {
+        for (const c of cubes) c.el.remove();
+        cubes = [];
+      }
+
+      function startGame() {
+        running = true;
+        score = 0;
+        remain = GAME_SECONDS;
+        activeLane = 1;
+        spawnAcc = 0;
+        lastTs = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = remain.toFixed(1);
+        clearCubes();
+        updateLaneUI();
+        noteEl.textContent = 'プレイ中：列タップで開放ラインを切り替え';
+        startBtn.textContent = 'RUNNING...';
+        startBtn.disabled = true;
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        startBtn.disabled = false;
+        startBtn.textContent = 'RETRY 60s';
+
+        if (score > best) {
+          best = score;
+          localStorage.setItem(KEY, String(best));
+          bestEl.textContent = String(best);
+          noteEl.textContent = `終了！ 新記録 ${score} 点`; 
+        } else {
+          noteEl.textContent = `終了！ スコア ${score} 点（BEST ${best}）`;
+        }
+      }
+
+      function loop(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        remain -= dt;
+        if (remain <= 0) {
+          remain = 0;
+          timeEl.textContent = '0.0';
+          endGame();
+          return;
+        }
+        timeEl.textContent = remain.toFixed(1);
+
+        const lv = levelForRemain(remain);
+        spawnAcc += dt;
+        while (spawnAcc >= lv.spawn) {
+          spawnAcc -= lv.spawn;
+          spawnCube();
+          if (Math.random() < 0.33) spawnCube();
+        }
+
+        const catchLine = stage.clientHeight - 18;
+
+        for (let i = cubes.length - 1; i >= 0; i--) {
+          const c = cubes[i];
+          c.y += c.vy * dt;
+
+          if (c.y >= catchLine) {
+            if (c.lane === activeLane) {
+              score += (c.kind === 'good') ? 1 : -2;
+              if (score < 0) score = 0;
+              scoreEl.textContent = String(score);
+            }
+            c.el.remove();
+            cubes.splice(i, 1);
+            continue;
+          }
+
+          const x = laneX(c.lane);
+          c.el.style.transform = `translate(${x - 12}px, ${c.y}px)`;
+        }
+
+        rafId = requestAnimationFrame(loop);
+      }
+
+      updateLaneUI();
+    })();
+  </script>
+</body>
+</html>
