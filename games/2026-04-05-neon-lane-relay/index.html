@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>ネオンレーン・リレイ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #080b1b;
+      --panel: #11162d;
+      --line: #334;
+      --text: #e9f0ff;
+      --blue: #5ed5ff;
+      --red: #ff5f7a;
+      --accent: #9ef76a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 0%, #18244f 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      touch-action: manipulation;
+    }
+    .app {
+      width: min(430px, 100vw);
+      height: 100dvh;
+      margin: 0 auto;
+      padding: 12px 12px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: 1.25rem;
+      letter-spacing: .04em;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      background: color-mix(in srgb, var(--panel) 85%, #fff 15%);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+      font-size: .78rem;
+    }
+    .stat strong { display: block; margin-top: 2px; font-size: 1.1rem; }
+    #game {
+      position: relative;
+      background: linear-gradient(180deg, #0e1430 0%, #070a17 100%);
+      border: 1px solid #2a3766;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    #lane-hint {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 8px;
+      text-align: center;
+      font-size: .75rem;
+      color: #9bb6ff;
+      opacity: .9;
+      pointer-events: none;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(5, 10, 23, 0.6);
+      backdrop-filter: blur(2px);
+      text-align: center;
+      padding: 16px;
+    }
+    .panel {
+      width: 100%;
+      max-width: 320px;
+      background: rgba(10, 16, 35, 0.95);
+      border: 1px solid #32417b;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .panel p { margin: 8px 0; font-size: .9rem; color: #ccd7ff; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #7df7ff, #8fff90);
+      color: #062228;
+      font-weight: 800;
+      padding: 10px 18px;
+      margin-top: 8px;
+      font-size: 1rem;
+    }
+    .actions { text-align: center; }
+    .back {
+      text-align: center;
+      color: #9bc3ff;
+      text-decoration: none;
+      font-size: .88rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>ネオンレーン・リレイ</h1>
+    <div class="hud">
+      <div class="stat">SCORE<strong id="score">0</strong></div>
+      <div class="stat">TIME<strong id="time">60.0</strong></div>
+      <div class="stat">HI<strong id="high">0</strong></div>
+    </div>
+
+    <div id="game" aria-label="game area">
+      <canvas id="canvas"></canvas>
+      <div id="lane-hint">左タップ: 左移動 / 右タップ: 右移動</div>
+      <div id="overlay" class="overlay">
+        <div class="panel" id="panelBody">
+          <p>青パケットを拾って +10</p>
+          <p>赤ノイズを避けろ（接触 -12）</p>
+          <div class="actions"><button id="startBtn">START</button></div>
+        </div>
+      </div>
+    </div>
+
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'neon-lane-relay-hi-v1';
+      const GAME_SECONDS = 60;
+
+      const game = document.getElementById('game');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      const overlay = document.getElementById('overlay');
+      const panelBody = document.getElementById('panelBody');
+      const startBtn = document.getElementById('startBtn');
+
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const highEl = document.getElementById('high');
+
+      const state = {
+        running: false,
+        score: 0,
+        high: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: GAME_SECONDS,
+        lane: 1,
+        items: [],
+        spawnAcc: 0,
+        lastTs: 0,
+        invincible: 0,
+      };
+
+      let W = 0, H = 0;
+      let laneX = [0, 0, 0];
+      const player = { x: 0, y: 0, r: 16 };
+
+      function resize() {
+        const rect = game.getBoundingClientRect();
+        W = Math.floor(rect.width);
+        H = Math.floor(rect.height);
+        canvas.width = W;
+        canvas.height = H;
+        laneX = [W * 0.2, W * 0.5, W * 0.8];
+        player.y = H - 46;
+      }
+
+      function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+      function resetGame() {
+        state.score = 0;
+        state.timeLeft = GAME_SECONDS;
+        state.items = [];
+        state.spawnAcc = 0;
+        state.lane = 1;
+        state.running = true;
+        state.invincible = 0;
+        state.lastTs = performance.now();
+        renderHud();
+      }
+
+      function levelSpeed() {
+        if (state.timeLeft > 30) return 140;
+        if (state.timeLeft > 15) return 175;
+        return 205;
+      }
+
+      function noiseRate() {
+        if (state.timeLeft > 30) return 0.28;
+        if (state.timeLeft > 15) return 0.36;
+        return 0.44;
+      }
+
+      function spawnGap() {
+        if (state.timeLeft > 30) return 0.62;
+        if (state.timeLeft > 15) return 0.48;
+        return 0.38;
+      }
+
+      function spawnItem() {
+        const lane = Math.floor(Math.random() * 3);
+        const isNoise = Math.random() < noiseRate();
+        state.items.push({
+          lane,
+          y: -24,
+          r: 12,
+          type: isNoise ? 'noise' : 'packet',
+          wobble: Math.random() * Math.PI * 2,
+        });
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+
+        state.timeLeft = clamp(state.timeLeft - dt, 0, GAME_SECONDS);
+        state.spawnAcc += dt;
+        while (state.spawnAcc >= spawnGap()) {
+          state.spawnAcc -= spawnGap();
+          spawnItem();
+          if (state.timeLeft < 45 && Math.random() < 0.4) spawnItem();
+        }
+
+        if (state.invincible > 0) state.invincible -= dt;
+
+        const speed = levelSpeed();
+        for (const item of state.items) {
+          item.y += speed * dt;
+          item.wobble += dt * 5;
+        }
+
+        const px = laneX[state.lane];
+        for (const item of state.items) {
+          const ix = laneX[item.lane] + Math.sin(item.wobble) * 3;
+          const dy = item.y - player.y;
+          const dx = ix - px;
+          const hit = (dx * dx + dy * dy) < (item.r + player.r) * (item.r + player.r);
+          if (hit) {
+            item.y = H + 30;
+            if (item.type === 'packet') {
+              state.score += 10;
+            } else if (state.invincible <= 0) {
+              state.score = Math.max(0, state.score - 12);
+              state.invincible = 0.35;
+            }
+          }
+        }
+
+        state.items = state.items.filter(it => it.y < H + 40);
+
+        if (state.timeLeft <= 0) finishGame();
+      }
+
+      function renderHud() {
+        scoreEl.textContent = String(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        highEl.textContent = String(state.high);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+
+        for (let i = 0; i < 3; i++) {
+          const x = laneX[i];
+          ctx.strokeStyle = 'rgba(130,170,255,0.18)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+
+        for (const item of state.items) {
+          const x = laneX[item.lane] + Math.sin(item.wobble) * 3;
+          ctx.beginPath();
+          ctx.arc(x, item.y, item.r, 0, Math.PI * 2);
+          if (item.type === 'packet') {
+            ctx.fillStyle = 'rgba(94,213,255,0.95)';
+            ctx.shadowColor = '#5ed5ff';
+          } else {
+            ctx.fillStyle = 'rgba(255,95,122,0.95)';
+            ctx.shadowColor = '#ff5f7a';
+          }
+          ctx.shadowBlur = 12;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        const px = laneX[state.lane];
+        ctx.beginPath();
+        ctx.arc(px, player.y, player.r, 0, Math.PI * 2);
+        ctx.fillStyle = state.invincible > 0 ? '#fff4a5' : '#9ef76a';
+        ctx.shadowColor = '#9ef76a';
+        ctx.shadowBlur = 14;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('RUNNER', px, player.y + 4);
+      }
+
+      function loop(ts) {
+        const dt = Math.min((ts - state.lastTs) / 1000, 0.05);
+        state.lastTs = ts;
+        update(dt);
+        draw();
+        renderHud();
+        requestAnimationFrame(loop);
+      }
+
+      function finishGame() {
+        state.running = false;
+        if (state.score > state.high) {
+          state.high = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.high));
+        }
+        panelBody.innerHTML = `
+          <p>TIME UP</p>
+          <p>Score: <strong>${state.score}</strong></p>
+          <p>High: <strong>${state.high}</strong></p>
+          <div class="actions"><button id="retryBtn">RETRY</button></div>
+        `;
+        overlay.hidden = false;
+        document.getElementById('retryBtn').addEventListener('pointerdown', startGame, { passive: true });
+      }
+
+      function startGame(e) {
+        e?.preventDefault?.();
+        overlay.hidden = true;
+        resetGame();
+      }
+
+      game.addEventListener('pointerdown', (e) => {
+        if (!state.running) return;
+        const rect = game.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        if (x < rect.width / 2) state.lane = Math.max(0, state.lane - 1);
+        else state.lane = Math.min(2, state.lane + 1);
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', startGame, { passive: true });
+      window.addEventListener('resize', resize);
+
+      resize();
+      renderHud();
+      requestAnimationFrame((ts) => {
+        state.lastTs = ts;
+        requestAnimationFrame(loop);
+      });
+    })();
+  </script>
+</body>
+</html>
