@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>クロックワーク・キャッチ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0a0f1f;
+      --panel: #131a2f;
+      --line: #2a355a;
+      --text: #eef3ff;
+      --good: #43f5c9;
+      --near: #7eb6ff;
+      --bad: #ff6b8a;
+      --accent: #ffd166;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 30% 10%, #1c2950 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+      touch-action: manipulation;
+    }
+    .wrap {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+      max-width: 460px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.25rem;
+      letter-spacing: .04em;
+      text-align: center;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .stat {
+      background: color-mix(in srgb, var(--panel) 86%, #ffffff 14%);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .label { font-size: .7rem; opacity: .75; }
+    .value { font-size: 1.1rem; font-weight: 700; margin-top: 3px; }
+    .arena {
+      background: color-mix(in srgb, var(--panel) 90%, #ffffff 10%);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 0;
+    }
+    canvas {
+      width: min(88vw, 360px);
+      height: min(88vw, 360px);
+      max-height: 48vh;
+      aspect-ratio: 1 / 1;
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      padding: 14px;
+      text-align: center;
+      font-weight: 600;
+      line-height: 1.5;
+      text-shadow: 0 2px 8px rgba(0,0,0,.5);
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    button, .tap-pad {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #1a2442;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 700;
+      min-height: 52px;
+    }
+    #start-btn {
+      background: linear-gradient(135deg, #324f9e, #25396e);
+    }
+    .tap-pad {
+      background: linear-gradient(135deg, #264d45, #1d3a34);
+      user-select: none;
+      display: grid;
+      place-items: center;
+    }
+    .tap-pad:active { transform: scale(.98); }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .85rem;
+      opacity: .88;
+    }
+    a { color: #9dc2ff; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🕰️ クロックワーク・キャッチ</h1>
+
+    <div class="hud">
+      <div class="stat"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </div>
+
+    <section class="arena">
+      <canvas id="game" width="420" height="420" aria-label="ゲーム画面"></canvas>
+      <div class="overlay" id="message">STARTで開始。<br>GOODゾーンでタップして稼げ。</div>
+    </section>
+
+    <div class="controls">
+      <button id="start-btn" type="button">START</button>
+      <div class="tap-pad" id="tap-pad" role="button" aria-label="タップ判定">TAP</div>
+    </div>
+
+    <div class="footer">
+      <span>60秒 / タップ判定</span>
+      <a href="../../">← 戻る</a>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const KEY = 'clockwork-catch-hi-v1';
+      const PLAY_MS = 60000;
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('message');
+      const startBtn = document.getElementById('start-btn');
+      const tapPad = document.getElementById('tap-pad');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      let score = 0;
+      let running = false;
+      let startTs = 0;
+      let lastTs = 0;
+      let angle = -Math.PI / 2;
+      let speed = 1.7;
+      let sectors = makeSectors();
+      let sectorRefresh = 0;
+
+      hiEl.textContent = hi;
+
+      function makeSectors() {
+        const base = Math.random() * Math.PI * 2;
+        const goodWidth = 0.78;
+        const badWidth = 0.88;
+        return {
+          good: { a0: norm(base - goodWidth / 2), a1: norm(base + goodWidth / 2) },
+          bad:  { a0: norm(base + Math.PI - badWidth / 2), a1: norm(base + Math.PI + badWidth / 2) }
+        };
+      }
+
+      function norm(rad) {
+        const t = Math.PI * 2;
+        let r = rad % t;
+        if (r < 0) r += t;
+        return r;
+      }
+
+      function inArc(a, arc) {
+        const x = norm(a);
+        return arc.a0 <= arc.a1
+          ? (x >= arc.a0 && x <= arc.a1)
+          : (x >= arc.a0 || x <= arc.a1);
+      }
+
+      function arcDistance(a, arc) {
+        const x = norm(a);
+        if (inArc(x, arc)) return 0;
+        const d0 = Math.min(Math.abs(x - arc.a0), Math.PI * 2 - Math.abs(x - arc.a0));
+        const d1 = Math.min(Math.abs(x - arc.a1), Math.PI * 2 - Math.abs(x - arc.a1));
+        return Math.min(d0, d1);
+      }
+
+      function setMessage(text, hold = 900) {
+        msgEl.textContent = text;
+        if (!running) return;
+        clearTimeout(setMessage.tid);
+        setMessage.tid = setTimeout(() => {
+          msgEl.textContent = 'GOODを狙ってTAP';
+        }, hold);
+      }
+
+      function onTap(ev) {
+        ev.preventDefault();
+        if (!running) return;
+
+        if (inArc(angle, sectors.good)) {
+          score += 12;
+          setMessage('GOOD +12');
+        } else if (inArc(angle, sectors.bad)) {
+          score = Math.max(0, score - 10);
+          setMessage('BAD -10');
+        } else if (arcDistance(angle, sectors.good) < 0.15) {
+          score += 4;
+          setMessage('NEAR +4');
+        } else {
+          setMessage('MISS ±0', 500);
+        }
+        scoreEl.textContent = score;
+      }
+
+      function startGame() {
+        score = 0;
+        running = true;
+        startTs = performance.now();
+        lastTs = startTs;
+        sectorRefresh = 0;
+        speed = 1.7;
+        sectors = makeSectors();
+        scoreEl.textContent = '0';
+        msgEl.textContent = 'GOODを狙ってTAP';
+      }
+
+      function endGame() {
+        running = false;
+        const prevHi = hi;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = `FINISH ${score}  新記録!`;
+        } else {
+          msgEl.textContent = `FINISH ${score}  (HI ${prevHi})`;
+        }
+      }
+
+      function drawDial() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+        const r = Math.min(w, h) * 0.36;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.fillStyle = '#0f1730';
+        ctx.beginPath(); ctx.arc(cx, cy, r + 18, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#32426d';
+        ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+
+        drawArc(sectors.good, r, '#43f5c9');
+        drawArc(sectors.bad, r, '#ff6b8a');
+
+        for (let i = 0; i < 12; i++) {
+          const t = (Math.PI * 2 / 12) * i - Math.PI / 2;
+          const x0 = cx + Math.cos(t) * (r - 12);
+          const y0 = cy + Math.sin(t) * (r - 12);
+          const x1 = cx + Math.cos(t) * (r + 10);
+          const y1 = cy + Math.sin(t) * (r + 10);
+          ctx.strokeStyle = 'rgba(220,230,255,0.45)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0);
+          ctx.lineTo(x1, y1);
+          ctx.stroke();
+        }
+
+        const tipX = cx + Math.cos(angle) * (r - 16);
+        const tipY = cy + Math.sin(angle) * (r - 16);
+        ctx.strokeStyle = '#ffd166';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2); ctx.fill();
+
+        function drawArc(arc, radius, color) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 16;
+          ctx.beginPath();
+          const start = arc.a0 - Math.PI / 2;
+          const end = arc.a1 - Math.PI / 2;
+          if (arc.a0 <= arc.a1) {
+            ctx.arc(cx, cy, radius, start, end);
+          } else {
+            ctx.arc(cx, cy, radius, start, Math.PI * 1.5);
+            ctx.arc(cx, cy, radius, -Math.PI * 0.5, end);
+          }
+          ctx.stroke();
+        }
+      }
+
+      function tick(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.05, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        if (running) {
+          const elapsed = ts - startTs;
+          const remain = Math.max(0, PLAY_MS - elapsed);
+          timeEl.textContent = (remain / 1000).toFixed(1);
+
+          if (elapsed >= 45000) speed = 3.2;
+          else if (elapsed >= 30000) speed = 2.5;
+          else speed = 1.7;
+
+          angle = norm(angle + speed * dt);
+          sectorRefresh += dt;
+          if (sectorRefresh >= 3.8) {
+            sectorRefresh = 0;
+            sectors = makeSectors();
+          }
+
+          if (remain <= 0) endGame();
+        } else {
+          timeEl.textContent = '60.0';
+        }
+
+        drawDial();
+        requestAnimationFrame(tick);
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        startGame();
+      });
+
+      tapPad.addEventListener('pointerdown', onTap);
+      canvas.addEventListener('pointerdown', onTap);
+
+      drawDial();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
