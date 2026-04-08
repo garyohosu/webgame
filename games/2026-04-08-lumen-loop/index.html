@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>ルーメンループ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+     crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #07131a;
+      --panel: rgba(10, 24, 33, 0.88);
+      --line: rgba(137, 227, 255, 0.18);
+      --text: #eefcff;
+      --muted: #88a9b8;
+      --blue: #62e7ff;
+      --blue-deep: #1e8fb7;
+      --red: #ff6b78;
+      --gold: #ffd36b;
+      --glow: rgba(98, 231, 255, 0.32);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 10%, rgba(87, 210, 255, 0.24), transparent 34%),
+        radial-gradient(circle at 50% 120%, rgba(255, 211, 107, 0.18), transparent 42%),
+        linear-gradient(180deg, #07131a 0%, #031018 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 460px);
+      height: 100%;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+
+    .title-box,
+    .hud,
+    .arena,
+    .controls,
+    .footer {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+      backdrop-filter: blur(8px);
+    }
+
+    .title-box {
+      border-radius: 18px;
+      padding: 12px 14px;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.28rem;
+      letter-spacing: 0.08em;
+    }
+
+    .subtitle {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+    }
+
+    .hud {
+      border-radius: 16px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 8px 6px;
+      text-align: center;
+    }
+
+    .label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .value {
+      margin-top: 3px;
+      font-size: 1.12rem;
+      font-weight: 700;
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      border-radius: 22px;
+      padding: 12px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .grid-fx {
+      position: absolute;
+      inset: 0;
+      opacity: 0.16;
+      background:
+        linear-gradient(rgba(98, 231, 255, 0.12) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(98, 231, 255, 0.12) 1px, transparent 1px);
+      background-size: 26px 26px;
+      mask-image: radial-gradient(circle at center, black 48%, transparent 88%);
+      pointer-events: none;
+    }
+
+    canvas {
+      width: min(82vw, 350px);
+      height: min(82vw, 350px);
+      max-height: 47vh;
+      aspect-ratio: 1 / 1;
+      display: block;
+      z-index: 1;
+    }
+
+    .message {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 16px;
+      z-index: 2;
+      text-align: center;
+      font-size: 0.88rem;
+      line-height: 1.4;
+      color: #e9fbff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+
+    .controls {
+      border-radius: 18px;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 10px;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 56px;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      color: #031018;
+    }
+
+    #start-btn {
+      background: linear-gradient(135deg, var(--gold), #ffb347);
+      box-shadow: inset 0 -4px 12px rgba(255, 150, 34, 0.2);
+    }
+
+    #pulse-btn {
+      background: linear-gradient(135deg, #8bfff2, var(--blue));
+      box-shadow: inset 0 -6px 14px rgba(30, 143, 183, 0.24);
+    }
+
+    button:active {
+      transform: scale(0.985);
+    }
+
+    .footer {
+      border-radius: 16px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .footer a {
+      color: #a9eaff;
+      text-decoration: none;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="title-box">
+      <h1>ルーメンループ</h1>
+      <div class="subtitle">回転する灯りが青ノードをなぞる瞬間だけ、パルスを撃て。</div>
+    </section>
+
+    <section class="hud" aria-label="スコア情報">
+      <div class="stat"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </section>
+
+    <section class="arena" id="arena" aria-label="ゲームエリア">
+      <div class="grid-fx"></div>
+      <canvas id="game" width="420" height="420"></canvas>
+      <div class="message" id="message">STARTで開始。<br>青が光った瞬間にPULSE。</div>
+    </section>
+
+    <section class="controls" aria-label="操作">
+      <button id="start-btn" type="button">START</button>
+      <button id="pulse-btn" type="button">PULSE</button>
+    </section>
+
+    <footer class="footer">
+      <span>60秒 / タップ照射</span>
+      <a href="../../">← 作品集へ戻る</a>
+    </footer>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "lumen-loop-hi-v1";
+      const GAME_MS = 60000;
+      const PULSE_COOLDOWN = 260;
+      const RING_RADIUS = 148;
+      const NODE_RADIUS = 11;
+      const MAX_NODES = 12;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const hiEl = document.getElementById("hi");
+      const messageEl = document.getElementById("message");
+      const startBtn = document.getElementById("start-btn");
+      const pulseBtn = document.getElementById("pulse-btn");
+
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      let score = 0;
+      let running = false;
+      let startTime = 0;
+      let lastFrame = 0;
+      let lastSpawn = 0;
+      let sweepAngle = -Math.PI / 2;
+      let sweepSpeed = 1.28;
+      let pulseMs = 0;
+      let pulseCooldown = 0;
+      let nodes = [];
+      let nextId = 1;
+      let messageTimer = 0;
+
+      hiEl.textContent = String(hi);
+
+      function rand(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function difficulty(elapsedMs) {
+        if (elapsedMs < 30000) {
+          return { spawnGap: 940, speed: 1.28, blueChance: 0.72, life: 4200 };
+        }
+        if (elapsedMs < 45000) {
+          return { spawnGap: 740, speed: 1.62, blueChance: 0.62, life: 3500 };
+        }
+        return { spawnGap: 560, speed: 1.95, blueChance: 0.55, life: 3000 };
+      }
+
+      function shortestAngleDiff(a, b) {
+        let diff = (a - b + Math.PI) % (Math.PI * 2) - Math.PI;
+        if (diff < -Math.PI) diff += Math.PI * 2;
+        return diff;
+      }
+
+      function showMessage(text, hold = 820) {
+        messageEl.innerHTML = text;
+        clearTimeout(messageTimer);
+        if (!running) return;
+        messageTimer = setTimeout(() => {
+          messageEl.innerHTML = "青が光った瞬間にPULSE。<br>赤を巻き込むと減点。";
+        }, hold);
+      }
+
+      function addNode(now, config) {
+        if (nodes.length >= MAX_NODES) return;
+
+        const recentAngles = nodes.map((node) => node.angle);
+        let angle = rand(0, Math.PI * 2);
+        let tries = 0;
+        while (recentAngles.some((value) => Math.abs(shortestAngleDiff(angle, value)) < 0.42) && tries < 18) {
+          angle = rand(0, Math.PI * 2);
+          tries += 1;
+        }
+
+        nodes.push({
+          id: nextId++,
+          kind: Math.random() < config.blueChance ? "blue" : "red",
+          angle,
+          bornAt: now,
+          ttl: config.life + rand(-320, 260),
+          hitFlash: 0
+        });
+      }
+
+      function resetGame() {
+        score = 0;
+        scoreEl.textContent = "0";
+        timeEl.textContent = "60.0";
+        pulseMs = 0;
+        pulseCooldown = 0;
+        nodes = [];
+        nextId = 1;
+        sweepAngle = -Math.PI / 2;
+      }
+
+      function startGame() {
+        resetGame();
+        running = true;
+        startTime = performance.now();
+        lastFrame = startTime;
+        lastSpawn = startTime - 600;
+        showMessage("青が光ったらPULSE", 900);
+      }
+
+      function finishGame() {
+        running = false;
+        clearTimeout(messageTimer);
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+          hiEl.textContent = String(hi);
+          messageEl.innerHTML = "FINISH " + score + "<br>新記録更新";
+        } else {
+          messageEl.innerHTML = "FINISH " + score + "<br>HI " + hi;
+        }
+      }
+
+      function pulse() {
+        if (!running || pulseCooldown > 0) return;
+
+        pulseMs = 180;
+        pulseCooldown = PULSE_COOLDOWN;
+        let delta = 0;
+        let hitCount = 0;
+
+        for (const node of nodes) {
+          const overlap = Math.abs(shortestAngleDiff(sweepAngle, node.angle));
+          if (overlap <= 0.24) {
+            if (node.kind === "blue") {
+              delta += 10;
+              hitCount += 1;
+              node.hitFlash = 180;
+              node.remove = true;
+            } else {
+              delta -= 8;
+              node.hitFlash = 220;
+              node.remove = true;
+            }
+          }
+        }
+
+        nodes = nodes.filter((node) => !node.remove);
+
+        if (hitCount >= 2) delta += 4;
+        score = Math.max(0, score + delta);
+        scoreEl.textContent = String(score);
+
+        if (delta > 0) {
+          showMessage(hitCount >= 2 ? "DOUBLE PULSE +" + delta : "CLEAR +" + delta, 560);
+        } else if (delta < 0) {
+          showMessage("NOISE " + delta, 620);
+        } else {
+          showMessage("MISS ±0", 420);
+        }
+      }
+
+      function update(now) {
+        const deltaMs = now - lastFrame;
+        lastFrame = now;
+
+        if (running) {
+          const elapsed = now - startTime;
+          const remain = Math.max(0, GAME_MS - elapsed);
+          const config = difficulty(elapsed);
+
+          sweepSpeed = config.speed;
+          sweepAngle += (deltaMs / 1000) * sweepSpeed;
+          if (sweepAngle > Math.PI * 2) sweepAngle -= Math.PI * 2;
+
+          if (now - lastSpawn >= config.spawnGap) {
+            addNode(now, config);
+            lastSpawn = now;
+          }
+
+          pulseMs = Math.max(0, pulseMs - deltaMs);
+          pulseCooldown = Math.max(0, pulseCooldown - deltaMs);
+
+          let missed = 0;
+          nodes = nodes.filter((node) => {
+            node.hitFlash = Math.max(0, node.hitFlash - deltaMs);
+            if (now - node.bornAt > node.ttl) {
+              if (node.kind === "blue") missed += 4;
+              return false;
+            }
+            return true;
+          });
+
+          if (missed > 0) {
+            score = Math.max(0, score - missed);
+            scoreEl.textContent = String(score);
+            showMessage("MISS -" + missed, 500);
+          }
+
+          timeEl.textContent = (remain / 1000).toFixed(1);
+          if (remain <= 0) {
+            finishGame();
+          }
+        }
+
+        draw(now);
+        requestAnimationFrame(update);
+      }
+
+      function drawRadarBase(cx, cy) {
+        ctx.save();
+        ctx.translate(cx, cy);
+
+        for (let ring = 1; ring <= 4; ring += 1) {
+          ctx.beginPath();
+          ctx.arc(0, 0, (RING_RADIUS / 4) * ring, 0, Math.PI * 2);
+          ctx.strokeStyle = ring === 4 ? "rgba(169, 234, 255, 0.28)" : "rgba(169, 234, 255, 0.12)";
+          ctx.lineWidth = ring === 4 ? 2.4 : 1;
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < 8; i += 1) {
+          const a = (Math.PI * 2 * i) / 8;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * 22, Math.sin(a) * 22);
+          ctx.lineTo(Math.cos(a) * RING_RADIUS, Math.sin(a) * RING_RADIUS);
+          ctx.strokeStyle = "rgba(169, 234, 255, 0.08)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      function drawSweep(cx, cy) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(sweepAngle);
+
+        const sweep = ctx.createLinearGradient(0, 0, RING_RADIUS, 0);
+        sweep.addColorStop(0, "rgba(98, 231, 255, 0)");
+        sweep.addColorStop(0.55, "rgba(98, 231, 255, 0.08)");
+        sweep.addColorStop(1, "rgba(98, 231, 255, 0.34)");
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, RING_RADIUS, -0.18, 0.18);
+        ctx.closePath();
+        ctx.fillStyle = sweep;
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(RING_RADIUS, 0);
+        ctx.strokeStyle = "rgba(154, 248, 255, 0.95)";
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = "rgba(98, 231, 255, 0.6)";
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawNodes(cx, cy, now) {
+        for (const node of nodes) {
+          const x = cx + Math.cos(node.angle) * RING_RADIUS;
+          const y = cy + Math.sin(node.angle) * RING_RADIUS;
+          const overlap = Math.abs(shortestAngleDiff(sweepAngle, node.angle));
+          const lit = overlap <= 0.24;
+          const pulseGlow = pulseMs > 0 && lit;
+          const blink = 0.82 + Math.sin((now - node.bornAt) / 180) * 0.18;
+          const baseFill = node.kind === "blue" ? "rgba(98, 231, 255, 0.92)" : "rgba(255, 107, 120, 0.92)";
+          const shadow = node.kind === "blue" ? "rgba(98, 231, 255, 0.5)" : "rgba(255, 107, 120, 0.45)";
+
+          ctx.beginPath();
+          ctx.arc(x, y, NODE_RADIUS + (pulseGlow ? 5 : 0), 0, Math.PI * 2);
+          ctx.fillStyle = node.kind === "blue"
+            ? "rgba(98, 231, 255, " + (lit ? 0.26 : 0.1) + ")"
+            : "rgba(255, 107, 120, " + (lit ? 0.22 : 0.08) + ")";
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(x, y, NODE_RADIUS * blink, 0, Math.PI * 2);
+          ctx.fillStyle = baseFill;
+          ctx.shadowBlur = lit || node.hitFlash > 0 ? 16 : 8;
+          ctx.shadowColor = shadow;
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(x, y, NODE_RADIUS - 4, 0, Math.PI * 2);
+          ctx.fillStyle = node.kind === "blue" ? "rgba(221, 252, 255, 0.96)" : "rgba(255, 227, 230, 0.96)";
+          ctx.globalAlpha = lit ? 0.95 : 0.72;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
+        }
+      }
+
+      function drawPulseRing(cx, cy) {
+        if (pulseMs <= 0) return;
+        const progress = 1 - pulseMs / 180;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 36 + progress * 132, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(255, 211, 107, " + (0.6 - progress * 0.45) + ")";
+        ctx.lineWidth = 6 - progress * 3.5;
+        ctx.stroke();
+      }
+
+      function draw(now) {
+        const { width, height } = canvas;
+        const cx = width / 2;
+        const cy = height / 2;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const bg = ctx.createRadialGradient(cx, cy, 18, cx, cy, RING_RADIUS + 70);
+        bg.addColorStop(0, "rgba(15, 40, 56, 0.92)");
+        bg.addColorStop(1, "rgba(3, 12, 18, 0.24)");
+        ctx.fillStyle = bg;
+        ctx.beginPath();
+        ctx.arc(cx, cy, RING_RADIUS + 28, 0, Math.PI * 2);
+        ctx.fill();
+
+        drawRadarBase(cx, cy);
+        drawPulseRing(cx, cy);
+        drawSweep(cx, cy);
+        drawNodes(cx, cy, now);
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 211, 107, 0.92)";
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "rgba(255, 211, 107, 0.55)";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.fillStyle = "#fff9de";
+        ctx.fill();
+      }
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      pulseBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        pulse();
+      });
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target === startBtn || event.target === pulseBtn) return;
+        event.preventDefault();
+        pulse();
+      });
+
+      requestAnimationFrame((now) => {
+        startTime = now;
+        lastFrame = now;
+        draw(now);
+        requestAnimationFrame(update);
+      });
+    })();
+  </script>
+</body>
+</html>
