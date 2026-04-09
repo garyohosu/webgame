@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>プリズムシフト</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0a1020;
+      --panel: #111a32;
+      --text: #e8f1ff;
+      --muted: #8da1c8;
+      --cyan: #35d7ff;
+      --magenta: #ff55d3;
+      --yellow: #ffd447;
+      --ok: #57ffa0;
+      --ng: #ff6f8f;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% -10%, #1f2f5f, var(--bg) 58%); color: var(--text); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+    .app {
+      width: min(100vw, 440px);
+      height: 100dvh;
+      max-height: 900px;
+      padding: env(safe-area-inset-top, 12px) 14px env(safe-area-inset-bottom, 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    .topbar {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; color: var(--muted);
+    }
+    .back { color: var(--muted); text-decoration: none; border: 1px solid #2a3a64; border-radius: 999px; padding: 6px 10px; }
+    h1 { margin: 0; font-size: 1.45rem; letter-spacing: .04em; }
+    .hud {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .pill {
+      background: rgba(17, 26, 50, .85); border: 1px solid #31467a; border-radius: 12px;
+      padding: 8px 10px; text-align: center;
+    }
+    .pill .k { font-size: 10px; color: var(--muted); }
+    .pill .v { font-size: 1.2rem; font-weight: 700; line-height: 1.1; }
+    #stage {
+      position: relative; background: linear-gradient(180deg, rgba(52,77,138,.28), rgba(11,18,34,.85));
+      border: 1px solid #31467a; border-radius: 16px; overflow: hidden;
+    }
+    #hint {
+      position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+      font-size: 12px; color: #b9caf1; background: rgba(9,14,28,.65);
+      border: 1px solid #2f457b; border-radius: 999px; padding: 6px 10px;
+    }
+    #flash {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      font-weight: 700; pointer-events: none; opacity: 0; transition: opacity .15s;
+    }
+    #catcher {
+      position: absolute; bottom: 16px; left: 50%; width: 98px; height: 18px; transform: translateX(-50%);
+      border-radius: 999px; border: 2px solid rgba(255,255,255,.35); box-shadow: 0 0 12px rgba(255,255,255,.15);
+      transition: background .08s;
+    }
+    .drop {
+      position: absolute; width: 22px; height: 22px; border-radius: 50%;
+      box-shadow: 0 0 10px rgba(255,255,255,.25);
+    }
+    .controls { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    #startBtn {
+      border: 0; border-radius: 12px; padding: 12px 14px; color: #041020;
+      font-weight: 800; font-size: 1rem; background: linear-gradient(135deg, #6cf0ff, #ffe46d);
+    }
+    #legend { font-size: 11px; color: var(--muted); text-align: right; }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <div class="topbar">
+      <a class="back" href="../../">← 戻る</a>
+      <span>60s One Screen</span>
+    </div>
+    <h1>プリズムシフト</h1>
+    <section class="hud">
+      <div class="pill"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="pill"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="pill"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+    </section>
+    <section id="stage">
+      <div id="hint">タップで色を切替（C→M→Y）</div>
+      <div id="flash"></div>
+      <div id="catcher"></div>
+    </section>
+    <div class="controls">
+      <button id="startBtn" type="button">START</button>
+      <div id="legend">同色:+10 / 異色:-6 / 取り逃し:-3</div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'prism-shift-hi-v1';
+      const COLORS = [
+        { name: 'C', hex: '#35d7ff' },
+        { name: 'M', hex: '#ff55d3' },
+        { name: 'Y', hex: '#ffd447' }
+      ];
+
+      const stage = document.getElementById('stage');
+      const catcher = document.getElementById('catcher');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const startBtn = document.getElementById('startBtn');
+      const flash = document.getElementById('flash');
+
+      let hiScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = hiScore;
+
+      let running = false;
+      let score = 0;
+      let colorIndex = 0;
+      let drops = [];
+      let lastTs = 0;
+      let spawnTimer = 0;
+      let remaining = 60;
+      let rafId = 0;
+
+      function setCatcherColor() {
+        catcher.style.background = COLORS[colorIndex].hex;
+      }
+
+      function showFlash(text, color) {
+        flash.textContent = text;
+        flash.style.color = color;
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 130);
+      }
+
+      function resetGame() {
+        drops.forEach(d => d.el.remove());
+        drops = [];
+        score = 0;
+        remaining = 60;
+        colorIndex = 0;
+        spawnTimer = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        setCatcherColor();
+      }
+
+      function spawnDrop() {
+        const idx = Math.floor(Math.random() * COLORS.length);
+        const el = document.createElement('div');
+        el.className = 'drop';
+        el.style.background = COLORS[idx].hex;
+        const padding = 24;
+        const maxX = Math.max(padding, stage.clientWidth - padding - 22);
+        const x = padding + Math.random() * (maxX - padding);
+        el.style.left = `${x}px`;
+        el.style.top = '-24px';
+        stage.appendChild(el);
+
+        drops.push({ el, color: idx, x, y: -24, vy: getSpeed() });
+      }
+
+      function getSpeed() {
+        const elapsed = 60 - remaining;
+        if (elapsed < 30) return 150;
+        if (elapsed < 45) return 190;
+        return 220;
+      }
+
+      function update(dt) {
+        remaining = Math.max(0, remaining - dt);
+        timeEl.textContent = remaining.toFixed(1);
+
+        spawnTimer -= dt;
+        const elapsed = 60 - remaining;
+        const interval = elapsed < 30 ? 0.62 : elapsed < 45 ? 0.45 : 0.34;
+        if (spawnTimer <= 0) {
+          spawnDrop();
+          spawnTimer = interval;
+          if (elapsed >= 45 && Math.random() < 0.35) spawnDrop();
+        }
+
+        const catchLine = stage.clientHeight - 34;
+        const catcherCenter = stage.clientWidth * 0.5;
+        const catcherHalf = 54;
+        for (let i = drops.length - 1; i >= 0; i--) {
+          const d = drops[i];
+          d.vy = getSpeed();
+          d.y += d.vy * dt;
+          d.el.style.top = `${d.y}px`;
+
+          if (d.y >= catchLine) {
+            const dropCenter = d.x + 11;
+            const canCatch = Math.abs(dropCenter - catcherCenter) <= catcherHalf;
+            if (!canCatch) {
+              score -= 3;
+              showFlash('-3', '#ff9f7f');
+            } else if (d.color === colorIndex) {
+              score += 10;
+              showFlash('+10', '#57ffa0');
+            } else {
+              score -= 6;
+              showFlash('-6', '#ff7f9a');
+            }
+            d.el.remove();
+            drops.splice(i, 1);
+          }
+        }
+
+        scoreEl.textContent = String(score);
+
+        if (remaining <= 0) {
+          endGame();
+        }
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+        update(dt);
+        rafId = requestAnimationFrame(frame);
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        startBtn.disabled = false;
+        startBtn.textContent = 'RETRY';
+        if (score > hiScore) {
+          hiScore = score;
+          localStorage.setItem(STORAGE_KEY, String(hiScore));
+          hiEl.textContent = String(hiScore);
+        }
+        showFlash('FINISH', '#e8f1ff');
+      }
+
+      function startGame() {
+        resetGame();
+        running = true;
+        startBtn.disabled = true;
+        lastTs = 0;
+        rafId = requestAnimationFrame(frame);
+      }
+
+      document.getElementById('app').addEventListener('pointerdown', (ev) => {
+        if (!running) return;
+        if (ev.target === startBtn) return;
+        colorIndex = (colorIndex + 1) % COLORS.length;
+        setCatcherColor();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        if (!running) startGame();
+      });
+
+      setCatcherColor();
+    })();
+  </script>
+</body>
+</html>
