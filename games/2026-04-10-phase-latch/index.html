@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>フェーズラッチ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg:#080b16; --panel:#11162a; --ink:#ecf2ff; --sub:#9fb0d9;
+      --accent:#5be7ff; --good:#58f7a6; --bad:#ff6b8f;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;margin:0;overflow:hidden;background:radial-gradient(circle at 50% 0%, #1a2240 0%, var(--bg) 55%);color:var(--ink);font-family:system-ui,-apple-system,sans-serif;}
+    body{display:flex;justify-content:center;align-items:center;padding:10px;touch-action:manipulation;}
+    .game{width:min(430px,100%);height:min(92vh,820px);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.12);border-radius:18px;display:flex;flex-direction:column;padding:12px;gap:10px;}
+    .top{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;}
+    h1{font-size:1.1rem;margin:0;letter-spacing:.06em}
+    .back{color:var(--sub);text-decoration:none;font-size:.9rem}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+    .cell{background:var(--panel);border-radius:10px;padding:6px;text-align:center}
+    .k{font-size:.68rem;color:var(--sub)} .v{font-weight:700;font-variant-numeric:tabular-nums}
+    #field{position:relative;flex:1;background:#0a1020;border-radius:14px;border:1px solid rgba(255,255,255,.08);overflow:hidden}
+    .laneMark{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.08)}
+    #catcher{position:absolute;bottom:16px;width:22%;height:12px;background:linear-gradient(90deg,var(--accent),#c6f7ff);border-radius:999px;box-shadow:0 0 14px rgba(91,231,255,.7);transition:left .1s linear}
+    .orb{position:absolute;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%)}
+    .orb.good{background:var(--good);box-shadow:0 0 10px rgba(88,247,166,.8)}
+    .orb.bad{background:var(--bad);box-shadow:0 0 10px rgba(255,107,143,.8)}
+    .center{display:flex;gap:8px;justify-content:center;align-items:center}
+    button{border:none;border-radius:999px;background:linear-gradient(90deg,#57f0ff,#7d8dff);color:#041225;font-weight:800;padding:10px 24px}
+    #msg{font-size:.9rem;color:var(--sub);min-height:1.3em;text-align:center}
+  </style>
+</head>
+<body>
+  <main class="game">
+    <div class="top">
+      <h1>🧷 フェーズラッチ</h1>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+    <div class="hud">
+      <div class="cell"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="cell"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="cell"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+      <div class="cell"><div class="k">PHASE</div><div class="v" id="phase">1/4</div></div>
+    </div>
+    <section id="field">
+      <div class="laneMark" style="left:25%"></div><div class="laneMark" style="left:50%"></div><div class="laneMark" style="left:75%"></div>
+      <div id="catcher"></div>
+    </section>
+    <div class="center"><button id="start">START</button></div>
+    <div id="msg">タップで受け皿を回して青を取る。赤は取らない。</div>
+  </main>
+<script>
+(() => {
+  const KEY='phase-latch-hi-v1';
+  const field=document.getElementById('field'), catcher=document.getElementById('catcher');
+  const scoreEl=document.getElementById('score'), timeEl=document.getElementById('time'), hiEl=document.getElementById('hi'), phaseEl=document.getElementById('phase');
+  const startBtn=document.getElementById('start'), msg=document.getElementById('msg');
+  let hi=Number(localStorage.getItem(KEY)||0); hiEl.textContent=hi;
+  const lanes=4; let lane=0, score=0, t=60, playing=false, last=0, spawnAcc=0;
+  const orbs=[];
+
+  const laneLeft = i => (i*(100/lanes)+1.5)+'%';
+  const setLane = () => { catcher.style.left=laneLeft(lane); phaseEl.textContent=`${lane+1}/4`; };
+  setLane();
+
+  function spawn(){
+    const danger = t<15 ? 0.4 : t<30 ? 0.3 : 0.2;
+    const isBad = Math.random()<danger;
+    const o={lane:Math.floor(Math.random()*lanes), y:0, speed:(t<15?220:t<30?180:145)+Math.random()*45, bad:isBad};
+    const el=document.createElement('div'); el.className='orb '+(isBad?'bad':'good');
+    el.style.left=((o.lane+0.5)*(100/lanes))+'%'; el.style.top='0%'; field.appendChild(el); o.el=el; orbs.push(o);
+  }
+
+  function tap(){ if(!playing) return; lane=(lane+1)%lanes; setLane(); }
+  document.body.addEventListener('pointerdown', tap, {passive:true});
+
+  function end(){
+    playing=false; startBtn.style.display='inline-block';
+    if(score>hi){ hi=score; localStorage.setItem(KEY,String(hi)); hiEl.textContent=hi; msg.textContent='NEW HIGH SCORE!'; }
+    else msg.textContent='終了。もう一回で更新を狙え。';
+  }
+
+  function loop(ts){
+    if(!playing) return;
+    if(!last) last=ts;
+    const dt=(ts-last)/1000; last=ts;
+    t=Math.max(0,t-dt); timeEl.textContent=t.toFixed(1);
+    spawnAcc += dt;
+    const interval = t<15?0.42:t<30?0.55:0.72;
+    while(spawnAcc>interval){ spawnAcc-=interval; spawn(); if(t<15 && Math.random()<0.25) spawn(); }
+
+    const h=field.clientHeight;
+    for(let i=orbs.length-1;i>=0;i--){
+      const o=orbs[i]; o.y += o.speed*dt; o.el.style.top=(o.y/h*100)+'%';
+      const catchY=h-24;
+      if(o.y>=catchY && o.y<=catchY+14 && o.lane===lane){
+        score += o.bad ? -12 : 10;
+        o.el.remove(); orbs.splice(i,1); continue;
+      }
+      if(o.y>h+24){ if(!o.bad) score-=4; o.el.remove(); orbs.splice(i,1); }
+    }
+    scoreEl.textContent=Math.max(0,score); // 見た目だけ0未満防止
+    if(t<=0){ end(); return; }
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener('pointerdown', (e)=>{
+    e.stopPropagation();
+    orbs.splice(0).forEach(o=>o.el.remove());
+    score=0; t=60; lane=0; setLane(); last=0; spawnAcc=0;
+    scoreEl.textContent='0'; timeEl.textContent='60.0'; msg.textContent='青を受けて、赤は流せ。';
+    startBtn.style.display='none'; playing=true; requestAnimationFrame(loop);
+  });
+})();
+</script>
+</body>
+</html>
