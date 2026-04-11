@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ネオンスタッカー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090b18;
+      --panel: #121933;
+      --line: #2a376d;
+      --neon: #62f6ff;
+      --accent: #ffd166;
+      --danger: #ff5d8f;
+      --text: #e9efff;
+      --muted: #9aa8d6;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% -20%, #1e2d63, var(--bg) 58%); color: var(--text); font-family: "Noto Sans JP", system-ui, sans-serif; }
+    body { display: grid; place-items: center; }
+
+    .app {
+      width: min(100vw, 480px);
+      height: 100dvh;
+      max-height: 860px;
+      padding: 12px 12px 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+
+    .title { text-align: center; font-size: 1.3rem; font-weight: 800; letter-spacing: .06em; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .chip {
+      background: rgba(15, 24, 56, .9);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .chip .k { font-size: .65rem; color: var(--muted); }
+    .chip .v { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+
+    .arena-wrap {
+      background: linear-gradient(180deg, rgba(10,16,42,.95), rgba(8,12,28,.95));
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+
+    .overlay {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      background: rgba(4, 7, 20, .52);
+      backdrop-filter: blur(1px);
+      padding: 16px;
+      text-align: center;
+    }
+    .panel {
+      background: rgba(14, 22, 52, .94);
+      border: 1px solid #3a4b8c;
+      border-radius: 12px;
+      padding: 14px 12px;
+      width: min(94%, 360px);
+    }
+    .panel p { margin: 8px 0 0; color: var(--muted); line-height: 1.45; font-size: .92rem; }
+
+    button {
+      margin-top: 10px;
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--neon), #6cb9ff);
+      color: #061426;
+      padding: 11px;
+      font-weight: 800;
+      font-size: 1rem;
+    }
+
+    .hint { text-align: center; color: var(--muted); font-size: .83rem; }
+    .back { text-align: center; }
+    .back a { color: #9ad8ff; text-decoration: none; font-size: .95rem; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">ネオンスタッカー</div>
+
+    <section class="hud" aria-label="ステータス">
+      <div class="chip"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="chip"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="chip"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+    </section>
+
+    <section class="arena-wrap">
+      <canvas id="game" width="360" height="560" aria-label="ゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <strong id="panel-title">60秒でどこまで積める？</strong>
+          <p id="panel-text">タップで移動ブロックを固定。下段と重なった分だけ次の足場になる。重なりゼロで終了。</p>
+          <button id="start">スタート</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="hint">操作：画面をタップ（pointerdown）</div>
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'neon-stacker-hi-v1';
+      const W = 360, H = 560;
+      const FLOOR_Y = H - 44;
+      const BLOCK_H = 22;
+      const START_W = 170;
+
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const overlay = document.getElementById('overlay');
+      const panelTitle = document.getElementById('panel-title');
+      const panelText = document.getElementById('panel-text');
+      const startBtn = document.getElementById('start');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      let state = 'idle';
+      let score = 0;
+      let remain = 60;
+      let lastTs = 0;
+      let gameOverReason = '';
+
+      let moving = null;
+      let base = null;
+      let settled = [];
+
+      function levelSpeed() {
+        if (remain <= 15) return 235;
+        if (remain <= 30) return 195;
+        return 155;
+      }
+
+      function reset() {
+        score = 0;
+        remain = 60;
+        lastTs = 0;
+        gameOverReason = '';
+        settled = [];
+        const baseY = FLOOR_Y;
+        base = { x: (W - START_W) / 2, y: baseY, w: START_W, h: BLOCK_H };
+        moving = { x: 0, y: baseY - BLOCK_H, w: START_W, h: BLOCK_H, dir: 1 };
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+      }
+
+      function pushBlock() {
+        if (state !== 'running') return;
+
+        const overlapLeft = Math.max(moving.x, base.x);
+        const overlapRight = Math.min(moving.x + moving.w, base.x + base.w);
+        const overlapW = overlapRight - overlapLeft;
+
+        if (overlapW <= 0) {
+          finish('足場を外した');
+          return;
+        }
+
+        const perfectWindow = remain <= 15 ? 4 : (remain <= 30 ? 6 : 8);
+        const delta = Math.abs(moving.x - base.x);
+        const perfect = delta <= perfectWindow;
+
+        let gain = perfect ? 12 : Math.max(3, Math.round(overlapW / 12));
+        score += gain;
+        scoreEl.textContent = String(score);
+
+        settled.push({ x: overlapLeft, y: moving.y, w: overlapW, h: BLOCK_H, perfect });
+
+        const nextY = moving.y - BLOCK_H;
+        if (nextY <= 44) {
+          // 画面上端に到達したら底を落として循環
+          settled = settled.map(b => ({ ...b, y: b.y + BLOCK_H }));
+          base = { x: overlapLeft, y: moving.y + BLOCK_H, w: overlapW, h: BLOCK_H };
+          moving = { x: 0, y: moving.y, w: overlapW, h: BLOCK_H, dir: 1 };
+        } else {
+          base = { x: overlapLeft, y: moving.y, w: overlapW, h: BLOCK_H };
+          moving = { x: 0, y: nextY, w: overlapW, h: BLOCK_H, dir: 1 };
+        }
+      }
+
+      function finish(reason) {
+        state = 'over';
+        gameOverReason = reason;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+        panelTitle.textContent = reason === 'TIME' ? 'TIME UP' : 'GAME OVER';
+        panelText.textContent = `スコア ${score} / ハイスコア ${hi}` + (reason === 'TIME' ? '' : `（${reason}）`);
+        startBtn.textContent = 'もう一度';
+        overlay.style.display = 'grid';
+      }
+
+      function update(dt) {
+        if (state !== 'running') return;
+        remain = Math.max(0, remain - dt);
+        timeEl.textContent = remain.toFixed(1);
+        if (remain <= 0) {
+          finish('TIME');
+          return;
+        }
+
+        const speed = levelSpeed();
+        moving.x += moving.dir * speed * dt;
+        if (moving.x < 0) {
+          moving.x = 0;
+          moving.dir = 1;
+        } else if (moving.x + moving.w > W) {
+          moving.x = W - moving.w;
+          moving.dir = -1;
+        }
+      }
+
+      function drawGrid() {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(98,246,255,0.08)';
+        ctx.lineWidth = 1;
+        for (let y = 0; y < H; y += 28) {
+          ctx.beginPath();
+          ctx.moveTo(0, y + 0.5);
+          ctx.lineTo(W, y + 0.5);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawBlock(b, color, glow = false) {
+        if (glow) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 12;
+        }
+        ctx.fillStyle = color;
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255,255,255,.25)';
+        ctx.strokeRect(b.x + .5, b.y + .5, b.w - 1, b.h - 1);
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, W, H);
+
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, '#0f1740');
+        g.addColorStop(1, '#080b1e');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        drawGrid();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.fillRect(0, FLOOR_Y + BLOCK_H, W, H - FLOOR_Y);
+
+        for (const b of settled) drawBlock(b, b.perfect ? '#ffd166' : '#62f6ff');
+        if (base) drawBlock(base, '#6ca6ff');
+        if (moving) drawBlock(moving, '#ff5d8f', true);
+
+        ctx.fillStyle = 'rgba(154,168,214,.95)';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('タップで固定', 10, 20);
+      }
+
+      function loop(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.05, (ts - lastTs) / 1000);
+        lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      function startGame() {
+        reset();
+        state = 'running';
+        overlay.style.display = 'none';
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        startGame();
+      });
+
+      canvas.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        pushBlock();
+      }, { passive: false });
+
+      // 初期描画
+      reset();
+      render();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
