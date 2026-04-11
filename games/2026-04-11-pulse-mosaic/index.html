@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>パルスモザイク</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #05111f;
+      --panel: rgba(11, 26, 43, 0.92);
+      --line: rgba(116, 197, 255, 0.2);
+      --text: #eef5ff;
+      --muted: #93a8c8;
+      --cyan: #69f0ff;
+      --blue: #7a8dff;
+      --gold: #ffd166;
+      --bad: #ff6d8d;
+      --good: #5cf0bd;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(122, 141, 255, 0.25), transparent 24%),
+        radial-gradient(circle at 82% 10%, rgba(105, 240, 255, 0.2), transparent 24%),
+        linear-gradient(180deg, #081727 0%, var(--bg) 58%, #02070d 100%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      touch-action: manipulation;
+    }
+
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      max-height: 880px;
+      padding: 12px 12px 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Orbitron", sans-serif;
+      font-size: 1.15rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .back {
+      color: #9edfff;
+      text-decoration: none;
+      font-size: 0.92rem;
+      white-space: nowrap;
+    }
+
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .chip {
+      padding: 8px 6px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      text-align: center;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    }
+
+    .chip .k {
+      font-family: "Orbitron", sans-serif;
+      font-size: 0.58rem;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+    }
+
+    .chip .v {
+      margin-top: 3px;
+      font-size: 1rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .arena-shell {
+      position: relative;
+      border-radius: 18px;
+      border: 1px solid rgba(116, 197, 255, 0.2);
+      background:
+        linear-gradient(180deg, rgba(9, 24, 40, 0.94), rgba(4, 10, 19, 0.96)),
+        repeating-linear-gradient(90deg, transparent 0 42px, rgba(255,255,255,0.015) 42px 43px);
+      box-shadow: 0 22px 50px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background: rgba(2, 8, 15, 0.48);
+      backdrop-filter: blur(2px);
+    }
+
+    .panel {
+      width: min(100%, 350px);
+      padding: 16px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(122, 141, 255, 0.3);
+      background: rgba(9, 22, 39, 0.92);
+      text-align: center;
+    }
+
+    .panel strong {
+      display: block;
+      font-size: 1.02rem;
+      letter-spacing: 0.04em;
+    }
+
+    .panel p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
+    }
+
+    button {
+      margin-top: 12px;
+      width: 100%;
+      border: none;
+      border-radius: 999px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      color: #041223;
+      font-family: "Orbitron", sans-serif;
+      font-size: 0.95rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .legend {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .legend b { color: var(--text); }
+    .legend span:last-child { text-align: right; }
+
+    .hint {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.83rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="top">
+      <h1>🟦 パルスモザイク</h1>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </div>
+
+    <section class="hud" aria-label="ステータス">
+      <div class="chip"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="chip"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="chip"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+      <div class="chip"><div class="k">SCAN</div><div class="v" id="scan">1.0x</div></div>
+    </section>
+
+    <section class="arena-shell">
+      <canvas id="game" width="360" height="500" aria-label="ゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <strong id="panel-title">青だけを走査ラインで切り抜け</strong>
+          <p id="panel-text">4x4のタイルに青と赤が出現。走査ラインが重なった青だけをタップ。早押しと赤は減点。</p>
+          <button id="start">START</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="legend">
+      <span><b>青</b> +10 / ライン外 -4 / 逃し -5</span>
+      <span><b>赤</b> -8 / 45秒以降は増加</span>
+    </div>
+
+    <div class="hint">操作: タイルを直接タップ（pointerdown）</div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = "pulse-mosaic-hi-v1";
+      const COLS = 4;
+      const ROWS = 4;
+      const WIDTH = 360;
+      const HEIGHT = 500;
+      const PADDING_X = 26;
+      const TOP_Y = 84;
+      const BOTTOM_Y = 446;
+      const GRID_W = WIDTH - PADDING_X * 2;
+      const GRID_H = BOTTOM_Y - TOP_Y;
+      const CELL_W = GRID_W / COLS;
+      const CELL_H = GRID_H / ROWS;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const overlay = document.getElementById("overlay");
+      const panelTitle = document.getElementById("panel-title");
+      const panelText = document.getElementById("panel-text");
+      const startBtn = document.getElementById("start");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const hiEl = document.getElementById("hi");
+      const scanEl = document.getElementById("scan");
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      let score = 0;
+      let remain = 60;
+      let playing = false;
+      let lastTs = 0;
+      let spawnAcc = 0;
+      let sweepX = PADDING_X;
+      let sweepDir = 1;
+      let message = "ラインが重なった青だけを叩く";
+      let flash = 0;
+      let endReason = "";
+      const tiles = [];
+
+      function difficulty() {
+        if (remain <= 15) {
+          return { speed: 250, interval: 0.48, badRate: 0.4, life: 1.6, mult: 1.7 };
+        }
+        if (remain <= 30) {
+          return { speed: 210, interval: 0.62, badRate: 0.28, life: 1.85, mult: 1.35 };
+        }
+        return { speed: 165, interval: 0.8, badRate: 0.16, life: 2.1, mult: 1.0 };
+      }
+
+      function cellRect(col, row) {
+        return {
+          x: PADDING_X + col * CELL_W,
+          y: TOP_Y + row * CELL_H,
+          w: CELL_W,
+          h: CELL_H
+        };
+      }
+
+      function emptyCells() {
+        const occupied = new Set(tiles.map(tile => `${tile.col}-${tile.row}`));
+        const open = [];
+        for (let row = 0; row < ROWS; row += 1) {
+          for (let col = 0; col < COLS; col += 1) {
+            const key = `${col}-${row}`;
+            if (!occupied.has(key)) {
+              open.push({ col, row });
+            }
+          }
+        }
+        return open;
+      }
+
+      function spawnTile() {
+        const open = emptyCells();
+        if (!open.length) return;
+        const pick = open[Math.floor(Math.random() * open.length)];
+        const diff = difficulty();
+        const bad = Math.random() < diff.badRate;
+        tiles.push({
+          col: pick.col,
+          row: pick.row,
+          kind: bad ? "bad" : "good",
+          age: 0,
+          life: diff.life + Math.random() * 0.35
+        });
+      }
+
+      function reset() {
+        score = 0;
+        remain = 60;
+        playing = false;
+        lastTs = 0;
+        spawnAcc = 0;
+        sweepX = PADDING_X;
+        sweepDir = 1;
+        message = "ラインが重なった青だけを叩く";
+        flash = 0;
+        endReason = "";
+        tiles.length = 0;
+        scoreEl.textContent = "0";
+        timeEl.textContent = "60.0";
+        scanEl.textContent = "1.0x";
+      }
+
+      function setMessage(text, tone) {
+        message = text;
+        flash = tone === "bad" ? -0.55 : 0.55;
+      }
+
+      function adjustScore(delta) {
+        score = Math.max(0, score + delta);
+        scoreEl.textContent = String(score);
+      }
+
+      function finish(reason) {
+        playing = false;
+        endReason = reason;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+        panelTitle.textContent = reason === "TIME" ? "TIME UP" : "GAME OVER";
+        panelText.textContent = `スコア ${score} / ハイスコア ${hi}` + (reason === "TIME" ? "" : `（${reason}）`);
+        startBtn.textContent = "RETRY";
+        overlay.style.display = "grid";
+      }
+
+      function isSweepOnTile(tile) {
+        const rect = cellRect(tile.col, tile.row);
+        return sweepX >= rect.x + 8 && sweepX <= rect.x + rect.w - 8;
+      }
+
+      function handleBoardTap(clientX, clientY) {
+        if (!playing) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = (clientX - rect.left) * (canvas.width / rect.width);
+        const y = (clientY - rect.top) * (canvas.height / rect.height);
+        if (x < PADDING_X || x > WIDTH - PADDING_X || y < TOP_Y || y > BOTTOM_Y) return;
+
+        const col = Math.min(COLS - 1, Math.floor((x - PADDING_X) / CELL_W));
+        const row = Math.min(ROWS - 1, Math.floor((y - TOP_Y) / CELL_H));
+        const hitIndex = tiles.findIndex(tile => tile.col === col && tile.row === row);
+        if (hitIndex === -1) {
+          adjustScore(-2);
+          setMessage("空打ちで -2", "bad");
+          return;
+        }
+
+        const tile = tiles[hitIndex];
+        const aligned = isSweepOnTile(tile);
+        if (tile.kind === "bad") {
+          adjustScore(-8);
+          setMessage("赤タイルで -8", "bad");
+        } else if (aligned) {
+          adjustScore(10);
+          setMessage("走査ヒット +10", "good");
+        } else {
+          adjustScore(-4);
+          setMessage("ライン外で -4", "bad");
+        }
+        tiles.splice(hitIndex, 1);
+      }
+
+      function update(dt) {
+        if (!playing) return;
+        const diff = difficulty();
+        remain = Math.max(0, remain - dt);
+        timeEl.textContent = remain.toFixed(1);
+        scanEl.textContent = `${diff.mult.toFixed(1)}x`;
+        if (remain <= 0) {
+          finish("TIME");
+          return;
+        }
+
+        sweepX += sweepDir * diff.speed * dt;
+        if (sweepX <= PADDING_X) {
+          sweepX = PADDING_X;
+          sweepDir = 1;
+        } else if (sweepX >= WIDTH - PADDING_X) {
+          sweepX = WIDTH - PADDING_X;
+          sweepDir = -1;
+        }
+
+        spawnAcc += dt;
+        while (spawnAcc >= diff.interval) {
+          spawnAcc -= diff.interval;
+          spawnTile();
+          if (remain <= 30 && Math.random() < 0.28) spawnTile();
+        }
+
+        for (let i = tiles.length - 1; i >= 0; i -= 1) {
+          const tile = tiles[i];
+          tile.age += dt;
+          if (tile.age >= tile.life) {
+            if (tile.kind === "good") {
+              adjustScore(-5);
+              setMessage("青タイル取り逃し -5", "bad");
+            }
+            tiles.splice(i, 1);
+          }
+        }
+
+        if (flash !== 0) {
+          const decay = 2.1 * dt;
+          if (flash > 0) flash = Math.max(0, flash - decay);
+          else flash = Math.min(0, flash + decay);
+        }
+      }
+
+      function drawBackground() {
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        ctx.fillStyle = "#071321";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        const glow = ctx.createLinearGradient(0, TOP_Y, 0, BOTTOM_Y);
+        glow.addColorStop(0, "rgba(105,240,255,0.04)");
+        glow.addColorStop(1, "rgba(122,141,255,0.02)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(PADDING_X, TOP_Y, GRID_W, GRID_H);
+
+        for (let row = 0; row <= ROWS; row += 1) {
+          const y = TOP_Y + row * CELL_H;
+          ctx.strokeStyle = "rgba(255,255,255,0.09)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(PADDING_X, y + 0.5);
+          ctx.lineTo(WIDTH - PADDING_X, y + 0.5);
+          ctx.stroke();
+        }
+        for (let col = 0; col <= COLS; col += 1) {
+          const x = PADDING_X + col * CELL_W;
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, TOP_Y);
+          ctx.lineTo(x + 0.5, BOTTOM_Y);
+          ctx.stroke();
+        }
+
+        const alpha = Math.abs(flash) * 0.18;
+        if (alpha > 0.01) {
+          ctx.fillStyle = flash > 0 ? `rgba(92,240,189,${alpha})` : `rgba(255,109,141,${alpha})`;
+          ctx.fillRect(PADDING_X, TOP_Y, GRID_W, GRID_H);
+        }
+      }
+
+      function drawSweep() {
+        const beam = ctx.createLinearGradient(sweepX - 16, 0, sweepX + 16, 0);
+        beam.addColorStop(0, "rgba(105,240,255,0)");
+        beam.addColorStop(0.5, "rgba(105,240,255,0.22)");
+        beam.addColorStop(1, "rgba(105,240,255,0)");
+        ctx.fillStyle = beam;
+        ctx.fillRect(sweepX - 16, TOP_Y, 32, GRID_H);
+
+        ctx.strokeStyle = "rgba(105,240,255,0.92)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(sweepX, TOP_Y);
+        ctx.lineTo(sweepX, BOTTOM_Y);
+        ctx.stroke();
+      }
+
+      function drawTiles() {
+        for (const tile of tiles) {
+          const rect = cellRect(tile.col, tile.row);
+          const lifeRatio = 1 - tile.age / tile.life;
+          const inset = 8 + (1 - lifeRatio) * 4;
+          const x = rect.x + inset;
+          const y = rect.y + inset;
+          const w = rect.w - inset * 2;
+          const h = rect.h - inset * 2;
+          const aligned = isSweepOnTile(tile);
+          const hue = tile.kind === "good" ? "92,240,189" : "255,109,141";
+          const fillAlpha = aligned ? 0.88 : 0.38 + lifeRatio * 0.26;
+          const strokeAlpha = aligned ? 1 : 0.58;
+
+          ctx.fillStyle = `rgba(${hue},${fillAlpha})`;
+          ctx.strokeStyle = `rgba(${hue},${strokeAlpha})`;
+          ctx.lineWidth = aligned ? 3 : 2;
+          ctx.beginPath();
+          ctx.roundRect(x, y, w, h, 14);
+          ctx.fill();
+          ctx.stroke();
+
+          const innerGlow = ctx.createLinearGradient(x, y, x + w, y + h);
+          innerGlow.addColorStop(0, tile.kind === "good" ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.12)");
+          innerGlow.addColorStop(1, "rgba(255,255,255,0)");
+          ctx.fillStyle = innerGlow;
+          ctx.beginPath();
+          ctx.roundRect(x + 3, y + 3, Math.max(0, w - 6), Math.max(0, h * 0.45), 10);
+          ctx.fill();
+
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.font = '700 12px "Orbitron", sans-serif';
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(tile.kind === "good" ? "OK" : "NO", rect.x + rect.w / 2, rect.y + rect.h / 2);
+        }
+      }
+
+      function drawHudText() {
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.font = '700 14px "Noto Sans JP", sans-serif';
+        ctx.fillStyle = "rgba(238,245,255,0.95)";
+        ctx.fillText(message, PADDING_X, 24);
+        ctx.font = '600 11px "Orbitron", sans-serif';
+        ctx.fillStyle = "rgba(147,168,200,0.9)";
+        const status = playing ? "SCAN ACTIVE" : (endReason ? "READY TO RETRY" : "STANDBY");
+        ctx.fillText(status, PADDING_X, 46);
+      }
+
+      function render() {
+        drawBackground();
+        drawSweep();
+        drawTiles();
+        drawHudText();
+      }
+
+      function frame(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        handleBoardTap(event.clientX, event.clientY);
+      }, { passive: true });
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+        reset();
+        playing = true;
+        overlay.style.display = "none";
+        setMessage("ラインに重なった青だけを狙え", "good");
+      });
+
+      reset();
+      render();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
