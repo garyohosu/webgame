@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>フェーズピンボール</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #080b1c;
+      --panel: #151c38;
+      --line: #8cf0ff;
+      --good: #73ffbe;
+      --bad: #ff5e84;
+      --text: #eef4ff;
+      --muted: #9aabd1;
+      --accent: #7f89ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 50% -15%, #24316a 0%, var(--bg) 52%);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .app {
+      max-width: 440px;
+      height: 100dvh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+      padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    }
+    h1 { margin: 0; font-size: clamp(20px, 6vw, 28px); letter-spacing: .04em; }
+    .sub { font-size: 12px; color: var(--muted); }
+    .hud { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .pill {
+      background: rgba(20, 29, 58, .95);
+      border: 1px solid rgba(140,240,255,.26);
+      border-radius: 12px;
+      text-align: center;
+      padding: 8px 10px;
+    }
+    .k { font-size: 10px; color: var(--muted); }
+    .v { margin-top: 2px; font-size: 18px; font-weight: 800; }
+    .arena {
+      border-radius: 16px;
+      border: 1px solid rgba(140,240,255,.22);
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      position: relative;
+      overflow: hidden;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .controls { display: grid; gap: 8px; }
+    button {
+      border: 0;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 800;
+      padding: 12px;
+      color: #020a20;
+      background: linear-gradient(135deg, var(--line), var(--accent));
+    }
+    .msg { text-align: center; min-height: 1.4em; color: #ffd783; font-size: 13px; }
+    .back { text-align: center; }
+    .back a { color: var(--line); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header>
+      <h1>フェーズピンボール</h1>
+      <div class="sub">タップでバンパー回転。青を弾いて赤を流せ。</div>
+    </header>
+
+    <section class="hud" aria-label="status">
+      <div class="pill"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="pill"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="pill"><div class="k">HI-SCORE</div><div class="v" id="hi">0</div></div>
+    </section>
+
+    <section class="arena" id="arena"><canvas id="cv" width="400" height="400" aria-label="game area"></canvas></section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">スタート</button>
+      <div class="msg" id="msg">青パルスに向きを合わせてタップ回転。</div>
+    </section>
+
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'phase-pinball-hi-v1';
+      const app = document.getElementById('app');
+      const arena = document.getElementById('arena');
+      const cv = document.getElementById('cv');
+      const ctx = cv.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+      const startBtn = document.getElementById('startBtn');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      const state = {
+        running: false,
+        score: 0,
+        timeLeft: 60,
+        lastTs: 0,
+        bumperDir: 0,
+        spawnTimer: 0,
+        spawnEvery: 980,
+        speed: 92,
+        particles: []
+      };
+
+      function fitCanvas() {
+        const rect = arena.getBoundingClientRect();
+        const size = Math.floor(Math.min(rect.width, rect.height));
+        cv.width = size;
+        cv.height = size;
+      }
+
+      function difficulty() {
+        if (state.timeLeft > 30) {
+          state.spawnEvery = 980;
+          state.speed = 92;
+        } else if (state.timeLeft > 15) {
+          state.spawnEvery = 780;
+          state.speed = 112;
+        } else {
+          state.spawnEvery = 620;
+          state.speed = 132;
+        }
+      }
+
+      function spawnPulse() {
+        const lane = Math.floor(Math.random() * 4);
+        const isGood = Math.random() > 0.32;
+        state.particles.push({ lane, isGood, dist: 180, r: 10 + Math.random() * 2 });
+      }
+
+      function rotate() {
+        if (!state.running) return;
+        state.bumperDir = (state.bumperDir + 1) % 4;
+      }
+
+      function endGame() {
+        state.running = false;
+        startBtn.disabled = false;
+        startBtn.textContent = 'もう一度';
+        if (state.score > hi) {
+          hi = state.score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = `ハイスコア更新！ ${state.score}`;
+        } else {
+          msgEl.textContent = `終了！ スコア ${state.score}`;
+        }
+      }
+
+      function update(dt) {
+        state.timeLeft = Math.max(0, state.timeLeft - dt / 1000);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        if (state.timeLeft <= 0) return endGame();
+
+        difficulty();
+        state.spawnTimer += dt;
+        if (state.spawnTimer >= state.spawnEvery) {
+          state.spawnTimer = 0;
+          spawnPulse();
+        }
+
+        const next = [];
+        for (const p of state.particles) {
+          p.dist -= state.speed * dt / 1000;
+          if (p.dist <= 28) {
+            if (p.lane === state.bumperDir) {
+              state.score = Math.max(0, state.score + (p.isGood ? 1 : -2));
+              msgEl.textContent = p.isGood ? 'GOOD +1' : 'NOISE -2';
+            } else {
+              if (p.isGood) {
+                state.score = Math.max(0, state.score - 1);
+                msgEl.textContent = 'MISS -1';
+              }
+            }
+            scoreEl.textContent = String(state.score);
+          } else {
+            next.push(p);
+          }
+        }
+        state.particles = next;
+      }
+
+      function laneVector(lane) {
+        if (lane === 0) return [0, -1];
+        if (lane === 1) return [1, 0];
+        if (lane === 2) return [0, 1];
+        return [-1, 0];
+      }
+
+      function render() {
+        const w = cv.width;
+        const h = cv.height;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.strokeStyle = 'rgba(140,240,255,.15)';
+        ctx.lineWidth = 2;
+        for (let i = 1; i <= 3; i++) {
+          const rr = (w * 0.16) * i;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (const p of state.particles) {
+          const [vx, vy] = laneVector(p.lane);
+          const x = cx + vx * p.dist;
+          const y = cy + vy * p.dist;
+          ctx.fillStyle = p.isGood ? '#63a8ff' : '#ff5e84';
+          ctx.beginPath();
+          ctx.arc(x, y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+        const [bx, by] = dirs[state.bumperDir];
+        ctx.strokeStyle = '#8cf0ff';
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(cx - bx * 18, cy - by * 18);
+        ctx.lineTo(cx + bx * 38, cy + by * 38);
+        ctx.stroke();
+
+        ctx.fillStyle = '#eef4ff';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function tick(ts) {
+        if (!state.running) return;
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min(32, ts - state.lastTs);
+        state.lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(tick);
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.lastTs = 0;
+        state.bumperDir = 0;
+        state.spawnTimer = 0;
+        state.particles = [];
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        msgEl.textContent = '開始！ タップで向きを回せ。';
+        startBtn.disabled = true;
+        startBtn.textContent = 'プレイ中…';
+        requestAnimationFrame(tick);
+      }
+
+      window.addEventListener('resize', fitCanvas);
+      app.addEventListener('pointerdown', rotate, { passive: true });
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        if (!state.running) startGame();
+      }, { passive: true });
+
+      fitCanvas();
+      render();
+    })();
+  </script>
+</body>
+</html>
