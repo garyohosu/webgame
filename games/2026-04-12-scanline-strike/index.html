@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>スキャンライン・ストライク</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #111933;
+      --line: #7ef7ff;
+      --target: #4da3ff;
+      --trap: #ff557a;
+      --text: #eaf2ff;
+      --muted: #91a2c6;
+      --good: #7dffbe;
+      --warn: #ffd166;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      background: radial-gradient(circle at 50% -20%, #1b2a5e 0%, var(--bg) 55%);
+      color: var(--text);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .app {
+      max-width: 440px;
+      height: 100dvh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+      padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+    }
+    h1 { margin: 0; font-size: clamp(20px, 6vw, 28px); letter-spacing: .04em; }
+    .sub { color: var(--muted); font-size: 12px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(15, 26, 52, .95);
+      border: 1px solid rgba(126, 247, 255, .25);
+      border-radius: 12px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+    .pill .k { font-size: 10px; color: var(--muted); }
+    .pill .v { font-weight: 800; font-size: 18px; margin-top: 2px; }
+    .board-wrap {
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      border: 1px solid rgba(126,247,255,.2);
+      border-radius: 16px;
+      padding: 12px;
+      display: grid;
+      align-items: center;
+    }
+    .board {
+      width: min(100%, 360px);
+      aspect-ratio: 1 / 1;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      position: relative;
+    }
+    .scanline {
+      position: absolute;
+      left: 0; right: 0;
+      height: calc((100% - 16px)/3);
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(126,247,255,.12), rgba(126,247,255,.35), rgba(126,247,255,.12));
+      border: 1px solid rgba(126,247,255,.5);
+      box-shadow: 0 0 18px rgba(126,247,255,.35);
+      pointer-events: none;
+      transition: transform .12s linear;
+      z-index: 1;
+    }
+    .cell {
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 12px;
+      background: rgba(10, 17, 36, .92);
+      display: grid;
+      place-items: center;
+      font-size: clamp(24px, 8vw, 30px);
+      position: relative;
+      z-index: 2;
+      user-select: none;
+    }
+    .cell.target { box-shadow: inset 0 0 0 2px rgba(77,163,255,.45); }
+    .cell.trap { box-shadow: inset 0 0 0 2px rgba(255,85,122,.45); }
+    .cell.hit { animation: flashGood .18s; }
+    .cell.miss { animation: flashBad .18s; }
+    @keyframes flashGood { from { background: rgba(125,255,190,.45);} to {background: rgba(10,17,36,.92);} }
+    @keyframes flashBad { from { background: rgba(255,85,122,.5);} to {background: rgba(10,17,36,.92);} }
+    .controls { display: grid; gap: 8px; }
+    button {
+      border: 0;
+      background: linear-gradient(135deg, #58d4ff, #5d7bff);
+      color: #001025;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 800;
+      padding: 12px;
+    }
+    .msg { text-align: center; color: var(--warn); min-height: 1.4em; font-size: 13px; }
+    .back { text-align: center; }
+    .back a { color: var(--line); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>スキャンライン・ストライク</h1>
+      <div class="sub">走査ライン上の青セルだけを撃ち抜け。</div>
+    </header>
+
+    <section class="hud" aria-label="status">
+      <div class="pill"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="pill"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="pill"><div class="k">HI-SCORE</div><div class="v" id="hi">0</div></div>
+    </section>
+
+    <section class="board-wrap">
+      <div class="board" id="board" aria-label="game board">
+        <div class="scanline" id="scanline"></div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">スタート</button>
+      <div class="msg" id="msg">60秒でハイスコアを更新しよう。</div>
+    </section>
+
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'scanline-strike-hi-v1';
+      const board = document.getElementById('board');
+      const scanline = document.getElementById('scanline');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+      const startBtn = document.getElementById('startBtn');
+
+      const cells = [];
+      const icons = { normal: '·', target: '◉', trap: '✕' };
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'cell';
+        cell.dataset.index = String(i);
+        cell.textContent = icons.normal;
+        cell.addEventListener('pointerdown', onTap, { passive: true });
+        board.appendChild(cell);
+        cells.push(cell);
+      }
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      const state = {
+        running: false,
+        score: 0,
+        timeLeft: 60,
+        target: 0,
+        trap: 1,
+        scanRow: 0,
+        elapsedScan: 0,
+        scanStepMs: 800,
+        lastTs: 0,
+        nextRelocateAt: 0
+      };
+
+      function relocatePair() {
+        let t = Math.floor(Math.random() * 9);
+        let x = Math.floor(Math.random() * 9);
+        while (x === t) x = Math.floor(Math.random() * 9);
+        state.target = t;
+        state.trap = x;
+        renderBoard();
+      }
+
+      function renderBoard() {
+        for (let i = 0; i < 9; i++) {
+          const c = cells[i];
+          c.classList.remove('target', 'trap');
+          c.textContent = icons.normal;
+          if (i === state.target) {
+            c.classList.add('target');
+            c.textContent = icons.target;
+          } else if (i === state.trap) {
+            c.classList.add('trap');
+            c.textContent = icons.trap;
+          }
+        }
+        const y = state.scanRow * (100 / 3);
+        scanline.style.transform = `translateY(${y}%)`;
+      }
+
+      function setDifficulty() {
+        const t = state.timeLeft;
+        if (t > 30) {
+          state.scanStepMs = 800;
+        } else if (t > 15) {
+          state.scanStepMs = 620;
+        } else {
+          state.scanStepMs = 460;
+        }
+      }
+
+      function onTap(e) {
+        if (!state.running) return;
+        const idx = Number(e.currentTarget.dataset.index);
+        const row = Math.floor(idx / 3);
+
+        let delta = -1;
+        if (row === state.scanRow && idx === state.target) {
+          delta = 1;
+          e.currentTarget.classList.add('hit');
+          msgEl.textContent = 'NICE +1';
+          state.nextRelocateAt = 0;
+        } else {
+          e.currentTarget.classList.add('miss');
+          msgEl.textContent = (row === state.scanRow && idx === state.trap) ? 'TRAP -1' : 'MISS -1';
+          if (row === state.scanRow && idx === state.trap) state.nextRelocateAt = 0;
+        }
+        setTimeout(() => e.currentTarget.classList.remove('hit', 'miss'), 160);
+
+        state.score = Math.max(0, state.score + delta);
+        scoreEl.textContent = String(state.score);
+      }
+
+      function endGame() {
+        state.running = false;
+        startBtn.disabled = false;
+        startBtn.textContent = 'もう一度';
+        if (state.score > hi) {
+          hi = state.score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = `ハイスコア更新！ ${state.score}`;
+        } else {
+          msgEl.textContent = `終了！ スコア ${state.score}`;
+        }
+      }
+
+      function tick(ts) {
+        if (!state.running) return;
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = ts - state.lastTs;
+        state.lastTs = ts;
+
+        state.timeLeft = Math.max(0, state.timeLeft - dt / 1000);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        setDifficulty();
+
+        state.elapsedScan += dt;
+        if (state.elapsedScan >= state.scanStepMs) {
+          state.elapsedScan -= state.scanStepMs;
+          state.scanRow = (state.scanRow + 1) % 3;
+          renderBoard();
+        }
+
+        state.nextRelocateAt -= dt;
+        if (state.nextRelocateAt <= 0) {
+          relocatePair();
+          state.nextRelocateAt = state.scanStepMs * (state.timeLeft > 15 ? 1.6 : 1.2);
+        }
+
+        if (state.timeLeft <= 0) {
+          endGame();
+          return;
+        }
+        requestAnimationFrame(tick);
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.scanRow = 0;
+        state.elapsedScan = 0;
+        state.lastTs = 0;
+        state.nextRelocateAt = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        msgEl.textContent = 'GO! 走査ライン上の青を狙え';
+        startBtn.disabled = true;
+        startBtn.textContent = 'プレイ中';
+        renderBoard();
+        requestAnimationFrame(tick);
+      }
+
+      startBtn.addEventListener('pointerdown', startGame, { passive: true });
+      renderBoard();
+    })();
+  </script>
+</body>
+</html>
