@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>スプリットシグナル</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at 30% 10%, #18243f, #0a1022 58%, #050811);
+      color: #eaf1ff;
+      display: grid;
+      place-items: center;
+    }
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      max-height: 900px;
+      padding: 14px 14px 18px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: clamp(22px, 6vw, 30px); letter-spacing: .04em; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .panel {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .label { font-size: 11px; opacity: .82; }
+    .value { font-size: 20px; font-weight: 700; }
+    #game {
+      position: relative;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.24);
+      background: linear-gradient(180deg, rgba(130,170,255,.12), rgba(13,18,35,.55));
+      overflow: hidden;
+      touch-action: manipulation;
+      padding: 18px 10px 20px;
+      display: grid;
+      align-content: center;
+      gap: 18px;
+    }
+    .nodes {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .node {
+      aspect-ratio: 1 / 1;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.05);
+      transition: transform .08s ease, background .12s ease;
+    }
+    .node.good { background: rgba(82,232,178,.36); border-color: rgba(82,232,178,.8); }
+    .node.bad { background: rgba(255,100,124,.28); border-color: rgba(255,100,124,.65); }
+    .cursor {
+      position: absolute;
+      top: 50%;
+      width: 14%;
+      max-width: 52px;
+      aspect-ratio: 1 / 1;
+      border-radius: 999px;
+      border: 2px solid #dff9ff;
+      box-shadow: 0 0 18px rgba(115,238,255,.92), inset 0 0 12px rgba(115,238,255,.32);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .msg { text-align: center; font-size: 13px; min-height: 1.2em; opacity: .9; }
+    .controls { display: grid; gap: 8px; }
+    #startBtn {
+      width: 100%; border: 0; border-radius: 12px; padding: 12px;
+      background: linear-gradient(120deg, #7cf9ff, #8d7dff);
+      color: #081122; font-size: 16px; font-weight: 800;
+    }
+    .hint { text-align: center; font-size: 12px; opacity: .84; }
+    a.back { text-align: center; color: #bed0ff; text-decoration: none; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>スプリットシグナル</h1>
+    <section class="hud">
+      <div class="panel"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div id="time" class="value">45.0</div></div>
+      <div class="panel"><div class="label">HI</div><div id="hi" class="value">0</div></div>
+    </section>
+
+    <section id="game" aria-label="game field">
+      <div id="nodes" class="nodes"></div>
+      <div id="cursor" class="cursor"></div>
+      <div id="msg" class="msg">青ノード位置でタップすると +2</div>
+    </section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">START 45s</button>
+      <div class="hint">画面タップでその瞬間の位置を判定。青:+2 / 赤:-1</div>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORE_KEY = 'split-signal-hi-v1';
+      const DURATION = 45;
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const startBtn = document.getElementById('startBtn');
+      const gameEl = document.getElementById('game');
+      const nodesEl = document.getElementById('nodes');
+      const cursorEl = document.getElementById('cursor');
+      const msgEl = document.getElementById('msg');
+
+      const state = {
+        running: false,
+        score: 0,
+        timeLeft: DURATION,
+        hi: Number(localStorage.getItem(STORE_KEY) || 0),
+        cursorPos: 0,
+        cursorVel: 1,
+        targetIdx: 2,
+        retargetTimer: 0,
+        tapCooldown: 0,
+        prevTs: 0,
+        raf: 0,
+      };
+      hiEl.textContent = state.hi;
+
+      const nodes = Array.from({ length: 5 }, () => {
+        const d = document.createElement('div');
+        d.className = 'node bad';
+        nodesEl.appendChild(d);
+        return d;
+      });
+
+      function difficulty() {
+        if (state.timeLeft <= 15) return { speed: 2.2, interval: 0.78 };
+        return { speed: 1.75, interval: 0.95 };
+      }
+
+      function renderNodes() {
+        nodes.forEach((n, i) => {
+          n.className = `node ${i === state.targetIdx ? 'good' : 'bad'}`;
+        });
+      }
+
+      function setScore(v) {
+        state.score = Math.max(0, v);
+        scoreEl.textContent = state.score;
+      }
+
+      function updateCursor() {
+        const rect = nodesEl.getBoundingClientRect();
+        const x = rect.left + state.cursorPos * rect.width;
+        const parent = gameEl.getBoundingClientRect();
+        cursorEl.style.left = `${x - parent.left}px`;
+      }
+
+      function randomTarget() {
+        state.targetIdx = Math.floor(Math.random() * 5);
+        renderNodes();
+      }
+
+      function judgeTap() {
+        if (!state.running || state.tapCooldown > 0) return;
+        const idx = Math.round(state.cursorPos * 4);
+        if (idx === state.targetIdx) {
+          setScore(state.score + 2);
+          msgEl.textContent = 'HIT +2';
+        } else {
+          setScore(state.score - 1);
+          msgEl.textContent = 'MISS -1';
+        }
+        state.tapCooldown = 0.13;
+      }
+
+      function finish() {
+        state.running = false;
+        cancelAnimationFrame(state.raf);
+        startBtn.disabled = false;
+        startBtn.textContent = 'RETRY 45s';
+        msgEl.textContent = 'FINISH';
+        if (state.score > state.hi) {
+          state.hi = state.score;
+          localStorage.setItem(STORE_KEY, String(state.hi));
+          hiEl.textContent = state.hi;
+        }
+      }
+
+      function frame(ts) {
+        if (!state.running) return;
+        const dt = Math.min(0.033, (ts - state.prevTs) / 1000 || 0);
+        state.prevTs = ts;
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+
+        const d = difficulty();
+        state.cursorPos += state.cursorVel * d.speed * dt * 0.5;
+        if (state.cursorPos >= 1) { state.cursorPos = 1; state.cursorVel = -1; }
+        if (state.cursorPos <= 0) { state.cursorPos = 0; state.cursorVel = 1; }
+        updateCursor();
+
+        state.retargetTimer += dt;
+        if (state.retargetTimer >= d.interval) {
+          state.retargetTimer = 0;
+          randomTarget();
+        }
+
+        state.tapCooldown = Math.max(0, state.tapCooldown - dt);
+
+        if (state.timeLeft <= 0) {
+          finish();
+          return;
+        }
+        state.raf = requestAnimationFrame(frame);
+      }
+
+      function startGame() {
+        setScore(0);
+        state.timeLeft = DURATION;
+        state.cursorPos = 0;
+        state.cursorVel = 1;
+        state.retargetTimer = 0;
+        state.tapCooldown = 0;
+        randomTarget();
+        updateCursor();
+        msgEl.textContent = 'GO';
+        state.running = true;
+        startBtn.disabled = true;
+        startBtn.textContent = 'PLAYING...';
+        state.prevTs = performance.now();
+        state.raf = requestAnimationFrame(frame);
+      }
+
+      gameEl.addEventListener('pointerdown', judgeTap, { passive: true });
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!state.running) startGame();
+      });
+      addEventListener('resize', updateCursor);
+
+      renderNodes();
+      updateCursor();
+    })();
+  </script>
+</body>
+</html>
