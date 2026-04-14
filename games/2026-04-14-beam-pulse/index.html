@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ビームパルス</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090b1a;
+      --panel: #12162a;
+      --line: #56d3ff;
+      --text: #eaf2ff;
+      --muted: #9bb0d8;
+      --good: #58f7c6;
+      --bad: #ff6a8f;
+      --accent: #8d7dff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 10%, #1b2240 0%, var(--bg) 55%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+      touch-action: manipulation;
+    }
+    .game {
+      width: 100%;
+      height: 100dvh;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+      padding: 12px;
+    }
+    .title { text-align: center; font-weight: 700; letter-spacing: .06em; font-size: 22px; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 10px;
+      text-align: center;
+      padding: 6px 4px;
+    }
+    .label { font-size: 10px; color: var(--muted); }
+    .value { font-size: 16px; font-weight: 700; }
+    .field {
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 14px;
+      overflow: hidden;
+      min-height: 300px;
+    }
+    #playfield { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(5, 8, 18, .72);
+      text-align: center;
+      padding: 16px;
+    }
+    .overlay.hidden { display: none; }
+    button {
+      border: none;
+      border-radius: 999px;
+      background: linear-gradient(135deg, var(--accent), #5ec3ff);
+      color: #fff;
+      padding: 12px 26px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .hint { color: var(--muted); font-size: 12px; text-align: center; }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    a { color: #a7c9ff; }
+  </style>
+</head>
+<body>
+  <main class="game" id="game">
+    <div class="title">ビームパルス</div>
+    <div class="hud">
+      <div class="stat"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">TIME</div><div class="value" id="time">50.0</div></div>
+      <div class="stat"><div class="label">HI</div><div class="value" id="hiscore">0</div></div>
+      <div class="stat"><div class="label">BEAM</div><div class="value" id="beam">OFF</div></div>
+    </div>
+
+    <section class="field">
+      <canvas id="playfield" width="360" height="520"></canvas>
+      <div class="overlay" id="overlay">
+        <div id="overlayTitle">青パルスだけを抜け。</div>
+        <div id="overlayText">タップでビームON/OFF。ON中に青通過:+1、赤通過:-2</div>
+        <button id="startBtn" type="button">START</button>
+      </div>
+    </section>
+
+    <div class="hint">画面タップでビーム切替（pointerdown）</div>
+    <div class="footer"><a href="../../">← 作品集へ戻る</a><span>1 play: 50 sec</span></div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'beam-pulse-hi-v1';
+      const DURATION = 50;
+      const canvas = document.getElementById('playfield');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hiscore');
+      const beamEl = document.getElementById('beam');
+      const overlay = document.getElementById('overlay');
+      const overlayTitle = document.getElementById('overlayTitle');
+      const overlayText = document.getElementById('overlayText');
+      const startBtn = document.getElementById('startBtn');
+      const gameRoot = document.getElementById('game');
+
+      const state = {
+        running: false,
+        score: 0,
+        timeLeft: DURATION,
+        lastTs: 0,
+        spawnTimer: 0,
+        beamOn: false,
+        pulses: [],
+        hi: Number(localStorage.getItem(KEY) || 0)
+      };
+
+      hiEl.textContent = String(state.hi);
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(rect.width * dpr);
+        canvas.height = Math.floor(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function laneY(index, laneCount, h) {
+        const top = 48;
+        const bottom = h - 48;
+        const step = (bottom - top) / (laneCount - 1);
+        return top + step * index;
+      }
+
+      function getPhase(t) {
+        if (t > 20) {
+          return { speed: 95, spawn: 0.72, redRate: 0.28, lanes: 3 };
+        }
+        if (t > 5) {
+          return { speed: 128, spawn: 0.52, redRate: 0.38, lanes: 4 };
+        }
+        return { speed: 152, spawn: 0.40, redRate: 0.46, lanes: 4 };
+      }
+
+      function spawnPulse() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        const phase = getPhase(state.timeLeft);
+        const lane = Math.floor(Math.random() * phase.lanes);
+        const y = laneY(lane, phase.lanes, h);
+        const isRed = Math.random() < phase.redRate;
+        state.pulses.push({
+          x: w + 20,
+          y,
+          vx: phase.speed,
+          r: isRed ? 10 : 9,
+          kind: isRed ? 'red' : 'blue',
+          checked: false
+        });
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = DURATION;
+        state.lastTs = 0;
+        state.spawnTimer = 0;
+        state.beamOn = false;
+        state.pulses = [];
+        updateHud();
+        overlay.classList.add('hidden');
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > state.hi) {
+          state.hi = state.score;
+          localStorage.setItem(KEY, String(state.hi));
+        }
+        hiEl.textContent = String(state.hi);
+        overlayTitle.textContent = 'TIME UP';
+        overlayText.textContent = `SCORE ${state.score} / HI ${state.hi}`;
+        startBtn.textContent = 'RETRY';
+        overlay.classList.remove('hidden');
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        beamEl.textContent = state.beamOn ? 'ON' : 'OFF';
+        beamEl.style.color = state.beamOn ? '#58f7c6' : '#9bb0d8';
+      }
+
+      function update(dt) {
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        if (state.timeLeft <= 0) {
+          endGame();
+          return;
+        }
+
+        const phase = getPhase(state.timeLeft);
+        state.spawnTimer += dt;
+        while (state.spawnTimer >= phase.spawn) {
+          state.spawnTimer -= phase.spawn;
+          spawnPulse();
+        }
+
+        const captureX = 56;
+        for (const p of state.pulses) {
+          p.x -= p.vx * dt;
+          if (!p.checked && p.x <= captureX) {
+            p.checked = true;
+            if (state.beamOn) {
+              if (p.kind === 'blue') state.score += 1;
+              else state.score = Math.max(0, state.score - 2);
+            }
+          }
+        }
+
+        state.pulses = state.pulses.filter(p => p.x > -30);
+      }
+
+      function draw() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.03)';
+        for (let i = 0; i < 6; i++) {
+          const y = 24 + i * ((h - 48) / 5);
+          ctx.fillRect(0, y, w, 1);
+        }
+
+        const captureX = 56;
+        ctx.fillStyle = state.beamOn ? 'rgba(88,247,198,0.28)' : 'rgba(86,211,255,0.10)';
+        ctx.fillRect(captureX - 8, 0, 16, h);
+        ctx.fillStyle = '#56d3ff';
+        ctx.fillRect(captureX, 0, 2, h);
+
+        for (const p of state.pulses) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = p.kind === 'blue' ? '#6fd8ff' : '#ff6a8f';
+          ctx.fill();
+          if (p.kind === 'blue') {
+            ctx.strokeStyle = 'rgba(111,216,255,0.45)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+        }
+      }
+
+      function tick(ts) {
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min((ts - state.lastTs) / 1000, 0.05);
+        state.lastTs = ts;
+        if (state.running) {
+          update(dt);
+          updateHud();
+        }
+        draw();
+        requestAnimationFrame(tick);
+      }
+
+      function handlePointerDown(ev) {
+        if (!state.running) return;
+        ev.preventDefault();
+        state.beamOn = !state.beamOn;
+        updateHud();
+      }
+
+      startBtn.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        startGame();
+      });
+      gameRoot.addEventListener('pointerdown', handlePointerDown);
+      window.addEventListener('resize', resize);
+
+      resize();
+      updateHud();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
