@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>カラーゲート・スイッチ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root{
+      --bg:#0a1020; --panel:#121a33; --text:#e9efff; --sub:#9fb0d9;
+      --blue:#59b7ff; --yellow:#ffd75f; --pink:#ff72c4;
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:radial-gradient(120% 120% at 50% 0%,#1a2750 0%,var(--bg) 55%);font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;color:var(--text)}
+    body{display:flex;justify-content:center;align-items:stretch}
+    .app{width:min(100vw,430px);height:100dvh;padding:10px 12px 12px;display:flex;flex-direction:column;gap:8px}
+    h1{margin:2px 0 0;font-size:1.25rem;letter-spacing:.03em}
+    .hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+    .box{background:rgba(18,26,51,.86);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:8px;text-align:center}
+    .label{font-size:.68rem;color:var(--sub)}
+    .value{font-weight:800;font-size:1.05rem;margin-top:2px}
+    #stage{position:relative;flex:1;border-radius:16px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.16);overflow:hidden}
+    #hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.95rem;color:#dce6ff;opacity:.85;pointer-events:none;text-align:center;padding:20px}
+    .chip{position:absolute;width:34px;height:34px;border-radius:10px;box-shadow:0 5px 14px rgba(0,0,0,.28)}
+    .chip.b{background:var(--blue)} .chip.y{background:var(--yellow)} .chip.p{background:var(--pink)}
+    .capture-line{position:absolute;left:0;right:0;bottom:88px;height:2px;background:rgba(255,255,255,.35)}
+    .gate{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);width:160px;height:54px;border-radius:28px;border:2px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:.08em}
+    .gate.b{background:rgba(89,183,255,.2);color:var(--blue)} .gate.y{background:rgba(255,215,95,.2);color:var(--yellow)} .gate.p{background:rgba(255,114,196,.2);color:var(--pink)}
+    .controls{display:flex;gap:8px}
+    button,a.back{flex:1;height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:var(--panel);color:var(--text);font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center}
+    button{cursor:pointer}
+    .flash{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .09s}
+    .flash.ok{background:rgba(89,183,255,.16)} .flash.ng{background:rgba(255,90,120,.15)}
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <h1>カラーゲート・スイッチ</h1>
+    <div class="hud">
+      <div class="box"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="box"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="box"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </div>
+    <section id="stage" aria-label="game-stage">
+      <div id="hint">START で開始<br>プレイ中はどこでもタップで色切替</div>
+      <div class="capture-line"></div>
+      <div class="gate b" id="gate">BLUE</div>
+      <div class="flash" id="flash"></div>
+    </section>
+    <div class="controls">
+      <button id="start">START</button>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+  </main>
+<script>
+(() => {
+  const KEY = 'color-gate-switch-hi-v1';
+  const COLORS = ['b','y','p'];
+  const NAME = {b:'BLUE', y:'YELLOW', p:'PINK'};
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const stage = document.getElementById('stage');
+  const gate = document.getElementById('gate');
+  const hint = document.getElementById('hint');
+  const flash = document.getElementById('flash');
+  const startBtn = document.getElementById('start');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = hi;
+
+  let running = false, score = 0, timeLeft = 60, colorIdx = 0;
+  let chips = [], lastTs = 0, spawnTimer = 0, rafId = 0;
+
+  const captureY = () => stage.clientHeight - 88;
+
+  function setGate(idx){
+    colorIdx = (idx + COLORS.length) % COLORS.length;
+    const c = COLORS[colorIdx];
+    gate.className = 'gate ' + c;
+    gate.textContent = NAME[c];
+  }
+
+  function blink(ok){
+    flash.className = 'flash ' + (ok ? 'ok' : 'ng');
+    flash.style.opacity = '1';
+    setTimeout(() => flash.style.opacity = '0', 60);
+  }
+
+  function spawnChip() {
+    const c = COLORS[(Math.random()*COLORS.length)|0];
+    const el = document.createElement('div');
+    el.className = 'chip ' + c;
+    const maxX = stage.clientWidth - 34;
+    const x = Math.max(0, Math.min(maxX, Math.random()*maxX));
+    el.style.left = x + 'px';
+    el.style.top = '-40px';
+    stage.appendChild(el);
+    chips.push({el, c, x, y: -40, speed: 100 + Math.random()*65});
+  }
+
+  function resetGame(){
+    chips.forEach(o => o.el.remove());
+    chips = [];
+    score = 0;
+    timeLeft = 60;
+    spawnTimer = 0;
+    setGate(0);
+    scoreEl.textContent = '0';
+    timeEl.textContent = '60.0';
+    hint.style.display = 'none';
+  }
+
+  function endGame(){
+    running = false;
+    cancelAnimationFrame(rafId);
+    if (score > hi) {
+      hi = score;
+      localStorage.setItem(KEY, String(hi));
+      hiEl.textContent = hi;
+    }
+    hint.innerHTML = `TIME UP<br>Score ${score}`;
+    hint.style.display = 'flex';
+    startBtn.textContent = 'RETRY';
+  }
+
+  function tick(ts){
+    if (!running) return;
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min(0.033, (ts - lastTs) / 1000);
+    lastTs = ts;
+    timeLeft -= dt;
+    if (timeLeft <= 0){
+      timeLeft = 0;
+      timeEl.textContent = '0.0';
+      endGame();
+      return;
+    }
+
+    const elapsed = 60 - timeLeft;
+    const level = elapsed < 30 ? 1 : elapsed < 45 ? 1.2 : 1.45;
+    const spawnBase = elapsed < 45 ? 0.62 : 0.48;
+    spawnTimer += dt;
+    if (spawnTimer >= spawnBase) {
+      spawnTimer = 0;
+      spawnChip();
+      if (Math.random() < (elapsed > 45 ? 0.35 : elapsed > 30 ? 0.2 : 0.1)) spawnChip();
+    }
+
+    const gateColor = COLORS[colorIdx];
+    const capY = captureY();
+    for (let i = chips.length - 1; i >= 0; i--) {
+      const o = chips[i];
+      o.y += o.speed * level * dt;
+      o.el.style.top = o.y + 'px';
+
+      if (!o.judged && o.y + 34 >= capY) {
+        o.judged = true;
+        if (o.c === gateColor) { score += 10; blink(true); }
+        else { score = Math.max(0, score - 6); blink(false); }
+        scoreEl.textContent = String(score);
+      }
+      if (o.y > stage.clientHeight + 50) {
+        o.el.remove();
+        chips.splice(i,1);
+      }
+    }
+    timeEl.textContent = timeLeft.toFixed(1);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  document.getElementById('app').addEventListener('pointerdown', (e) => {
+    if (!running) return;
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    setGate(colorIdx + 1);
+  });
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (running) return;
+    running = true;
+    startBtn.textContent = 'RUNNING';
+    lastTs = 0;
+    resetGame();
+    rafId = requestAnimationFrame(tick);
+  });
+
+  setGate(0);
+})();
+</script>
+</body>
+</html>
