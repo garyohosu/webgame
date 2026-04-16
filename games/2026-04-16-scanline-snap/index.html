@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>スキャンライン・スナップ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090d1a;
+      --panel: #111a2e;
+      --line: #6ee7ff;
+      --good: #63ffa7;
+      --bad: #ff4f7b;
+      --text: #ecf3ff;
+      --muted: #95a7c6;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% -20%, #1a2852, var(--bg)); color: var(--text); font-family: system-ui, -apple-system, sans-serif; }
+    body { display: flex; justify-content: center; }
+    .app {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.3rem; letter-spacing: .04em; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      background: rgba(17, 26, 46, .88);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+    .stat .k { font-size: .72rem; color: var(--muted); }
+    .stat .v { font-size: 1.1rem; font-weight: 700; }
+    #game {
+      position: relative;
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    #scanline {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, transparent, var(--line), transparent);
+      box-shadow: 0 0 14px rgba(110,231,255,.8);
+      transform: translateY(-2px);
+      pointer-events: none;
+    }
+    .target {
+      position: absolute;
+      width: 34px;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.35);
+      opacity: .95;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .target.good { background: radial-gradient(circle at 30% 30%, #d8ffe9, var(--good)); }
+    .target.bad { background: radial-gradient(circle at 30% 30%, #ffd4df, var(--bad)); }
+    .flash {
+      position: absolute;
+      inset: 0;
+      background: rgba(110,231,255,.13);
+      opacity: 0;
+      pointer-events: none;
+    }
+    .controls { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #07131f;
+      background: linear-gradient(135deg, #7ee7ff, #7dffb2);
+    }
+    .note { font-size: .8rem; color: var(--muted); text-align: right; }
+    a { color: #a9c8ff; text-decoration: none; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>スキャンライン・スナップ</h1>
+
+    <section class="hud">
+      <div class="stat"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="stat"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="stat"><div class="k">HI-SCORE</div><div class="v" id="hi">0</div></div>
+    </section>
+
+    <section id="game" aria-label="game area">
+      <div id="scanline"></div>
+      <div class="flash" id="flash"></div>
+    </section>
+
+    <div class="controls">
+      <button id="startBtn" type="button">START</button>
+      <div class="note" id="msg">ラインと重なった瞬間にタップ</div>
+    </div>
+
+    <a href="../../">← 作品集へ戻る</a>
+  </main>
+
+  <script>
+    (() => {
+      const GAME_SECONDS = 60;
+      const KEY = 'motoko.webgame.scanline-snap.hiscore';
+      const game = document.getElementById('game');
+      const lineEl = document.getElementById('scanline');
+      const flashEl = document.getElementById('flash');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+      const startBtn = document.getElementById('startBtn');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let score = 0;
+      let timeLeft = GAME_SECONDS;
+      let lineY = 0;
+      let lineDir = 1;
+      let last = 0;
+      let spawnAcc = 0;
+      let targetId = 1;
+      const targets = new Map();
+
+      function resetTargets() {
+        for (const t of targets.values()) t.el.remove();
+        targets.clear();
+      }
+
+      function difficultyRate() {
+        const elapsed = GAME_SECONDS - timeLeft;
+        if (elapsed < 30) return { speed: 110, spawnMs: 680, badRate: 0.18 };
+        if (elapsed < 45) return { speed: 150, spawnMs: 520, badRate: 0.28 };
+        return { speed: 190, spawnMs: 410, badRate: 0.36 };
+      }
+
+      function spawnTarget() {
+        const rect = game.getBoundingClientRect();
+        const padding = 22;
+        const x = padding + Math.random() * (rect.width - padding * 2);
+        const y = padding + Math.random() * (rect.height - padding * 2);
+        const d = difficultyRate();
+        const bad = Math.random() < d.badRate;
+
+        const el = document.createElement('div');
+        el.className = `target ${bad ? 'bad' : 'good'}`;
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        game.appendChild(el);
+
+        const id = targetId++;
+        const ttl = bad ? 2400 : 2800;
+        targets.set(id, { id, x, y, bad, born: performance.now(), ttl, el });
+      }
+
+      function start() {
+        resetTargets();
+        running = true;
+        score = 0;
+        timeLeft = GAME_SECONDS;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        msgEl.textContent = 'ナイスショットを狙え';
+        lineY = game.clientHeight * 0.2;
+        lineDir = 1;
+        last = 0;
+        spawnAcc = 0;
+        startBtn.textContent = 'RESTART';
+        requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        running = false;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = `新記録 ${score}！`;
+        } else {
+          msgEl.textContent = `終了！スコア ${score}`;
+        }
+      }
+
+      function onTap() {
+        if (!running) return;
+        let delta = 0;
+        const hitBand = 16;
+        for (const [id, t] of targets) {
+          if (Math.abs(t.y - lineY) <= hitBand) {
+            delta += t.bad ? -2 : 1;
+            t.el.remove();
+            targets.delete(id);
+          }
+        }
+        score += delta;
+        scoreEl.textContent = String(score);
+        flashEl.style.opacity = '1';
+        setTimeout(() => { flashEl.style.opacity = '0'; }, 60);
+      }
+
+      function loop(ts) {
+        if (!running) return;
+        if (!last) last = ts;
+        const dt = Math.min(33, ts - last);
+        last = ts;
+
+        timeLeft = Math.max(0, timeLeft - dt / 1000);
+        timeEl.textContent = timeLeft.toFixed(1);
+
+        const d = difficultyRate();
+        lineY += lineDir * d.speed * (dt / 1000);
+        if (lineY < 0) { lineY = 0; lineDir = 1; }
+        if (lineY > game.clientHeight) { lineY = game.clientHeight; lineDir = -1; }
+        lineEl.style.top = `${lineY}px`;
+
+        spawnAcc += dt;
+        while (spawnAcc >= d.spawnMs) {
+          spawnAcc -= d.spawnMs;
+          spawnTarget();
+        }
+
+        const now = performance.now();
+        for (const [id, t] of targets) {
+          if (now - t.born > t.ttl) {
+            t.el.remove();
+            targets.delete(id);
+          }
+        }
+
+        if (timeLeft <= 0) {
+          endGame();
+          return;
+        }
+        requestAnimationFrame(loop);
+      }
+
+      game.addEventListener('pointerdown', onTap);
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        start();
+      });
+    })();
+  </script>
+</body>
+</html>
