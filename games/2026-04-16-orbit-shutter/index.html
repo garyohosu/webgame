@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>オービットシャッター</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg:#080b17;
+      --panel:#12182a;
+      --line:#2a3556;
+      --text:#eef3ff;
+      --muted:#9aabcf;
+      --good:#59e1ff;
+      --bad:#ff6f91;
+      --accent:#95ff77;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 20% 0%, #1a2450 0%, var(--bg) 45%, #05070f 100%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      touch-action: manipulation;
+    }
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+      gap: 8px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(20px, 6vw, 28px);
+      letter-spacing: .04em;
+      text-align: center;
+    }
+    .hud {
+      background: rgba(18,24,42,.75);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .hud small { display:block; color:var(--muted); font-size:10px; font-weight:600; }
+    #field {
+      position: relative;
+      width: min(96vw, 440px);
+      height: min(58vh, 560px);
+      margin: 0 auto;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px) 0 0/100% 34px,
+        linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px) 0 0/34px 100%,
+        #0b1020;
+      overflow: hidden;
+    }
+    #shaft {
+      position: absolute;
+      left: 50%; top: 0;
+      width: 108px; height: 100%;
+      transform: translateX(-50%);
+      background: linear-gradient(to bottom, rgba(90,110,170,.12), rgba(90,110,170,.04));
+      border-left: 1px solid rgba(130,160,255,.18);
+      border-right: 1px solid rgba(130,160,255,.18);
+    }
+    #ring {
+      position: absolute;
+      left: 50%; bottom: 86px;
+      width: 160px; height: 160px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      border: 4px solid rgba(149,255,119,.35);
+      box-shadow: 0 0 24px rgba(149,255,119,.25), inset 0 0 16px rgba(149,255,119,.18);
+      pointer-events: none;
+    }
+    #shutter {
+      position: absolute;
+      left: 50%; bottom: 80px;
+      width: 172px; height: 172px;
+      transform: translateX(-50%) rotate(0deg);
+      transition: transform 120ms ease-out;
+      border-radius: 50%;
+      background:
+        conic-gradient(
+          from 0deg,
+          rgba(80,99,162,.92) 0 70deg,
+          transparent 70deg 110deg,
+          rgba(80,99,162,.92) 110deg 160deg,
+          transparent 160deg 200deg,
+          rgba(80,99,162,.92) 200deg 250deg,
+          transparent 250deg 290deg,
+          rgba(80,99,162,.92) 290deg 340deg,
+          transparent 340deg 360deg
+        );
+      border: 2px solid rgba(168,185,245,.45);
+      box-shadow: 0 0 22px rgba(50,72,140,.45);
+    }
+    .pulse {
+      position: absolute;
+      width: 30px; height: 30px;
+      left: 50%;
+      border-radius: 50%;
+      transform: translateX(-50%);
+      box-shadow: 0 0 14px currentColor;
+    }
+    .pulse.good { color: var(--good); background: radial-gradient(circle at 35% 35%, #d7f7ff 0 20%, var(--good) 50%, #1d8aa6 100%); }
+    .pulse.bad  { color: var(--bad);  background: radial-gradient(circle at 35% 35%, #ffd6e3 0 20%, var(--bad) 50%, #9f2749 100%); }
+    .controls {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+    }
+    button {
+      width: min(92vw, 420px);
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #68d6ff, #8cff7f);
+      color: #06101a;
+      font-weight: 800;
+      font-size: 18px;
+      padding: 12px 16px;
+    }
+    a.back {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      margin-top: 2px;
+    }
+    #toast {
+      min-height: 20px;
+      font-size: 13px;
+      color: #b8c8ee;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <h1>🌀 オービットシャッター</h1>
+
+    <section class="hud" aria-live="polite">
+      <div><small>SCORE</small><span id="score">0</span></div>
+      <div><small>TIME</small><span id="time">60.0</span></div>
+      <div><small>HI-SCORE</small><span id="hiscore">0</span></div>
+    </section>
+
+    <section id="field">
+      <div id="shaft"></div>
+      <div id="ring"></div>
+      <div id="shutter"></div>
+    </section>
+
+    <section class="controls">
+      <button id="start">START 60s</button>
+      <div id="toast">タップでシャッターを90°回転。青を通して赤は閉じろ。</div>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'orbit-shutter-hi-v1';
+      const field = document.getElementById('field');
+      const shutter = document.getElementById('shutter');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hiscore');
+      const startBtn = document.getElementById('start');
+      const toast = document.getElementById('toast');
+
+      const hi0 = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = String(hi0);
+
+      let running = false;
+      let score = 0;
+      let angle = 0; // 0,90,180,270
+      let pulses = [];
+      let raf = 0;
+      let lastTs = 0;
+      let left = 60;
+      let spawnAcc = 0;
+
+      const ringY = () => field.clientHeight - 160;
+
+      function phaseSpeed(secLeft) {
+        if (secLeft > 30) return 155;
+        if (secLeft > 15) return 186;
+        return 225;
+      }
+      function badRate(secLeft) {
+        if (secLeft > 30) return 0.20;
+        if (secLeft > 15) return 0.30;
+        return 0.40;
+      }
+      function spawnGap(secLeft) {
+        if (secLeft > 30) return 560;
+        if (secLeft > 15) return 430;
+        return 320;
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = left.toFixed(1);
+      }
+
+      function spawnPulse() {
+        if (!running) return;
+        const isBad = Math.random() < badRate(left);
+        const d = document.createElement('div');
+        d.className = `pulse ${isBad ? 'bad' : 'good'}`;
+        field.appendChild(d);
+        pulses.push({ el: d, y: -32, bad: isBad, judged: false });
+      }
+
+      function openDirection() {
+        // opening center index in 4-way, rotated with angle
+        // base opening centers: 90,180,270,0 with 40deg width; we simplify to 4 directions
+        // at each 90deg rotate, active "drop lane" toggles among 0..3
+        return ((angle / 90) % 4 + 4) % 4;
+      }
+
+      function judgePulse(p) {
+        if (p.judged) return;
+        p.judged = true;
+        const dir = openDirection();
+        // falling lane is vertical-down lane index 0 only, so allow pass when dir==0
+        // add rhythm by mapping every hit window to one of 4 virtual gates based on time
+        const virtualLane = (Math.floor((60 - left) * 3) % 4 + 4) % 4;
+        const pass = dir === virtualLane;
+
+        if (pass && !p.bad) score += 10;
+        else if (pass && p.bad) score = Math.max(0, score - 8);
+        else if (!pass && !p.bad) score = Math.max(0, score - 3);
+        else score += 2; // red blocked successfully
+
+        toast.textContent = pass
+          ? (p.bad ? '赤を通してしまった -8' : '青を通した +10')
+          : (p.bad ? '赤を遮断 +2' : '青を閉じた -3');
+      }
+
+      function renderShutter() {
+        shutter.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+      }
+
+      function loop(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = ts - lastTs;
+        lastTs = ts;
+
+        left = Math.max(0, left - dt / 1000);
+        spawnAcc += dt;
+
+        const gap = spawnGap(left);
+        while (spawnAcc >= gap) {
+          spawnAcc -= gap;
+          spawnPulse();
+        }
+
+        const speed = phaseSpeed(left);
+        const ry = ringY();
+
+        pulses.forEach((p) => {
+          p.y += speed * dt / 1000;
+          p.el.style.top = `${p.y}px`;
+          if (!p.judged && p.y + 15 >= ry + 80) judgePulse(p);
+        });
+
+        pulses = pulses.filter((p) => {
+          if (p.y > field.clientHeight + 40) {
+            p.el.remove();
+            return false;
+          }
+          return true;
+        });
+
+        updateHud();
+
+        if (left <= 0) {
+          endGame();
+          return;
+        }
+        raf = requestAnimationFrame(loop);
+      }
+
+      function startGame() {
+        pulses.forEach(p => p.el.remove());
+        pulses = [];
+        score = 0;
+        left = 60;
+        angle = 0;
+        spawnAcc = 0;
+        lastTs = 0;
+        running = true;
+        startBtn.textContent = 'PLAYING...';
+        toast.textContent = 'タップして開口を合わせろ。終盤は高速化する。';
+        renderShutter();
+        updateHud();
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(loop);
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(raf);
+        startBtn.textContent = 'RETRY';
+        const hi = Number(localStorage.getItem(KEY) || 0);
+        if (score > hi) {
+          localStorage.setItem(KEY, String(score));
+          hiEl.textContent = String(score);
+          toast.textContent = `終了！ NEW HI-SCORE: ${score}`;
+        } else {
+          hiEl.textContent = String(hi);
+          toast.textContent = `終了！ SCORE: ${score}`;
+        }
+      }
+
+      document.getElementById('app').addEventListener('pointerdown', (e) => {
+        if (e.target === startBtn) return;
+        if (!running) return;
+        angle = (angle + 90) % 360;
+        renderShutter();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        startGame();
+      });
+
+      renderShutter();
+      updateHud();
+    })();
+  </script>
+</body>
+</html>
