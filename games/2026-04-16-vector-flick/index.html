@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ベクターフリック</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg:#070b18;
+      --panel:#121a33;
+      --line:#2b3f78;
+      --text:#edf2ff;
+      --muted:#92a3d8;
+      --good:#6ce6ff;
+      --bad:#ff6a92;
+      --accent:#ffe27a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% -10%, #203164, #080c1a 58%, #040610 100%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      touch-action: manipulation;
+    }
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 8px;
+      padding: max(10px, env(safe-area-inset-top)) 12px max(10px, env(safe-area-inset-bottom));
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: clamp(20px, 6.3vw, 28px);
+      letter-spacing: .04em;
+    }
+    .hud {
+      background: rgba(18,26,51,.86);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .hud small { display:block; font-size:10px; color:var(--muted); }
+    #field {
+      width: min(95vw, 430px);
+      height: min(62vh, 560px);
+      margin: 0 auto;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background:
+        linear-gradient(to right,
+          rgba(255,255,255,.06) 33.33%,
+          rgba(255,255,255,.02) 33.33%,
+          rgba(255,255,255,.02) 66.66%,
+          rgba(255,255,255,.06) 66.66%),
+        #0a1228;
+      position: relative;
+      overflow: hidden;
+    }
+    .lane-mark {
+      position: absolute;
+      top: 8px;
+      font-size: 10px;
+      color: #b4c2f2;
+      opacity: .7;
+      transform: translateX(-50%);
+    }
+    .player {
+      position: absolute;
+      width: 42px;
+      height: 24px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #fff8ca, var(--accent));
+      border: 1px solid rgba(255,255,255,.65);
+      box-shadow: 0 0 18px rgba(255,226,122,.45);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .orb {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .orb.good {
+      background: radial-gradient(circle at 30% 30%, #f4fdff 0 22%, var(--good) 55%, #1f7998 100%);
+      box-shadow: 0 0 12px rgba(108,230,255,.6);
+    }
+    .orb.bad {
+      background: radial-gradient(circle at 30% 30%, #ffeaf1 0 22%, var(--bad) 55%, #8d2143 100%);
+      box-shadow: 0 0 12px rgba(255,106,146,.52);
+    }
+    .controls { display:grid; gap:8px; justify-items:center; }
+    button {
+      width: min(92vw, 420px);
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #7ee8fa, #ffe27a);
+      color: #091024;
+      font-size: 18px;
+      font-weight: 800;
+      padding: 12px 16px;
+    }
+    #msg {
+      min-height: 20px;
+      font-size: 13px;
+      color: #c4cff5;
+      text-align: center;
+    }
+    .back { color: var(--muted); text-decoration: none; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>⚡ ベクターフリック</h1>
+
+    <section class="hud" aria-live="polite">
+      <div><small>SCORE</small><span id="score">0</span></div>
+      <div><small>TIME</small><span id="time">60.0</span></div>
+      <div><small>HI-SCORE</small><span id="hi">0</span></div>
+    </section>
+
+    <section id="field" aria-label="game field">
+      <div class="lane-mark" style="left:16.66%;">L</div>
+      <div class="lane-mark" style="left:50%;">C</div>
+      <div class="lane-mark" style="left:83.33%;">R</div>
+      <div id="player" class="player"></div>
+    </section>
+
+    <section class="controls">
+      <button id="start">START 60s</button>
+      <div id="msg">タップ位置でレーン移動。青 +10 / 赤 -12 / 青取り逃し -4</div>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'vector-flick-hi-v1';
+      const field = document.getElementById('field');
+      const playerEl = document.getElementById('player');
+      const startBtn = document.getElementById('start');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+
+      hiEl.textContent = String(Number(localStorage.getItem(KEY) || 0));
+
+      const lanes = [0.1666, 0.5, 0.8333];
+      let laneIndex = 1;
+      let running = false;
+      let score = 0;
+      let left = 60;
+      let lastTs = 0;
+      let spawnAcc = 0;
+      let rafId = 0;
+      let orbs = [];
+
+      function laneX(index) {
+        return field.clientWidth * lanes[index];
+      }
+
+      function phase(leftSec) {
+        if (leftSec > 30) return { speed: 165, gap: 620, badRate: 0.25 };
+        if (leftSec > 15) return { speed: 235, gap: 470, badRate: 0.35 };
+        return { speed: 305, gap: 340, badRate: 0.45 };
+      }
+
+      function placePlayer() {
+        const y = field.clientHeight - 28;
+        playerEl.style.left = `${laneX(laneIndex)}px`;
+        playerEl.style.top = `${y}px`;
+      }
+
+      function spawnOrb() {
+        const lane = Math.floor(Math.random() * 3);
+        const isBad = Math.random() < phase(left).badRate;
+        const el = document.createElement('div');
+        el.className = `orb ${isBad ? 'bad' : 'good'}`;
+        field.appendChild(el);
+        orbs.push({ el, lane, y: -14, bad: isBad, hit: false });
+      }
+
+      function setHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = left.toFixed(1);
+      }
+
+      function tapMove(ev) {
+        if (!running) return;
+        const rect = field.getBoundingClientRect();
+        const x = ev.clientX - rect.left;
+        if (x < rect.width / 3) laneIndex = 0;
+        else if (x < rect.width * 2 / 3) laneIndex = 1;
+        else laneIndex = 2;
+        placePlayer();
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        const hi = Number(localStorage.getItem(KEY) || 0);
+        if (score > hi) {
+          localStorage.setItem(KEY, String(score));
+          hiEl.textContent = String(score);
+          msgEl.textContent = `終了！ ハイスコア更新 ${score}`;
+        } else {
+          msgEl.textContent = `終了！ スコア ${score}`;
+        }
+        startBtn.disabled = false;
+        startBtn.textContent = 'RESTART';
+      }
+
+      function loop(ts) {
+        if (!running) return;
+        const dt = Math.min(40, ts - lastTs);
+        lastTs = ts;
+
+        left -= dt / 1000;
+        if (left <= 0) {
+          left = 0;
+          setHud();
+          endGame();
+          return;
+        }
+
+        const p = phase(left);
+        spawnAcc += dt;
+        if (spawnAcc >= p.gap) {
+          spawnAcc = 0;
+          spawnOrb();
+        }
+
+        const playerY = field.clientHeight - 28;
+        for (const o of orbs) {
+          o.y += (p.speed * dt) / 1000;
+          o.el.style.left = `${laneX(o.lane)}px`;
+          o.el.style.top = `${o.y}px`;
+
+          if (!o.hit && o.lane === laneIndex && Math.abs(o.y - playerY) < 20) {
+            o.hit = true;
+            if (o.bad) {
+              score = Math.max(0, score - 12);
+              msgEl.textContent = '赤ノイズ衝突 -12';
+            } else {
+              score += 10;
+              msgEl.textContent = '青コア回収 +10';
+            }
+            o.el.remove();
+          } else if (!o.hit && o.y > field.clientHeight + 18) {
+            o.hit = true;
+            if (!o.bad) {
+              score = Math.max(0, score - 4);
+              msgEl.textContent = '青コア取り逃し -4';
+            }
+            o.el.remove();
+          }
+        }
+
+        orbs = orbs.filter(o => !o.hit);
+        setHud();
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function resetGame() {
+        for (const o of orbs) o.el.remove();
+        orbs = [];
+        laneIndex = 1;
+        score = 0;
+        left = 60;
+        spawnAcc = 0;
+        setHud();
+        placePlayer();
+        msgEl.textContent = '左/中/右をタップして即移動。終盤ほど高速化。';
+      }
+
+      startBtn.addEventListener('pointerdown', () => {
+        if (running) return;
+        resetGame();
+        running = true;
+        startBtn.disabled = true;
+        startBtn.textContent = 'RUNNING...';
+        lastTs = performance.now();
+        rafId = requestAnimationFrame(loop);
+      });
+
+      field.addEventListener('pointerdown', tapMove);
+      window.addEventListener('resize', placePlayer);
+      placePlayer();
+    })();
+  </script>
+</body>
+</html>
