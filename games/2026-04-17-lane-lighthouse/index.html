@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>レーンライトハウス</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #061122;
+      --panel: #10203a;
+      --line: #223a62;
+      --text: #eaf2ff;
+      --accent: #66d9ff;
+      --danger: #ff5d7a;
+      --good: #63f5b0;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at 30% 10%, #17335f, var(--bg) 50%); color: var(--text); font-family: "Noto Sans JP", system-ui, sans-serif; }
+    body { display: grid; place-items: center; }
+    .app {
+      width: min(100vw, 430px);
+      height: min(100dvh, 860px);
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    .top {
+      display: flex; justify-content: space-between; align-items: center;
+      border: 1px solid var(--line); border-radius: 12px; background: rgba(16,32,58,.75); padding: 10px 12px;
+    }
+    .title { font-size: 18px; font-weight: 800; letter-spacing: .04em; }
+    .meta { font-size: 12px; opacity: .9; }
+    .hud { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .chip { border: 1px solid var(--line); background: rgba(16,32,58,.75); border-radius: 10px; padding: 8px; text-align: center; }
+    .chip .k { font-size: 11px; opacity: .8; }
+    .chip .v { font-size: 20px; font-weight: 800; line-height: 1.1; }
+    canvas { width: 100%; height: 100%; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, rgba(12,23,44,.95), rgba(6,12,22,.95)); }
+    .controls { display: grid; gap: 8px; }
+    button {
+      border: 0; border-radius: 12px; padding: 12px; font-weight: 800; font-size: 16px;
+      background: linear-gradient(135deg, #79e3ff, #5e9dff); color: #041224;
+    }
+    .hint { text-align: center; font-size: 12px; opacity: .86; min-height: 1.2em; }
+    .back { color: #9dc7ff; text-decoration: none; text-align: center; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="top">
+      <div>
+        <div class="title">レーンライトハウス</div>
+        <div class="meta">タップで受け皿移動 / 青を拾って赤を避ける</div>
+      </div>
+    </header>
+
+    <section class="hud">
+      <div class="chip"><div class="k">SCORE</div><div id="score" class="v">0</div></div>
+      <div class="chip"><div class="k">TIME</div><div id="time" class="v">60.0</div></div>
+      <div class="chip"><div class="k">HI-SCORE</div><div id="hi" class="v">0</div></div>
+    </section>
+
+    <canvas id="game" width="390" height="520" aria-label="game field"></canvas>
+
+    <section class="controls">
+      <button id="startBtn" type="button">START</button>
+      <div id="hint" class="hint">タップでレーン切り替え。60秒でどこまで伸ばせるか。</div>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'webgame_2026_04_17_lane_lighthouse_highscore';
+      const LANES = [0.2, 0.5, 0.8];
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const hintEl = document.getElementById('hint');
+      const startBtn = document.getElementById('startBtn');
+
+      let hiScore = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hiScore;
+
+      let running = false;
+      let score = 0;
+      let laneIndex = 1;
+      let left = 60;
+      let last = 0;
+      let spawnTimer = 0;
+      let rafId = 0;
+      const drops = [];
+
+      function reset() {
+        running = true;
+        score = 0;
+        laneIndex = 1;
+        left = 60;
+        spawnTimer = 0;
+        drops.length = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        hintEl.textContent = 'プレイ中：タップでレーン移動';
+        startBtn.textContent = 'RETRY';
+        last = performance.now();
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function phaseDifficulty(t) {
+        if (t > 45) return { speed: 125, interval: 0.62, red: 0.22 };
+        if (t > 30) return { speed: 170, interval: 0.5, red: 0.30 };
+        return { speed: 215, interval: 0.38, red: 0.38 };
+      }
+
+      function spawn(dt) {
+        const d = phaseDifficulty(60 - left);
+        spawnTimer += dt;
+        while (spawnTimer >= d.interval) {
+          spawnTimer -= d.interval;
+          const lane = Math.floor(Math.random() * 3);
+          drops.push({
+            lane,
+            y: -24,
+            r: 13,
+            bad: Math.random() < d.red,
+            speed: d.speed + Math.random() * 30
+          });
+        }
+      }
+
+      function step(dt) {
+        const basketY = canvas.height - 42;
+        const basketX = LANES[laneIndex] * canvas.width;
+
+        for (let i = drops.length - 1; i >= 0; i--) {
+          const p = drops[i];
+          p.y += p.speed * dt;
+          const px = LANES[p.lane] * canvas.width;
+          const hit = Math.abs(px - basketX) < 34 && Math.abs(p.y - basketY) < 24;
+
+          if (hit) {
+            if (p.bad) {
+              score = Math.max(0, score - 12);
+              hintEl.textContent = '赤ノイズで -12';
+            } else {
+              score += 10;
+              hintEl.textContent = '青シグナル +10';
+            }
+            scoreEl.textContent = String(score);
+            drops.splice(i, 1);
+            continue;
+          }
+          if (p.y > canvas.height + 28) drops.splice(i, 1);
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.strokeStyle = 'rgba(102,217,255,.16)';
+        ctx.lineWidth = 2;
+        for (const lx of LANES) {
+          const x = lx * canvas.width;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvas.height);
+          ctx.stroke();
+        }
+
+        for (const p of drops) {
+          const x = LANES[p.lane] * canvas.width;
+          ctx.fillStyle = p.bad ? '#ff5d7a' : '#63f5b0';
+          ctx.beginPath();
+          ctx.arc(x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const bx = LANES[laneIndex] * canvas.width;
+        const by = canvas.height - 42;
+        ctx.fillStyle = '#66d9ff';
+        ctx.beginPath();
+        ctx.roundRect(bx - 35, by - 12, 70, 24, 8);
+        ctx.fill();
+        ctx.fillStyle = '#0a1a2e';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('LIGHT', bx, by + 4);
+      }
+
+      function finish() {
+        running = false;
+        if (score > hiScore) {
+          hiScore = score;
+          localStorage.setItem(KEY, String(hiScore));
+          hiEl.textContent = String(hiScore);
+          hintEl.textContent = `終了！ハイスコア更新: ${score}`;
+        } else {
+          hintEl.textContent = `終了！スコア: ${score}`;
+        }
+      }
+
+      function loop(now) {
+        if (!running) return;
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+
+        left -= dt;
+        if (left <= 0) {
+          left = 0;
+          timeEl.textContent = '0.0';
+          draw();
+          finish();
+          return;
+        }
+
+        spawn(dt);
+        step(dt);
+        draw();
+        timeEl.textContent = left.toFixed(1);
+        rafId = requestAnimationFrame(loop);
+      }
+
+      function onTap(e) {
+        e.preventDefault();
+        if (!running) return;
+        laneIndex = (laneIndex + 1) % 3;
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); cancelAnimationFrame(rafId); reset(); });
+      canvas.addEventListener('pointerdown', onTap, { passive: false });
+      document.body.addEventListener('pointerdown', (e) => {
+        if (e.target === canvas || e.target === startBtn || e.target.closest('a')) return;
+        if (running) onTap(e);
+      }, { passive: false });
+
+      draw();
+    })();
+  </script>
+</body>
+</html>
