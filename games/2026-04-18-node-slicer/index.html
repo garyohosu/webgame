@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>ノードスライサー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 50% -10%, #2b2f67 0%, #0a0d1f 60%, #05070f 100%);
+      color: #ecf2ff;
+      display: flex;
+      justify-content: center;
+    }
+    .game {
+      width: min(100vw, 480px);
+      height: 100vh;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: clamp(22px, 7vw, 30px); letter-spacing: .04em; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .panel {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 12px;
+      text-align: center;
+      padding: 8px 6px;
+    }
+    .label { font-size: 11px; opacity: .8; }
+    .value { font-size: 20px; font-weight: 800; }
+    #field {
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid rgba(146, 190, 255, .35);
+      background: linear-gradient(180deg, rgba(12,20,46,.92), rgba(6,10,24,.95));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .node {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .good { background: #65d7ff; box-shadow: 0 0 14px rgba(101,215,255,.9); }
+    .bad { background: #ff688a; box-shadow: 0 0 14px rgba(255,104,138,.9); }
+    #scanner {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      margin-left: -2px;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), #8ce6ff, rgba(255,255,255,.05));
+      box-shadow: 0 0 16px rgba(140,230,255,.8);
+      pointer-events: none;
+    }
+    #slash {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 64px;
+      margin-left: -32px;
+      background: linear-gradient(90deg, rgba(111,228,255,0), rgba(111,228,255,.45), rgba(111,228,255,0));
+      opacity: 0;
+      pointer-events: none;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 18px;
+      background: rgba(6,10,24,.58);
+      z-index: 5;
+    }
+    .box {
+      width: 100%;
+      max-width: 340px;
+      background: rgba(10,15,33,.92);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 14px;
+      padding: 16px;
+      line-height: 1.5;
+      font-size: 13px;
+    }
+    button {
+      margin-top: 10px;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #091226;
+      background: linear-gradient(135deg, #8ce6ff, #7bffd2);
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    a { color: #a7d8ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>ノードスライサー</h1>
+
+    <section class="hud">
+      <div class="panel"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="panel"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </section>
+
+    <section id="field" aria-label="game-field">
+      <div id="scanner"></div>
+      <div id="slash"></div>
+      <div id="overlay">
+        <div class="box">
+          往復するスキャンライン位置でタップ斬撃。<br>
+          青ノードを切って加点、赤ノードは減点。60秒でどこまで伸ばせる？
+          <br><button id="startBtn" type="button">START</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span id="msg">準備OK</span>
+      <a href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'node-slicer-hi-v1';
+      const field = document.getElementById('field');
+      const scannerEl = document.getElementById('scanner');
+      const slashEl = document.getElementById('slash');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = String(hi);
+
+      let running = false;
+      let score = 0;
+      let leftSec = 60;
+      let nodes = [];
+      let scannerX = 0;
+      let scannerDir = 1;
+      let spawnAcc = 0;
+      let slashFx = 0;
+      let rafId = 0;
+      let lastTs = 0;
+
+      function level() {
+        if (leftSec > 30) return 0;
+        if (leftSec > 15) return 1;
+        return 2;
+      }
+
+      function spawnNode() {
+        const lv = level();
+        const badRate = [0.22, 0.3, 0.4][lv];
+        const kind = Math.random() < badRate ? 'bad' : 'good';
+        const x = 24 + Math.random() * (field.clientWidth - 48);
+        const el = document.createElement('div');
+        el.className = `node ${kind}`;
+        field.appendChild(el);
+        nodes.push({ el, kind, x, y: -24 });
+      }
+
+      function reset() {
+        nodes.forEach(n => n.el.remove());
+        nodes = [];
+        score = 0;
+        leftSec = 60;
+        scannerX = field.clientWidth * 0.5;
+        scannerDir = 1;
+        spawnAcc = 0;
+        slashFx = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        msgEl.textContent = '青を狙え';
+        updateScanner();
+        updateSlash();
+      }
+
+      function updateScanner() {
+        scannerEl.style.left = scannerX + 'px';
+      }
+
+      function updateSlash() {
+        slashEl.style.left = scannerX + 'px';
+        slashEl.style.opacity = slashFx > 0 ? String(slashFx) : '0';
+      }
+
+      function clampScore() {
+        if (score < 0) score = 0;
+        scoreEl.textContent = String(score);
+      }
+
+      function slashAtScanner() {
+        if (!running) return;
+        const range = 34;
+        let hitGood = 0;
+        let hitBad = 0;
+
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          if (Math.abs(n.x - scannerX) <= range) {
+            if (n.kind === 'good') hitGood++;
+            else hitBad++;
+            n.el.remove();
+            nodes.splice(i, 1);
+          }
+        }
+
+        score += hitGood * 12;
+        score -= hitBad * 10;
+        clampScore();
+
+        if (hitGood > 0) msgEl.textContent = `+${hitGood * 12}`;
+        else if (hitBad > 0) msgEl.textContent = `-${hitBad * 10}`;
+        else msgEl.textContent = '空振り';
+
+        slashFx = 1;
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = 'ハイスコア更新';
+        } else {
+          msgEl.textContent = `終了: ${score} 点`;
+        }
+        startBtn.textContent = 'RETRY';
+        overlay.style.display = 'grid';
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.05, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        leftSec -= dt;
+        if (leftSec <= 0) {
+          leftSec = 0;
+          timeEl.textContent = '0.0';
+          endGame();
+          return;
+        }
+        timeEl.textContent = leftSec.toFixed(1);
+
+        const lv = level();
+        const scannerSpeed = [220, 300, 380][lv];
+        const dropSpeed = [150, 210, 280][lv];
+        const spawnInterval = [0.56, 0.42, 0.32][lv];
+
+        scannerX += scannerDir * scannerSpeed * dt;
+        if (scannerX < 10) {
+          scannerX = 10;
+          scannerDir = 1;
+        } else if (scannerX > field.clientWidth - 10) {
+          scannerX = field.clientWidth - 10;
+          scannerDir = -1;
+        }
+        updateScanner();
+
+        spawnAcc += dt;
+        while (spawnAcc >= spawnInterval) {
+          spawnAcc -= spawnInterval;
+          spawnNode();
+          if (lv >= 1 && Math.random() < (lv === 1 ? 0.18 : 0.32)) spawnNode();
+        }
+
+        const floorY = field.clientHeight - 20;
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          n.y += dropSpeed * dt;
+          n.el.style.left = n.x + 'px';
+          n.el.style.top = n.y + 'px';
+
+          if (n.y >= floorY) {
+            if (n.kind === 'good') {
+              score -= 6;
+              clampScore();
+              msgEl.textContent = '青取り逃し -6';
+            }
+            n.el.remove();
+            nodes.splice(i, 1);
+          }
+        }
+
+        slashFx = Math.max(0, slashFx - dt * 3.6);
+        updateSlash();
+
+        rafId = requestAnimationFrame(frame);
+      }
+
+      field.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        slashAtScanner();
+      });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        reset();
+        running = true;
+        lastTs = 0;
+        overlay.style.display = 'none';
+        rafId = requestAnimationFrame(frame);
+      });
+
+      window.addEventListener('resize', () => {
+        if (!field.clientWidth) return;
+        scannerX = Math.min(field.clientWidth - 10, Math.max(10, scannerX));
+        updateScanner();
+        updateSlash();
+      });
+
+      reset();
+    })();
+  </script>
+</body>
+</html>
