@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>シグナルフォージ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 20% 0%, #1a2a44, #070b14 65%);
+      color: #e9f2ff;
+      display: flex;
+      justify-content: center;
+    }
+    .game {
+      width: min(100vw, 480px);
+      height: 100vh;
+      padding: 14px 14px 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    .title { font-size: clamp(22px, 6vw, 30px); font-weight: 800; letter-spacing: .04em; margin: 4px 0 0; }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 8px;
+    }
+    .panel {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+    .label { font-size: 11px; opacity: .8; }
+    .value { font-size: 20px; font-weight: 700; }
+    #field {
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid rgba(130, 200, 255, .35);
+      background: linear-gradient(180deg, rgba(16,33,60,.88), rgba(8,14,28,.95));
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .lane-line {
+      position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.12);
+    }
+    #catcher {
+      position: absolute;
+      bottom: 14px;
+      width: 30%;
+      height: 16px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,#7ddbff,#8dffcb);
+      box-shadow: 0 0 14px rgba(125,219,255,.7);
+      transform: translateX(-50%);
+      transition: left .08s linear;
+    }
+    .drop {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .good { background: #68d4ff; box-shadow: 0 0 16px rgba(104,212,255,.85); }
+    .bad { background: #ff6b87; box-shadow: 0 0 16px rgba(255,107,135,.85); }
+    #overlay {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      background: rgba(3,8,16,.55);
+      z-index: 5;
+      text-align: center;
+      padding: 18px;
+    }
+    .box {
+      width: 100%;
+      max-width: 340px;
+      background: rgba(10,18,34,.92);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 14px;
+      padding: 16px 14px;
+    }
+    button {
+      appearance: none; border: 0;
+      margin-top: 10px;
+      font-size: 18px; font-weight: 700;
+      color: #041427;
+      background: linear-gradient(135deg,#7edbff,#90ffcf);
+      border-radius: 999px;
+      padding: 12px 22px;
+    }
+    .hint { font-size: 13px; opacity: .85; line-height: 1.5; }
+    .footer {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 13px;
+      opacity: .9;
+    }
+    a { color: #9fd8ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1 class="title">シグナルフォージ</h1>
+
+    <section class="hud">
+      <div class="panel"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div id="time" class="value">60.0</div></div>
+      <div class="panel"><div class="label">HI</div><div id="hi" class="value">0</div></div>
+    </section>
+
+    <section id="field" aria-label="game field">
+      <div class="lane-line" style="left:33.333%"></div>
+      <div class="lane-line" style="left:66.666%"></div>
+      <div id="catcher"></div>
+      <div id="overlay">
+        <div class="box">
+          <p class="hint">タップでゲートを左→中→右へ切替。<br>青を取って、赤を避けろ。60秒勝負。</p>
+          <button id="startBtn" type="button">START</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="footer">
+      <span id="msg">準備OK</span>
+      <a href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'signal-forge-hi-v1';
+      const field = document.getElementById('field');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const catcher = document.getElementById('catcher');
+      const msgEl = document.getElementById('msg');
+
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      hiEl.textContent = hi;
+
+      let lane = 1;
+      let score = 0;
+      let leftSec = 60;
+      let running = false;
+      let drops = [];
+      let rafId = 0;
+      let lastTs = 0;
+      let spawnAcc = 0;
+
+      const laneCenter = (i) => ((i + 0.5) / 3) * field.clientWidth;
+
+      function setLane(next) {
+        lane = (next + 3) % 3;
+        catcher.style.left = laneCenter(lane) + 'px';
+      }
+
+      function reset() {
+        drops.forEach(d => d.el.remove());
+        drops = [];
+        score = 0;
+        leftSec = 60;
+        spawnAcc = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        msgEl.textContent = '青を取れ';
+        setLane(1);
+      }
+
+      function level() {
+        if (leftSec > 30) return 0;
+        if (leftSec > 15) return 1;
+        return 2;
+      }
+
+      function spawn() {
+        const lv = level();
+        const badRate = [0.26, 0.34, 0.42][lv];
+        const laneId = Math.floor(Math.random() * 3);
+        const kind = Math.random() < badRate ? 'bad' : 'good';
+        const el = document.createElement('div');
+        el.className = `drop ${kind}`;
+        field.appendChild(el);
+        drops.push({ el, lane: laneId, y: -24, kind });
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = 'ハイスコア更新';
+        } else {
+          msgEl.textContent = '終了: ' + score + ' 点';
+        }
+        overlay.style.display = 'grid';
+        startBtn.textContent = 'RETRY';
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.05, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        leftSec -= dt;
+        if (leftSec <= 0) {
+          leftSec = 0;
+          timeEl.textContent = '0.0';
+          endGame();
+          return;
+        }
+        timeEl.textContent = leftSec.toFixed(1);
+
+        const lv = level();
+        const speed = [240, 320, 400][lv];
+        const interval = [0.58, 0.46, 0.36][lv];
+
+        spawnAcc += dt;
+        while (spawnAcc >= interval) {
+          spawnAcc -= interval;
+          spawn();
+          if (Math.random() < (lv === 2 ? 0.35 : lv === 1 ? 0.2 : 0.1)) spawn();
+        }
+
+        const catcherY = field.clientHeight - 22;
+
+        for (let i = drops.length - 1; i >= 0; i--) {
+          const d = drops[i];
+          d.y += speed * dt;
+          const x = laneCenter(d.lane);
+          d.el.style.left = x + 'px';
+          d.el.style.top = d.y + 'px';
+
+          if (d.y >= catcherY) {
+            if (d.lane === lane) {
+              score += d.kind === 'good' ? 10 : -12;
+            } else if (d.kind === 'good') {
+              score -= 4;
+            }
+            if (score < 0) score = 0;
+            scoreEl.textContent = String(score);
+            d.el.remove();
+            drops.splice(i, 1);
+          }
+        }
+
+        rafId = requestAnimationFrame(frame);
+      }
+
+      field.addEventListener('pointerdown', () => {
+        if (!running) return;
+        setLane(lane + 1);
+      });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        reset();
+        running = true;
+        lastTs = 0;
+        overlay.style.display = 'none';
+        rafId = requestAnimationFrame(frame);
+      });
+
+      window.addEventListener('resize', () => setLane(lane));
+      setLane(1);
+    })();
+  </script>
+</body>
+</html>
