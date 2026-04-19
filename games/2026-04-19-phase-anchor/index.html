@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>フェーズアンカー | Daily Game Factory</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg1: #060914;
+      --bg2: #0f1631;
+      --fg: #eef3ff;
+      --muted: #97a7d6;
+      --good: #4de1ff;
+      --bad: #ff5a8b;
+      --accent: #ffd166;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 10%, #1a2550 0%, var(--bg1) 55%, #03040a 100%);
+      color: var(--fg);
+      font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .app {
+      width: min(100vw, 440px);
+      height: 100dvh;
+      padding: 14px 14px 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    .title {
+      text-align: center;
+      font-weight: 700;
+      letter-spacing: .04em;
+      font-size: clamp(20px, 5.4vw, 27px);
+      margin-top: 2px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .panel {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 12px;
+      padding: 8px;
+      text-align: center;
+    }
+    .label { font-size: 11px; color: var(--muted); }
+    .value { font-size: 22px; font-weight: 700; margin-top: 2px; }
+
+    .arenaWrap {
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+    canvas {
+      width: min(86vw, 360px);
+      height: min(86vw, 360px);
+      max-height: 52dvh;
+      aspect-ratio: 1/1;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 48%, #141f42 0%, #091129 55%, #050811 100%);
+      box-shadow: 0 14px 30px rgba(0, 0, 0, .45), inset 0 0 28px rgba(77,225,255,.08);
+      border: 1px solid rgba(255,255,255,.15);
+    }
+    .hint {
+      position: absolute;
+      bottom: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      text-align: center;
+      width: 100%;
+      text-shadow: 0 2px 8px rgba(0,0,0,.45);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #111523;
+      background: linear-gradient(135deg, var(--good), var(--accent));
+    }
+    button:active { transform: scale(.985); }
+    .msg {
+      min-height: 22px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .back {
+      text-align: center;
+      color: #b8c7f6;
+      text-decoration: none;
+      font-size: 14px;
+      padding-bottom: max(2px, env(safe-area-inset-bottom));
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="gameRoot">
+    <div class="title">フェーズアンカー</div>
+
+    <div class="stats">
+      <div class="panel"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="panel"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </div>
+
+    <div class="arenaWrap">
+      <canvas id="arena" width="420" height="420" aria-label="phase anchor arena"></canvas>
+      <div class="hint" id="hint">青でタップ:+2 / 赤でタップ:-3</div>
+    </div>
+
+    <div class="actions">
+      <button id="startBtn">START</button>
+      <div class="msg" id="msg">リングを見て、タイミングでタップ。</div>
+    </div>
+
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </div>
+
+  <script>
+    (() => {
+      const GAME_SECONDS = 60;
+      const HI_KEY = 'phase-anchor-hi-v1';
+
+      const canvas = document.getElementById('arena');
+      const ctx = canvas.getContext('2d');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const msgEl = document.getElementById('msg');
+      const hintEl = document.getElementById('hint');
+      const startBtn = document.getElementById('startBtn');
+      const root = document.getElementById('gameRoot');
+
+      let hi = Number(localStorage.getItem(HI_KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let ended = false;
+      let score = 0;
+      let remain = GAME_SECONDS;
+      let lastTs = 0;
+      let pointerAngle = -Math.PI / 2;
+
+      let current = null;
+
+      function makeSegment() {
+        const progress = 1 - remain / GAME_SECONDS;
+        const speed = progress < 0.5 ? 1.9 : progress < 0.75 ? 2.3 : 2.75;
+        const goodArc = progress < 0.5 ? 0.95 : progress < 0.75 ? 0.72 : 0.55;
+        const start = Math.random() * Math.PI * 2;
+        const badArc = Math.min(Math.PI * 2 - goodArc - 0.45, 1.5 + progress * 0.9);
+        const badStart = (start + goodArc + 0.25 + Math.random() * 0.5) % (Math.PI * 2);
+        return { start, goodArc, badStart, badArc, speed };
+      }
+
+      function normalize(a) {
+        const t = Math.PI * 2;
+        return ((a % t) + t) % t;
+      }
+
+      function inArc(angle, start, arc) {
+        const a = normalize(angle);
+        const s = normalize(start);
+        const e = normalize(start + arc);
+        if (s <= e) return a >= s && a <= e;
+        return a >= s || a <= e;
+      }
+
+      function drawRingArc(r, w, start, arc, color) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = w;
+        ctx.lineCap = 'round';
+        ctx.arc(210, 210, r, start, start + arc);
+        ctx.stroke();
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, 420, 420);
+
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 34;
+        ctx.arc(210, 210, 126, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (current) {
+          drawRingArc(126, 34, current.start, current.goodArc, 'rgba(77,225,255,0.92)');
+          drawRingArc(126, 34, current.badStart, current.badArc, 'rgba(255,90,139,0.88)');
+        }
+
+        const x = 210 + Math.cos(pointerAngle) * 126;
+        const y = 210 + Math.sin(pointerAngle) * 126;
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#ffe08a';
+        ctx.lineWidth = 4;
+        ctx.moveTo(210, 210);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.fillStyle = '#ffd166';
+        ctx.arc(x, y, 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.arc(210, 210, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function updateUI() {
+        scoreEl.textContent = score;
+        timeEl.textContent = Math.max(0, remain).toFixed(1);
+      }
+
+      function endGame() {
+        running = false;
+        ended = true;
+        startBtn.textContent = 'RETRY';
+        msgEl.textContent = `終了: ${score} 点`;
+        hintEl.textContent = 'もう一度挑戦するならRETRY。';
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(HI_KEY, String(hi));
+          hiEl.textContent = hi;
+          msgEl.textContent += '  ハイスコア更新!';
+        }
+      }
+
+      function tick(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = (ts - lastTs) / 1000;
+        lastTs = ts;
+
+        remain -= dt;
+        if (remain <= 0) {
+          remain = 0;
+          updateUI();
+          render();
+          endGame();
+          return;
+        }
+
+        pointerAngle += current.speed * dt;
+        updateUI();
+        render();
+        requestAnimationFrame(tick);
+      }
+
+      function startGame() {
+        running = true;
+        ended = false;
+        score = 0;
+        remain = GAME_SECONDS;
+        pointerAngle = -Math.PI / 2;
+        current = makeSegment();
+        startBtn.textContent = 'PLAYING...';
+        msgEl.textContent = '青を狙え。赤は危険。';
+        hintEl.textContent = '画面どこでもタップ判定';
+        lastTs = 0;
+        updateUI();
+        render();
+        requestAnimationFrame(tick);
+      }
+
+      function judgeTap() {
+        if (!running) return;
+
+        const hitGood = inArc(pointerAngle, current.start, current.goodArc);
+        const hitBad = inArc(pointerAngle, current.badStart, current.badArc);
+
+        if (hitGood) {
+          score += 2;
+          msgEl.textContent = 'GOOD +2';
+        } else if (hitBad) {
+          score = Math.max(0, score - 3);
+          msgEl.textContent = 'MISS -3';
+        } else {
+          msgEl.textContent = '空振り ±0';
+        }
+
+        current = makeSegment();
+        updateUI();
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!running) startGame();
+      });
+
+      root.addEventListener('pointerdown', (e) => {
+        if (e.target === startBtn) return;
+        if (!running) return;
+        e.preventDefault();
+        judgeTap();
+      }, { passive: false });
+
+      render();
+      if (!ended) {
+        timeEl.textContent = GAME_SECONDS.toFixed(1);
+      }
+    })();
+  </script>
+</body>
+</html>
