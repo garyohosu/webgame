@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>レーダータップ・ロック</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:#060912;color:#eaf2ff;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif}
+    body{display:flex;justify-content:center;align-items:stretch}
+    .app{width:min(100vw,430px);height:100%;padding:14px 14px 18px;display:flex;flex-direction:column;gap:10px;background:radial-gradient(circle at 50% 10%,#1a2a48,#060912 60%)}
+    .top{display:flex;justify-content:space-between;align-items:center}
+    .title{font-weight:800;font-size:1.1rem;letter-spacing:.04em}
+    .back{color:#9ac7ff;text-decoration:none;font-size:.9rem}
+    .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .panel{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:8px;text-align:center}
+    .label{font-size:.72rem;opacity:.8}
+    .value{font-size:1.1rem;font-weight:800}
+    #gameWrap{position:relative;flex:1;min-height:0;border-radius:16px;background:linear-gradient(180deg,rgba(31,63,112,.42),rgba(10,16,32,.8));border:1px solid rgba(154,199,255,.25);overflow:hidden;touch-action:manipulation}
+    canvas{width:100%;height:100%;display:block}
+    .overlay{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:12px;padding:20px;text-align:center;background:rgba(3,8,18,.66)}
+    .overlay.hidden{display:none}
+    .hint{font-size:.88rem;line-height:1.5;opacity:.9}
+    button{border:0;border-radius:999px;padding:12px 24px;font-size:1rem;font-weight:800;background:linear-gradient(135deg,#5ec4ff,#7effc7);color:#061022}
+    .footer{font-size:.78rem;opacity:.72;text-align:center}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="top">
+      <div class="title">🎯 レーダータップ・ロック</div>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+
+    <section class="stats">
+      <div class="panel"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="panel"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </section>
+
+    <div id="gameWrap">
+      <canvas id="cv" width="360" height="540" aria-label="game canvas"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="hint">回転ラインの角度に合わせてタップ。<br>青ヒット:+1、赤ヒット:-2。<br>60秒でハイスコアを狙え。</div>
+        <button id="startBtn" type="button">START</button>
+      </div>
+    </div>
+
+    <div class="footer">pointerdown / localStorage / 60sec</div>
+  </main>
+
+<script>
+(() => {
+  const KEY = 'tap-radar-hi-v1';
+  const wrap = document.getElementById('gameWrap');
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+
+  let w = 360, h = 540, cx = 180, cy = 280, radius = 128;
+  let running = false, score = 0, timeLeft = 60, angle = 0, speed = 1.6;
+  let targets = [], lastTs = 0, spawnTimer = 0, judgementDeg = 18;
+  let flash = 0, flashColor = '#fff';
+
+  const hiInit = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = String(hiInit);
+
+  function resize() {
+    const r = wrap.getBoundingClientRect();
+    w = Math.max(300, Math.floor(r.width));
+    h = Math.max(420, Math.floor(r.height));
+    cv.width = w; cv.height = h;
+    cx = w / 2;
+    cy = h * 0.55;
+    radius = Math.min(w * 0.34, h * 0.26);
+  }
+
+  function reset() {
+    score = 0;
+    timeLeft = 60;
+    angle = Math.random() * Math.PI * 2;
+    speed = 1.6;
+    judgementDeg = 18;
+    targets = [];
+    spawnTimer = 0;
+    flash = 0;
+    scoreEl.textContent = '0';
+    timeEl.textContent = '60.0';
+  }
+
+  function addTarget() {
+    const r = Math.random();
+    const badRate = timeLeft > 30 ? 0.25 : timeLeft > 15 ? 0.35 : 0.45;
+    targets.push({
+      a: Math.random() * Math.PI * 2,
+      type: r < badRate ? 'bad' : 'good',
+      ttl: 2.8 + Math.random() * 1.8
+    });
+  }
+
+  function drawRadar() {
+    ctx.clearRect(0,0,w,h);
+
+    ctx.fillStyle = '#081425';
+    ctx.fillRect(0,0,w,h);
+
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * (1 - i * 0.28), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(136,190,255,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
+    for (const t of targets) {
+      const x = cx + Math.cos(t.a) * radius;
+      const y = cy + Math.sin(t.a) * radius;
+      ctx.beginPath();
+      ctx.arc(x, y, 10, 0, Math.PI * 2);
+      ctx.fillStyle = t.type === 'good' ? '#56f0a8' : '#ff6b7a';
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 14;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    const lx = cx + Math.cos(angle) * radius * 1.05;
+    const ly = cy + Math.sin(angle) * radius * 1.05;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(lx, ly);
+    ctx.strokeStyle = '#9cd1ff';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+    ctx.fillStyle = '#d8ebff';
+    ctx.fill();
+
+    if (flash > 0) {
+      ctx.fillStyle = flashColor.replace(')', `,${flash})`).replace('rgb', 'rgba');
+      ctx.fillRect(0,0,w,h);
+    }
+  }
+
+  function degDiff(a, b) {
+    let d = Math.abs(a - b) % (Math.PI * 2);
+    if (d > Math.PI) d = Math.PI * 2 - d;
+    return d * 180 / Math.PI;
+  }
+
+  function onTap() {
+    if (!running) return;
+    let bestI = -1;
+    let best = 999;
+    for (let i = 0; i < targets.length; i++) {
+      const d = degDiff(angle, targets[i].a);
+      if (d < best) { best = d; bestI = i; }
+    }
+    if (bestI === -1 || best > judgementDeg) {
+      flash = 0.18;
+      flashColor = 'rgb(255,255,255)';
+      return;
+    }
+    const hit = targets.splice(bestI, 1)[0];
+    if (hit.type === 'good') {
+      score += 1;
+      timeLeft = Math.min(60, timeLeft + 0.35);
+      flash = 0.24;
+      flashColor = 'rgb(80,255,190)';
+    } else {
+      score = Math.max(0, score - 2);
+      flash = 0.26;
+      flashColor = 'rgb(255,90,110)';
+    }
+    scoreEl.textContent = String(score);
+  }
+
+  function endGame() {
+    running = false;
+    const hi = Number(localStorage.getItem(KEY) || 0);
+    if (score > hi) {
+      localStorage.setItem(KEY, String(score));
+      hiEl.textContent = String(score);
+    }
+    overlay.classList.remove('hidden');
+    document.querySelector('.hint').innerHTML = `終了！スコア: <b>${score}</b><br>もう一度挑戦できる。`;
+    startBtn.textContent = 'RETRY';
+  }
+
+  function tick(ts) {
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min(0.033, (ts - lastTs) / 1000);
+    lastTs = ts;
+
+    if (running) {
+      if (timeLeft > 30) { speed = 1.7; judgementDeg = 18; }
+      else if (timeLeft > 15) { speed = 2.1; judgementDeg = 15; }
+      else { speed = 2.6; judgementDeg = 12; }
+
+      angle += speed * dt;
+      if (angle > Math.PI * 2) angle -= Math.PI * 2;
+
+      timeLeft -= dt;
+      if (timeLeft <= 0) {
+        timeLeft = 0;
+        timeEl.textContent = '0.0';
+        endGame();
+      } else {
+        timeEl.textContent = timeLeft.toFixed(1);
+      }
+
+      spawnTimer -= dt;
+      if (spawnTimer <= 0) {
+        addTarget();
+        const interval = timeLeft > 30 ? 0.75 : timeLeft > 15 ? 0.62 : 0.5;
+        spawnTimer = interval;
+      }
+
+      targets = targets.filter(t => {
+        t.ttl -= dt;
+        return t.ttl > 0;
+      });
+    }
+
+    if (flash > 0) flash = Math.max(0, flash - dt * 1.9);
+    drawRadar();
+    requestAnimationFrame(tick);
+  }
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    reset();
+    running = true;
+    lastTs = 0;
+    overlay.classList.add('hidden');
+  });
+
+  wrap.addEventListener('pointerdown', (e) => {
+    if (e.target === startBtn) return;
+    e.preventDefault();
+    onTap();
+  }, { passive: false });
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
