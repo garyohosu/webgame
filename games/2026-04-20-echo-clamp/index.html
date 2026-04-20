@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>エコークランプ | Daily Game Factory</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg0: #071018;
+      --bg1: #10263a;
+      --bg2: #06111d;
+      --panel: rgba(255, 255, 255, 0.08);
+      --panel-border: rgba(255, 255, 255, 0.14);
+      --fg: #eff8ff;
+      --muted: #95aec3;
+      --good: #47e0c2;
+      --bad: #ff6b87;
+      --accent: #ffd166;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(71, 224, 194, 0.18), transparent 36%),
+        radial-gradient(circle at 50% 100%, rgba(255, 107, 135, 0.16), transparent 28%),
+        linear-gradient(180deg, var(--bg1), var(--bg0) 42%, var(--bg2));
+      color: var(--fg);
+      font-family: "Trebuchet MS", "Noto Sans JP", system-ui, sans-serif;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      padding: 14px 14px calc(16px + env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+
+    .title {
+      text-align: center;
+      font-weight: 700;
+      font-size: clamp(22px, 6vw, 30px);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-shadow: 0 0 20px rgba(71, 224, 194, 0.25);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 9px 8px;
+      text-align: center;
+      backdrop-filter: blur(6px);
+    }
+
+    .label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .value {
+      font-size: 22px;
+      font-weight: 700;
+      margin-top: 3px;
+    }
+
+    .arena-wrap {
+      position: relative;
+      display: grid;
+      place-items: center;
+      min-height: 0;
+    }
+
+    canvas {
+      width: min(92vw, 400px);
+      height: min(60dvh, 560px);
+      max-height: 100%;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)),
+        linear-gradient(180deg, #102437, #07111b 55%, #040a10);
+      box-shadow:
+        0 16px 36px rgba(0, 0, 0, 0.34),
+        inset 0 0 28px rgba(71, 224, 194, 0.08);
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 10px;
+      left: 18px;
+      right: 18px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    }
+
+    .actions {
+      display: grid;
+      gap: 8px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 14px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      color: #0b1621;
+      background: linear-gradient(135deg, var(--good), var(--accent));
+      box-shadow: 0 10px 20px rgba(71, 224, 194, 0.18);
+    }
+
+    button:active {
+      transform: scale(0.985);
+    }
+
+    .msg {
+      min-height: 22px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .back {
+      color: #bdd9eb;
+      text-decoration: none;
+      text-align: center;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="title">エコークランプ</div>
+
+    <div class="stats">
+      <div class="panel"><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div class="value" id="time">60.0</div></div>
+      <div class="panel"><div class="label">HI</div><div class="value" id="hi">0</div></div>
+    </div>
+
+    <div class="arena-wrap">
+      <canvas id="arena" width="400" height="560" aria-label="echo clamp arena"></canvas>
+      <div class="hint" id="hint">流れるシグナルに合わせてタップでクランプ閉鎖</div>
+    </div>
+
+    <div class="actions">
+      <button id="startBtn" type="button">START</button>
+      <div class="msg" id="msg">青をまとめて挟み、赤ノイズは巻き込まない。</div>
+    </div>
+
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </div>
+
+  <script>
+    (() => {
+      const GAME_SECONDS = 60;
+      const HI_KEY = "echo-clamp-hi-v1";
+      const W = 400;
+      const H = 560;
+
+      const canvas = document.getElementById("arena");
+      const ctx = canvas.getContext("2d");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const hiEl = document.getElementById("hi");
+      const msgEl = document.getElementById("msg");
+      const hintEl = document.getElementById("hint");
+      const startBtn = document.getElementById("startBtn");
+      const app = document.getElementById("app");
+
+      let hi = Number(localStorage.getItem(HI_KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let ended = false;
+      let score = 0;
+      let remain = GAME_SECONDS;
+      let lastTs = 0;
+      let phase = 0;
+      let clampCenter = H / 2;
+      let clampClose = 0;
+      let spawnTimer = 0;
+      let particles = [];
+      let particleId = 0;
+      let pulseText = "";
+      let pulseTimer = 0;
+
+      function getBandHeight() {
+        if (remain > 30) return 86;
+        if (remain > 15) return 68;
+        return 54;
+      }
+
+      function getDifficulty() {
+        if (remain > 30) return { speed: 76, spawnEvery: 0.56, redRate: 0.22 };
+        if (remain > 15) return { speed: 100, spawnEvery: 0.43, redRate: 0.29 };
+        return { speed: 128, spawnEvery: 0.32, redRate: 0.36 };
+      }
+
+      function resetGame() {
+        running = false;
+        ended = false;
+        score = 0;
+        remain = GAME_SECONDS;
+        lastTs = 0;
+        phase = 0;
+        clampCenter = H / 2;
+        clampClose = 0;
+        spawnTimer = 0;
+        particles = [];
+        particleId = 0;
+        pulseText = "";
+        pulseTimer = 0;
+        updateUI();
+        hintEl.textContent = "青をまとめて+2 / 赤ノイズを巻き込むと-3";
+        msgEl.textContent = "STARTで開始。プレイ中はどこをタップしても閉じる。";
+        startBtn.textContent = "START";
+        render();
+      }
+
+      function startGame() {
+        score = 0;
+        remain = GAME_SECONDS;
+        lastTs = 0;
+        running = true;
+        ended = false;
+        phase = 0;
+        clampCenter = H / 2;
+        clampClose = 0;
+        spawnTimer = 0;
+        particles = [];
+        particleId = 0;
+        pulseText = "";
+        pulseTimer = 0;
+        updateUI();
+        hintEl.textContent = "狭い終盤ほど一気取りを狙う。";
+        msgEl.textContent = "クランプ待機中";
+        startBtn.textContent = "PLAYING";
+        requestAnimationFrame(tick);
+      }
+
+      function spawnParticle() {
+        const diff = getDifficulty();
+        const fromLeft = Math.random() > 0.5;
+        const radius = 10 + Math.random() * 6;
+        particles.push({
+          id: particleId++,
+          x: fromLeft ? -20 : W + 20,
+          y: 48 + Math.random() * (H - 96),
+          vx: (fromLeft ? 1 : -1) * (diff.speed + Math.random() * 36),
+          radius,
+          type: Math.random() < diff.redRate ? "bad" : "good",
+          wobble: Math.random() * Math.PI * 2,
+          wobbleRate: 1.4 + Math.random() * 1.8
+        });
+      }
+
+      function handleTap() {
+        if (!running) {
+          if (ended) startGame();
+          return;
+        }
+
+        if (clampClose > 0.2) return;
+        clampClose = 1;
+
+        const bandHeight = getBandHeight();
+        const top = clampCenter - bandHeight / 2;
+        const bottom = clampCenter + bandHeight / 2;
+
+        let good = 0;
+        let bad = 0;
+        const survivors = [];
+
+        for (const particle of particles) {
+          const inside = particle.y >= top - particle.radius && particle.y <= bottom + particle.radius;
+          if (!inside) {
+            survivors.push(particle);
+            continue;
+          }
+          if (particle.type === "good") {
+            good += 1;
+          } else {
+            bad += 1;
+          }
+        }
+
+        particles = survivors;
+        if (good === 0 && bad === 0) {
+          pulseText = "MISS";
+          msgEl.textContent = "空振り";
+          pulseTimer = 0.45;
+          return;
+        }
+
+        score += good * 2 - bad * 3;
+        updateUI();
+        pulseText = `${good > 0 ? `+${good * 2}` : ""}${bad > 0 ? `${good > 0 ? " " : ""}-${bad * 3}` : ""}`;
+        msgEl.textContent = bad > 0 ? `青${good} / 赤${bad} を判定` : `${good}ヒット`;
+        pulseTimer = 0.7;
+      }
+
+      function updateUI() {
+        scoreEl.textContent = score;
+        timeEl.textContent = Math.max(0, remain).toFixed(1);
+      }
+
+      function endGame() {
+        running = false;
+        ended = true;
+        startBtn.textContent = "RETRY";
+        msgEl.textContent = `終了: ${score} 点`;
+        hintEl.textContent = "RETRYで再挑戦";
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(HI_KEY, String(hi));
+          hiEl.textContent = hi;
+          msgEl.textContent += " / ハイスコア更新";
+        }
+        render();
+      }
+
+      function tick(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        remain -= dt;
+        if (remain <= 0) {
+          remain = 0;
+          updateUI();
+          endGame();
+          return;
+        }
+
+        phase += dt;
+        const bandHeight = getBandHeight();
+        const diff = getDifficulty();
+        const swing = (H - 120 - bandHeight) / 2;
+        clampCenter = H / 2 + Math.sin(phase * 1.15) * swing;
+
+        if (clampClose > 0) {
+          clampClose = Math.max(0, clampClose - dt * 4.8);
+        }
+
+        spawnTimer += dt;
+        while (spawnTimer >= diff.spawnEvery) {
+          spawnTimer -= diff.spawnEvery;
+          spawnParticle();
+        }
+
+        for (const particle of particles) {
+          particle.x += particle.vx * dt;
+          particle.y += Math.sin(phase * particle.wobbleRate + particle.wobble + particle.id) * dt * 12;
+        }
+        particles = particles.filter((particle) => particle.x > -42 && particle.x < W + 42);
+
+        if (pulseTimer > 0) pulseTimer = Math.max(0, pulseTimer - dt);
+
+        updateUI();
+        render();
+        requestAnimationFrame(tick);
+      }
+
+      function drawBackgroundGrid() {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 1;
+        for (let y = 52; y < H; y += 46) {
+          ctx.beginPath();
+          ctx.moveTo(22, y);
+          ctx.lineTo(W - 22, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawClamp() {
+        const baseHeight = getBandHeight();
+        const closedFactor = 0.28 + clampClose * 0.72;
+        const glowAlpha = 0.16 + clampClose * 0.18;
+        const liveHeight = baseHeight * (1 - 0.72 * clampClose);
+        const top = clampCenter - liveHeight / 2;
+        const bottom = clampCenter + liveHeight / 2;
+
+        ctx.save();
+        ctx.fillStyle = `rgba(71, 224, 194, ${glowAlpha})`;
+        ctx.fillRect(22, top, W - 44, liveHeight);
+
+        ctx.strokeStyle = "rgba(71, 224, 194, 0.95)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(30, top);
+        ctx.lineTo(W - 30, top);
+        ctx.moveTo(30, bottom);
+        ctx.lineTo(W - 30, bottom);
+        ctx.stroke();
+
+        const jawInset = 26 * closedFactor;
+        ctx.fillStyle = "#d5fff4";
+        ctx.fillRect(12, top - 9, jawInset, 18);
+        ctx.fillRect(W - 12 - jawInset, top - 9, jawInset, 18);
+        ctx.fillRect(12, bottom - 9, jawInset, 18);
+        ctx.fillRect(W - 12 - jawInset, bottom - 9, jawInset, 18);
+        ctx.restore();
+      }
+
+      function drawParticle(particle) {
+        const color = particle.type === "good" ? "#47e0c2" : "#ff6b87";
+        ctx.save();
+        ctx.translate(particle.x, particle.y);
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = color;
+
+        if (particle.type === "good") {
+          ctx.beginPath();
+          ctx.arc(0, 0, particle.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.75)";
+          ctx.fillRect(-particle.radius * 0.5, -2, particle.radius, 4);
+        } else {
+          ctx.rotate((particle.id % 5) * 0.18);
+          ctx.fillRect(-particle.radius, -3, particle.radius * 2, 6);
+          ctx.fillRect(-3, -particle.radius, 6, particle.radius * 2);
+        }
+        ctx.restore();
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, W, H);
+
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, "rgba(255,255,255,0.04)");
+        bg.addColorStop(1, "rgba(0,0,0,0.18)");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        drawBackgroundGrid();
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(22, 22, W - 44, H - 44);
+        ctx.restore();
+
+        for (const particle of particles) drawParticle(particle);
+        drawClamp();
+
+        ctx.save();
+        ctx.fillStyle = "rgba(255,255,255,0.82)";
+        ctx.font = "700 16px Trebuchet MS, sans-serif";
+        ctx.fillText("CLAMP FIELD", 28, 38);
+        ctx.restore();
+
+        if (!running && !ended) {
+          ctx.save();
+          ctx.fillStyle = "rgba(0,0,0,0.42)";
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = "#eff8ff";
+          ctx.font = "700 30px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("TAP TO SNAP", W / 2, H / 2 - 8);
+          ctx.font = "16px Trebuchet MS, sans-serif";
+          ctx.fillStyle = "rgba(239,248,255,0.82)";
+          ctx.fillText("青をまとめて、赤は避ける", W / 2, H / 2 + 24);
+          ctx.restore();
+        }
+
+        if (pulseTimer > 0 && pulseText) {
+          ctx.save();
+          ctx.globalAlpha = Math.min(1, pulseTimer / 0.25);
+          ctx.fillStyle = pulseText.includes("-") ? "#ff95aa" : "#a5ffe2";
+          ctx.font = "700 34px Trebuchet MS, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(pulseText, W / 2, 88);
+          ctx.restore();
+        }
+      }
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        if (running) return;
+        startGame();
+      });
+
+      app.addEventListener("pointerdown", (event) => {
+        if (event.target === startBtn) return;
+        if (event.target.closest(".back")) return;
+        event.preventDefault();
+        handleTap();
+      });
+
+      resetGame();
+    })();
+  </script>
+</body>
+</html>
