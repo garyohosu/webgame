@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>レーンペンデュラム</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #111a31;
+      --line: #2b3f73;
+      --text: #ebf2ff;
+      --good: #58d7ff;
+      --bad: #ff6a8f;
+      --accent: #ffd166;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 20%, #15244c 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+    }
+    .game {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      margin: 0 auto;
+      padding: 12px 12px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      opacity: .95;
+    }
+    .title { font-weight: 800; letter-spacing: .04em; }
+    a.back {
+      color: #9ecbff;
+      text-decoration: none;
+      border: 1px solid #385aa5;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+    .hud {
+      background: color-mix(in srgb, var(--panel) 88%, #fff 12%);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+    .label { font-size: 10px; opacity: .8; }
+    .value { font-size: 18px; font-weight: 800; line-height: 1.2; }
+    .field {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(20,32,63,.85), rgba(10,16,32,.9));
+      overflow: hidden;
+    }
+    .lane-guides {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .lane-guides > div { border-right: 1px dashed rgba(137,170,255,.25); }
+    .lane-guides > div:last-child { border-right: none; }
+    .catcher {
+      position: absolute;
+      bottom: 18px;
+      width: 28%;
+      height: 14px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #ffe28f, var(--accent));
+      box-shadow: 0 0 18px rgba(255,209,102,.45);
+      transform: translateX(-50%);
+      transition: left .1s linear;
+    }
+    .node {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .node.good { background: var(--good); box-shadow: 0 0 14px rgba(88,215,255,.8); }
+    .node.bad { background: var(--bad); box-shadow: 0 0 14px rgba(255,106,143,.7); }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(6,10,20,.72), rgba(6,10,20,.88));
+    }
+    .overlay h1 { margin: 0 0 8px; font-size: 28px; }
+    .overlay p { margin: 0 0 14px; font-size: 13px; opacity: .9; line-height: 1.6; }
+    .start {
+      border: none;
+      background: linear-gradient(135deg, #79d8ff, #7dffb6);
+      color: #04243a;
+      border-radius: 999px;
+      padding: 12px 26px;
+      font-weight: 800;
+      font-size: 16px;
+    }
+    .tip { text-align: center; font-size: 12px; opacity: .78; }
+    .flash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      background: rgba(255,0,64,.16);
+    }
+  </style>
+</head>
+<body>
+  <div class="game" id="gameRoot">
+    <div class="topbar">
+      <div class="title">🎮 レーンペンデュラム</div>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+
+    <div class="hud">
+      <div><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div><div class="label">TIME</div><div class="value" id="time">60</div></div>
+      <div><div class="label">HI</div><div class="value" id="hi">0</div></div>
+      <div><div class="label">LANE</div><div class="value" id="lane">L</div></div>
+    </div>
+
+    <div class="field" id="field">
+      <div class="lane-guides"><div></div><div></div><div></div></div>
+      <div class="catcher" id="catcher"></div>
+      <div class="flash" id="flash"></div>
+      <div class="overlay" id="overlay">
+        <div>
+          <h1>Lane Pendulum</h1>
+          <p>タップで受け皿を左→中→右に切替。<br>青を取って、赤は避ける。60秒。</p>
+          <button class="start" id="startBtn">START</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip">画面タップでレーン切替（pointerdown）</div>
+  </div>
+
+  <script>
+    (() => {
+      const KEY = 'lane-pendulum-hi-v1';
+      const field = document.getElementById('field');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const laneEl = document.getElementById('lane');
+      const catcher = document.getElementById('catcher');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const flash = document.getElementById('flash');
+
+      const lanePos = [16.5, 50, 83.5];
+      const laneChar = ['L', 'C', 'R'];
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      let running = false;
+      let score = 0;
+      let lane = 1;
+      let left = 60;
+      let nodes = [];
+      let last = 0;
+      let spawnAcc = 0;
+      let timerAcc = 0;
+      let flashTimer = 0;
+
+      function setLane(next) {
+        lane = next;
+        catcher.style.left = lanePos[lane] + '%';
+        laneEl.textContent = laneChar[lane];
+      }
+
+      function setHi(v) {
+        hi = v;
+        hiEl.textContent = String(hi);
+        localStorage.setItem(KEY, String(hi));
+      }
+
+      function level() {
+        if (left > 30) return { speed: 18, span: 1380, badRate: 0.22, sway: 42 };
+        if (left > 15) return { speed: 24, span: 1060, badRate: 0.32, sway: 54 };
+        return { speed: 30, span: 840, badRate: 0.42, sway: 66 };
+      }
+
+      function spawnNode() {
+        const lv = level();
+        const laneIdx = Math.floor(Math.random() * 3);
+        const isBad = Math.random() < lv.badRate;
+        const amp = lv.sway * (0.6 + Math.random() * 0.6);
+        const phase = Math.random() * Math.PI * 2;
+        const el = document.createElement('div');
+        el.className = 'node ' + (isBad ? 'bad' : 'good');
+        field.appendChild(el);
+        nodes.push({
+          el,
+          lane: laneIdx,
+          y: -8,
+          speed: lv.speed + Math.random() * 6,
+          bad: isBad,
+          amp,
+          phase,
+          hit: false
+        });
+      }
+
+      function startGame() {
+        nodes.forEach(n => n.el.remove());
+        nodes = [];
+        running = true;
+        score = 0;
+        left = 60;
+        spawnAcc = 0;
+        timerAcc = 0;
+        flashTimer = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60';
+        setLane(1);
+        overlay.style.display = 'none';
+        last = performance.now();
+        requestAnimationFrame(loop);
+      }
+
+      function finishGame() {
+        running = false;
+        if (score > hi) setHi(score);
+        overlay.innerHTML = `<div><h1>RESULT ${score}</h1><p>${score > hi ? 'NEW HIGH!' : 'もう一回。'}<br>青:+10 / 赤:-12</p><button class="start" id="restartBtn">RETRY</button></div>`;
+        overlay.style.display = 'grid';
+        document.getElementById('restartBtn').addEventListener('pointerdown', startGame, { once: true });
+      }
+
+      function loop(now) {
+        if (!running) return;
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+
+        timerAcc += dt;
+        if (timerAcc >= 1) {
+          timerAcc -= 1;
+          left -= 1;
+          timeEl.textContent = String(left);
+          if (left <= 0) {
+            finishGame();
+            return;
+          }
+        }
+
+        const lv = level();
+        spawnAcc += dt * 1000;
+        if (spawnAcc >= lv.span) {
+          spawnAcc = 0;
+          spawnNode();
+        }
+
+        const h = field.clientHeight;
+        const catcherY = h - 22;
+
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          n.y += n.speed * dt * 10;
+          const baseX = lanePos[n.lane];
+          const swayX = Math.sin((n.y * 0.03) + n.phase) * (n.amp / 100);
+          const x = baseX + swayX;
+
+          n.el.style.left = x + '%';
+          n.el.style.top = n.y + 'px';
+
+          if (!n.hit && Math.abs(n.y - catcherY) < 12 && n.lane === lane) {
+            n.hit = true;
+            if (n.bad) {
+              score = Math.max(0, score - 12);
+              flashTimer = 0.12;
+            } else {
+              score += 10;
+            }
+            scoreEl.textContent = String(score);
+            n.el.remove();
+            nodes.splice(i, 1);
+            continue;
+          }
+
+          if (n.y > h + 24) {
+            n.el.remove();
+            nodes.splice(i, 1);
+          }
+        }
+
+        if (flashTimer > 0) {
+          flashTimer -= dt;
+          flash.style.opacity = String(Math.max(0, flashTimer / 0.12));
+        } else {
+          flash.style.opacity = '0';
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      hiEl.textContent = String(hi);
+      setLane(1);
+
+      startBtn.addEventListener('pointerdown', startGame);
+      document.getElementById('gameRoot').addEventListener('pointerdown', (e) => {
+        if (!running) return;
+        if (e.target === startBtn) return;
+        lane = (lane + 1) % 3;
+        setLane(lane);
+      }, { passive: true });
+    })();
+  </script>
+</body>
+</html>
