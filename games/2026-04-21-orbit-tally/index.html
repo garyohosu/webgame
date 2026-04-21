@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>オービットタリー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #080c1f;
+      --panel: #121b3a;
+      --line: #344d90;
+      --text: #ebf1ff;
+      --good: #63e8ff;
+      --bad: #ff6c93;
+      --accent: #ffd166;
+    }
+    * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: radial-gradient(circle at 50% 20%, #1a2a59 0%, var(--bg) 62%);
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+      color: var(--text);
+    }
+    .game {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      margin: 0 auto;
+      padding: 12px 12px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .topbar { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+    .title { font-weight: 800; letter-spacing: .04em; }
+    .back {
+      color: #a3cbff; text-decoration: none; border: 1px solid #466ec7;
+      border-radius: 999px; padding: 4px 10px;
+    }
+    .hud {
+      background: color-mix(in srgb, var(--panel) 88%, #fff 12%);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      text-align: center;
+    }
+    .label { font-size: 10px; opacity: .8; }
+    .value { font-size: 18px; font-weight: 800; line-height: 1.2; }
+    .field {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(20,34,70,.85), rgba(9,14,28,.92));
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+    .ring {
+      width: min(72vw, 300px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 2px solid rgba(169,196,255,.35);
+      position: relative;
+      box-shadow: inset 0 0 34px rgba(23,40,94,.6);
+    }
+    .pointer {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 42%;
+      height: 4px;
+      border-radius: 999px;
+      transform-origin: 0% 50%;
+      background: linear-gradient(90deg, #fff, var(--accent));
+      box-shadow: 0 0 12px rgba(255,209,102,.55);
+    }
+    .center {
+      position: absolute;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 16px; height: 16px; border-radius: 50%;
+      background: #fff; box-shadow: 0 0 10px rgba(255,255,255,.8);
+    }
+    .overlay {
+      position: absolute; inset: 0;
+      display: grid; place-items: center; text-align: center;
+      padding: 18px;
+      background: linear-gradient(180deg, rgba(6,10,20,.72), rgba(6,10,20,.88));
+    }
+    .overlay h1 { margin-bottom: 8px; font-size: 29px; }
+    .overlay p { margin-bottom: 14px; font-size: 13px; line-height: 1.6; opacity: .92; }
+    .start {
+      border: none;
+      background: linear-gradient(135deg, #73dcff, #8bffba);
+      color: #04243a;
+      border-radius: 999px;
+      padding: 12px 26px;
+      font-weight: 800;
+      font-size: 16px;
+    }
+    .tip { text-align: center; font-size: 12px; opacity: .8; }
+    .pulse {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0;
+      transition: opacity .08s linear;
+    }
+    .pulse.good { background: radial-gradient(circle, rgba(99,232,255,.22), transparent 58%); }
+    .pulse.bad { background: radial-gradient(circle, rgba(255,108,147,.2), transparent 58%); }
+  </style>
+</head>
+<body>
+  <div class="game" id="root">
+    <div class="topbar">
+      <div class="title">🎯 オービットタリー</div>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+
+    <div class="hud">
+      <div><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div><div class="label">TIME</div><div class="value" id="time">60</div></div>
+      <div><div class="label">HI</div><div class="value" id="hi">0</div></div>
+      <div><div class="label">CHAIN</div><div class="value" id="chain">0</div></div>
+    </div>
+
+    <div class="field" id="field">
+      <div class="ring" id="ring">
+        <div class="pointer" id="pointer"></div>
+        <div class="center"></div>
+      </div>
+      <div class="pulse good" id="pulseGood"></div>
+      <div class="pulse bad" id="pulseBad"></div>
+
+      <div class="overlay" id="overlay">
+        <div>
+          <h1>Orbit Tally</h1>
+          <p>回るポインタが青セクターに入った瞬間をタップ。<br>赤で押すと減点。60秒でどこまで伸ばせるか。</p>
+          <button class="start" id="startBtn">START</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip">画面タップで判定（pointerdown）</div>
+  </div>
+
+  <script>
+    (() => {
+      const KEY = 'orbit-tally-hi-v1';
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const chainEl = document.getElementById('chain');
+      const ring = document.getElementById('ring');
+      const pointer = document.getElementById('pointer');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const pulseGood = document.getElementById('pulseGood');
+      const pulseBad = document.getElementById('pulseBad');
+
+      let running = false;
+      let score = 0;
+      let left = 60;
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      let chain = 0;
+      let angle = 0;
+      let speed = 110;
+      let dir = 1;
+      let last = 0;
+      let timerAcc = 0;
+
+      let goodStart = 20;
+      let goodSize = 78;
+      let badStart = 210;
+      let badSize = 78;
+
+      hiEl.textContent = String(hi);
+
+      function mod(a) {
+        const m = a % 360;
+        return m < 0 ? m + 360 : m;
+      }
+
+      function inArc(a, start, size) {
+        const x = mod(a - start);
+        return x >= 0 && x <= size;
+      }
+
+      function level() {
+        if (left > 30) return { speed: 120, goodSize: 84, badSize: 66 };
+        if (left > 15) return { speed: 155, goodSize: 64, badSize: 78 };
+        return { speed: 195, goodSize: 48, badSize: 88 };
+      }
+
+      function redrawRing() {
+        ring.style.background = `conic-gradient(
+          from -90deg,
+          rgba(99,232,255,.96) ${goodStart}deg ${goodStart + goodSize}deg,
+          rgba(52,77,144,.22) ${goodStart + goodSize}deg ${badStart}deg,
+          rgba(255,108,147,.92) ${badStart}deg ${badStart + badSize}deg,
+          rgba(52,77,144,.22) ${badStart + badSize}deg ${goodStart + 360}deg
+        )`;
+      }
+
+      function rerollArcs() {
+        const lv = level();
+        goodSize = lv.goodSize + (Math.random() * 8 - 4);
+        badSize = lv.badSize + (Math.random() * 10 - 5);
+        goodStart = Math.random() * 360;
+        badStart = mod(goodStart + 130 + Math.random() * 90);
+        redrawRing();
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = String(left);
+        chainEl.textContent = String(chain);
+      }
+
+      function flash(el) {
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; }, 70);
+      }
+
+      function judgeTap() {
+        if (!running) return;
+        const a = mod(angle);
+        if (inArc(a, goodStart, goodSize)) {
+          chain += 1;
+          score += 12 + Math.min(8, Math.floor(chain / 4));
+          flash(pulseGood);
+        } else if (inArc(a, badStart, badSize)) {
+          chain = 0;
+          score = Math.max(0, score - 10);
+          flash(pulseBad);
+        } else {
+          chain = 0;
+          score = Math.max(0, score - 2);
+        }
+        rerollArcs();
+        updateHud();
+      }
+
+      function endGame() {
+        running = false;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+        overlay.style.display = 'grid';
+      }
+
+      function loop(ts) {
+        if (!running) return;
+        const dt = Math.min(0.05, (ts - last) / 1000);
+        last = ts;
+
+        const lv = level();
+        speed += (lv.speed - speed) * Math.min(1, dt * 6);
+        angle = mod(angle + speed * dt * dir);
+        pointer.style.transform = `rotate(${angle}deg)`;
+
+        if (Math.random() < dt * 0.6) dir *= -1;
+
+        timerAcc += dt;
+        if (timerAcc >= 1) {
+          timerAcc -= 1;
+          left -= 1;
+          timeEl.textContent = String(left);
+          if (left <= 0) {
+            timeEl.textContent = '0';
+            endGame();
+            return;
+          }
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function startGame() {
+        running = true;
+        score = 0;
+        chain = 0;
+        left = 60;
+        angle = Math.random() * 360;
+        speed = 110;
+        dir = Math.random() < 0.5 ? -1 : 1;
+        timerAcc = 0;
+        updateHud();
+        rerollArcs();
+        overlay.style.display = 'none';
+        last = performance.now();
+        requestAnimationFrame(loop);
+      }
+
+      document.getElementById('root').addEventListener('pointerdown', (e) => {
+        if (e.target === startBtn) return;
+        judgeTap();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        startGame();
+      });
+
+      redrawRing();
+      updateHud();
+    })();
+  </script>
+</body>
+</html>
