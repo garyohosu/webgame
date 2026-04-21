@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>パルスピボット</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #101a37;
+      --line: #395892;
+      --text: #eaf0ff;
+      --good: #67e8ff;
+      --bad: #ff6b97;
+      --accent: #ffd36a;
+    }
+    * { box-sizing: border-box; margin: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: radial-gradient(circle at 50% 12%, #1c2c5f 0%, #0b1227 58%, #070b1a 100%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, sans-serif;
+    }
+    .game {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      margin: 0 auto;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .top { display: flex; justify-content: space-between; align-items: center; }
+    .title { font-weight: 800; letter-spacing: .03em; }
+    .back {
+      text-decoration: none; color: #a8ceff; border: 1px solid #4f75d4;
+      border-radius: 999px; padding: 4px 10px; font-size: 13px;
+    }
+    .hud {
+      background: rgba(16,26,55,.85); border: 1px solid var(--line); border-radius: 12px;
+      padding: 8px 10px; display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; text-align: center;
+    }
+    .label { font-size: 10px; opacity: .8; }
+    .value { font-size: 18px; font-weight: 800; line-height: 1.2; }
+    .field {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(23,38,81,.85), rgba(8,13,29,.94));
+      overflow: hidden;
+    }
+    .goal {
+      position: absolute; left: 8%; right: 8%; bottom: 12px; height: 34px;
+      border: 1px dashed rgba(103,232,255,.65);
+      border-radius: 9px;
+      background: rgba(103,232,255,.08);
+      color: #c6f6ff;
+      display: grid; place-items: center;
+      font-size: 11px; letter-spacing: .08em;
+    }
+    .pivot {
+      position: absolute; left: 50%; top: 56%;
+      width: min(62vw, 250px); height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #fff, var(--accent), #fff);
+      transform: translate(-50%, -50%) rotate(0deg);
+      transform-origin: 50% 50%;
+      box-shadow: 0 0 14px rgba(255,211,106,.45);
+    }
+    .pivot::after {
+      content: '';
+      position: absolute; left: 50%; top: 50%;
+      width: 16px; height: 16px; transform: translate(-50%, -50%);
+      border-radius: 50%; background: #fff; box-shadow: 0 0 12px rgba(255,255,255,.8);
+    }
+    .orb {
+      position: absolute;
+      width: 16px; height: 16px; border-radius: 50%;
+      box-shadow: 0 0 10px rgba(255,255,255,.35);
+    }
+    .orb.good { background: var(--good); }
+    .orb.bad { background: var(--bad); }
+    .overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(180deg, rgba(6,10,20,.72), rgba(6,10,20,.88));
+      display: grid; place-items: center; text-align: center;
+      padding: 16px;
+    }
+    .overlay h1 { font-size: 30px; margin-bottom: 8px; }
+    .overlay p { font-size: 13px; line-height: 1.6; margin-bottom: 14px; }
+    .start {
+      border: none; border-radius: 999px; padding: 12px 28px;
+      background: linear-gradient(135deg, #73dcff, #8fffc3);
+      color: #06253a; font-size: 16px; font-weight: 800;
+    }
+    .tip { text-align: center; font-size: 12px; opacity: .82; }
+    .flash {
+      position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .09s linear;
+    }
+    .flash.good { background: radial-gradient(circle, rgba(103,232,255,.22), transparent 56%); }
+    .flash.bad { background: radial-gradient(circle, rgba(255,107,151,.2), transparent 56%); }
+  </style>
+</head>
+<body>
+  <div class="game" id="game">
+    <div class="top">
+      <div class="title">🪄 パルスピボット</div>
+      <a class="back" href="../../">← 戻る</a>
+    </div>
+
+    <div class="hud">
+      <div><div class="label">SCORE</div><div class="value" id="score">0</div></div>
+      <div><div class="label">TIME</div><div class="value" id="time">60</div></div>
+      <div><div class="label">HI</div><div class="value" id="hi">0</div></div>
+      <div><div class="label">LV</div><div class="value" id="lv">1</div></div>
+    </div>
+
+    <div class="field" id="field">
+      <div class="pivot" id="pivot"></div>
+      <div class="goal">GOAL ZONE</div>
+      <div class="flash good" id="flashGood"></div>
+      <div class="flash bad" id="flashBad"></div>
+      <div class="overlay" id="overlay">
+        <div>
+          <h1>Pulse Pivot</h1>
+          <p>タップでバー角度を切替。<br>青パルスを下のGOALへ導き、赤は落とす。</p>
+          <button class="start" id="startBtn">START</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tip">画面タップでピボット回転（pointerdown）</div>
+  </div>
+
+  <script>
+    (() => {
+      const KEY = 'pulse-pivot-hi-v1';
+      const game = document.getElementById('game');
+      const field = document.getElementById('field');
+      const pivotEl = document.getElementById('pivot');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('startBtn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const lvEl = document.getElementById('lv');
+      const flashGood = document.getElementById('flashGood');
+      const flashBad = document.getElementById('flashBad');
+
+      const angles = [0, 45, 90, 135];
+      let angleIdx = 0;
+      let running = false;
+      let score = 0;
+      let left = 60;
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      let timerAcc = 0;
+      let spawnAcc = 0;
+      let last = 0;
+      let orbs = [];
+
+      hiEl.textContent = String(hi);
+
+      function levelParams() {
+        if (left > 30) return { lv: 1, speed: 130, spawn: 0.85, badRate: 0.28, max: 7 };
+        if (left > 15) return { lv: 2, speed: 165, spawn: 0.65, badRate: 0.36, max: 9 };
+        return { lv: 3, speed: 205, spawn: 0.5, badRate: 0.46, max: 11 };
+      }
+
+      function flash(el) {
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; }, 80);
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = String(left);
+        lvEl.textContent = String(levelParams().lv);
+      }
+
+      function spawnOrb() {
+        const p = levelParams();
+        if (orbs.length >= p.max) return;
+        const r = 8;
+        const w = field.clientWidth;
+        const x = 18 + Math.random() * (w - 36);
+        const bad = Math.random() < p.badRate;
+        const el = document.createElement('div');
+        el.className = `orb ${bad ? 'bad' : 'good'}`;
+        field.appendChild(el);
+        orbs.push({
+          el,
+          x,
+          y: -18,
+          vx: (Math.random() - 0.5) * 18,
+          vy: p.speed,
+          r,
+          bad,
+          hit: false
+        });
+      }
+
+      function rotatePivot() {
+        angleIdx = (angleIdx + 1) % angles.length;
+        pivotEl.style.transform = `translate(-50%, -50%) rotate(${angles[angleIdx]}deg)`;
+      }
+
+      function reflectOnPivot(o, dt) {
+        const cx = field.clientWidth * 0.5;
+        const cy = field.clientHeight * 0.56;
+        const len = Math.min(field.clientWidth * 0.62, 250);
+        const half = len * 0.5;
+        const th = 12;
+        const a = angles[angleIdx] * Math.PI / 180;
+        const cos = Math.cos(a), sin = Math.sin(a);
+        const dx = o.x - cx;
+        const dy = o.y - cy;
+        const lx = dx * cos + dy * sin;
+        const ly = -dx * sin + dy * cos;
+
+        if (Math.abs(lx) <= half && Math.abs(ly) <= th && o.vy > 0 && !o.hit) {
+          o.hit = true;
+          const nx = -sin;
+          const ny = cos;
+          const dot = o.vx * nx + o.vy * ny;
+          o.vx = o.vx - 2 * dot * nx;
+          o.vy = o.vy - 2 * dot * ny;
+          const amp = 70 + Math.random() * 40;
+          o.vx += nx * amp;
+          o.vy -= Math.abs(ny) * (100 + Math.random() * 50);
+          o.y -= Math.sign(o.vy || 1) * dt * 10;
+        }
+      }
+
+      function step(ts) {
+        if (!running) return;
+        const dt = Math.min(0.04, (ts - last) / 1000);
+        last = ts;
+
+        const p = levelParams();
+        spawnAcc += dt;
+        timerAcc += dt;
+
+        if (spawnAcc >= p.spawn) {
+          spawnAcc = 0;
+          spawnOrb();
+        }
+
+        const h = field.clientHeight;
+        const goalTop = h - 46;
+
+        for (let i = orbs.length - 1; i >= 0; i--) {
+          const o = orbs[i];
+          o.vy += 260 * dt;
+          o.x += o.vx * dt;
+          o.y += o.vy * dt;
+
+          reflectOnPivot(o, dt);
+
+          if (o.x < o.r) { o.x = o.r; o.vx *= -0.88; }
+          if (o.x > field.clientWidth - o.r) { o.x = field.clientWidth - o.r; o.vx *= -0.88; }
+
+          if (o.y >= goalTop && o.y <= h) {
+            if (o.bad) {
+              score = Math.max(0, score - 8);
+              flash(flashBad);
+            } else {
+              score += 10;
+              flash(flashGood);
+            }
+            o.el.remove();
+            orbs.splice(i, 1);
+            updateHud();
+            continue;
+          }
+
+          if (o.y > h + 40 || o.y < -60) {
+            o.el.remove();
+            orbs.splice(i, 1);
+            continue;
+          }
+
+          o.el.style.transform = `translate(${o.x - o.r}px, ${o.y - o.r}px)`;
+        }
+
+        if (timerAcc >= 1) {
+          timerAcc -= 1;
+          left -= 1;
+          timeEl.textContent = String(Math.max(0, left));
+          lvEl.textContent = String(levelParams().lv);
+          if (left <= 0) {
+            finish();
+            return;
+          }
+        }
+
+        requestAnimationFrame(step);
+      }
+
+      function cleanupOrbs() {
+        for (const o of orbs) o.el.remove();
+        orbs = [];
+      }
+
+      function start() {
+        cleanupOrbs();
+        running = true;
+        score = 0;
+        left = 60;
+        angleIdx = 0;
+        pivotEl.style.transform = 'translate(-50%, -50%) rotate(0deg)';
+        timerAcc = 0;
+        spawnAcc = 0;
+        updateHud();
+        overlay.style.display = 'none';
+        last = performance.now();
+        requestAnimationFrame(step);
+      }
+
+      function finish() {
+        running = false;
+        cleanupOrbs();
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+        overlay.style.display = 'grid';
+      }
+
+      game.addEventListener('pointerdown', (e) => {
+        if (e.target === startBtn) return;
+        if (!running) return;
+        rotatePivot();
+      }, { passive: true });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        start();
+      });
+
+      updateHud();
+    })();
+  </script>
+</body>
+</html>
