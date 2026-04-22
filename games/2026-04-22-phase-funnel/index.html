@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>フェーズファンネル</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0a0f1f;
+      --panel: #121a33;
+      --line: #26345f;
+      --txt: #eaf0ff;
+      --sub: #9fb2e8;
+      --good: #53d7ff;
+      --bad: #ff6a89;
+      --accent: #9f7bff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: radial-gradient(circle at 50% 0%, #1a2752, var(--bg) 60%); color: var(--txt); font-family: "Noto Sans JP", system-ui, sans-serif; }
+    body { display: flex; justify-content: center; }
+    .app {
+      width: min(100vw, 440px);
+      height: 100dvh;
+      padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: clamp(20px, 5.8vw, 28px); text-align: center; letter-spacing: .04em; }
+    .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .chip { background: rgba(18,26,51,.92); border: 1px solid var(--line); border-radius: 12px; padding: 8px 6px; text-align: center; }
+    .chip .k { display: block; font-size: 11px; color: var(--sub); }
+    .chip .v { font-weight: 700; font-size: 18px; }
+    .play {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      overflow: hidden;
+      min-height: 0;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .status { text-align: center; font-size: 13px; color: var(--sub); min-height: 20px; }
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    button {
+      appearance: none; border: none; border-radius: 12px; padding: 12px 14px; font-size: 16px; font-weight: 700;
+      color: #fff; background: linear-gradient(135deg, #6b8bff, var(--accent));
+    }
+    a { color: #b8c8ff; text-decoration: none; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>フェーズファンネル</h1>
+    <section class="hud">
+      <div class="chip"><span class="k">SCORE</span><span class="v" id="score">0</span></div>
+      <div class="chip"><span class="k">TIME</span><span class="v" id="time">60.0</span></div>
+      <div class="chip"><span class="k">HI</span><span class="v" id="hi">0</span></div>
+    </section>
+    <section class="play" id="stageWrap"><canvas id="stage" width="360" height="540"></canvas></section>
+    <div class="status" id="status">スタートで開始。画面タップで受け皿を切替。</div>
+    <div class="actions">
+      <button id="startBtn" type="button">START</button>
+      <a href="../../">← 戻る</a>
+    </div>
+  </main>
+
+<script>
+(() => {
+  const KEY = 'phase-funnel-hi-v1';
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const statusEl = document.getElementById('status');
+  const startBtn = document.getElementById('startBtn');
+  const stageWrap = document.getElementById('stageWrap');
+
+  let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  let w = 360, h = 540;
+  let playing = false;
+  let score = 0;
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  let lane = 1;
+  let nodes = [];
+  let timeLeft = 60;
+  let spawnTimer = 0;
+  let prev = 0;
+
+  function fit() {
+    const rect = stageWrap.getBoundingClientRect();
+    w = Math.floor(rect.width);
+    h = Math.floor(rect.height);
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function reset() {
+    score = 0;
+    timeLeft = 60;
+    lane = 1;
+    nodes = [];
+    spawnTimer = 0;
+    updateHud();
+  }
+
+  function difficulty() {
+    if (timeLeft > 30) return { speed: 165, interval: .62, badRate: .2 };
+    if (timeLeft > 15) return { speed: 215, interval: .48, badRate: .28 };
+    return { speed: 260, interval: .38, badRate: .36 };
+  }
+
+  function spawnNode() {
+    const d = difficulty();
+    nodes.push({
+      lane: Math.floor(Math.random() * 3),
+      y: -20,
+      r: 13,
+      bad: Math.random() < d.badRate,
+      speed: d.speed
+    });
+  }
+
+  function update(dt) {
+    if (!playing) return;
+
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      endGame();
+      return;
+    }
+
+    const d = difficulty();
+    spawnTimer += dt;
+    while (spawnTimer >= d.interval) {
+      spawnTimer -= d.interval;
+      spawnNode();
+    }
+
+    const catchY = h - 72;
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      n.y += n.speed * dt;
+      if (n.y > catchY - 8 && n.y < catchY + 8 && n.lane === lane) {
+        score += n.bad ? -2 : 1;
+        if (score < 0) score = 0;
+        nodes.splice(i, 1);
+      } else if (n.y > h + 24) {
+        nodes.splice(i, 1);
+      }
+    }
+
+    updateHud();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+
+    const laneW = w / 3;
+    for (let i = 1; i < 3; i++) {
+      ctx.strokeStyle = 'rgba(159,178,232,0.2)';
+      ctx.beginPath();
+      ctx.moveTo(laneW * i, 0);
+      ctx.lineTo(laneW * i, h);
+      ctx.stroke();
+    }
+
+    const catchY = h - 72;
+    const x = laneW * lane + laneW / 2;
+    ctx.fillStyle = 'rgba(159,123,255,0.22)';
+    ctx.fillRect(laneW * lane + 6, catchY - 18, laneW - 12, 36);
+    ctx.strokeStyle = '#bca9ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 28, catchY + 16);
+    ctx.lineTo(x, catchY - 20);
+    ctx.lineTo(x + 28, catchY + 16);
+    ctx.stroke();
+
+    for (const n of nodes) {
+      ctx.beginPath();
+      ctx.fillStyle = n.bad ? '#ff6a89' : '#53d7ff';
+      ctx.arc(laneW * n.lane + laneW / 2, n.y, n.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  function updateHud() {
+    scoreEl.textContent = String(score);
+    timeEl.textContent = timeLeft.toFixed(1);
+    hiEl.textContent = String(hi);
+  }
+
+  function endGame() {
+    playing = false;
+    if (score > hi) {
+      hi = score;
+      localStorage.setItem(KEY, String(hi));
+      hiEl.textContent = String(hi);
+      statusEl.textContent = `終了！新記録 ${score}`;
+    } else {
+      statusEl.textContent = `終了！スコア ${score}`;
+    }
+    startBtn.disabled = false;
+    startBtn.textContent = 'RESTART';
+  }
+
+  function loop(ts) {
+    if (!prev) prev = ts;
+    const dt = Math.min(0.033, (ts - prev) / 1000);
+    prev = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function nextLane() { lane = (lane + 1) % 3; }
+
+  document.addEventListener('pointerdown', (e) => {
+    if (e.target === startBtn) return;
+    if (!playing) return;
+    nextLane();
+  }, { passive: true });
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    reset();
+    playing = true;
+    startBtn.disabled = true;
+    statusEl.textContent = '青 +1 / 赤 -2。タップで受け皿を巡回。';
+  });
+
+  window.addEventListener('resize', fit);
+  fit();
+  updateHud();
+  draw();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
