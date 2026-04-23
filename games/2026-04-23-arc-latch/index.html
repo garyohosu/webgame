@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>アークラッチ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #080b1a;
+      --panel: #101633;
+      --line: #29366e;
+      --text: #e8ecff;
+      --cyan: #57e9ff;
+      --pink: #ff5a9d;
+      --good: #37f3b6;
+      --bad: #ff8f8f;
+      --shadow: 0 10px 24px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 10%, #17224f 0%, var(--bg) 60%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    }
+    .app {
+      width: min(100vw, 460px);
+      height: 100dvh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+      padding: 10px 12px 14px;
+    }
+    h1 {
+      margin: 2px 0 0;
+      font-size: 1.35rem;
+      letter-spacing: .04em;
+      text-align: center;
+    }
+    .hud {
+      background: rgba(16, 22, 51, .9);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px 10px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      box-shadow: var(--shadow);
+    }
+    .hud-item { text-align: center; }
+    .hud-label { font-size: .68rem; opacity: .75; }
+    .hud-value { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+    #lane-label { color: var(--cyan); }
+    .field-wrap {
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute; inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      text-align: center;
+      padding: 14px;
+      font-weight: 700;
+      text-shadow: 0 2px 8px rgba(0,0,0,.6);
+    }
+    .overlay span {
+      background: rgba(7,11,27,.64);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: .95rem;
+      line-height: 1.4;
+    }
+    .actions {
+      display: grid;
+      gap: 8px;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      background: linear-gradient(135deg, #2ee4ff, #6d8dff);
+      color: #061126;
+      font-weight: 800;
+      font-size: 1rem;
+      border-radius: 999px;
+      padding: 12px 14px;
+      width: 100%;
+      box-shadow: 0 8px 18px rgba(64,135,255,.35);
+    }
+    .hint, .back {
+      text-align: center;
+      font-size: .8rem;
+      opacity: .84;
+    }
+    .back a { color: #a7d2ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <h1>アークラッチ</h1>
+    <div class="hud">
+      <div class="hud-item"><div class="hud-label">SCORE</div><div class="hud-value" id="score">0</div></div>
+      <div class="hud-item"><div class="hud-label">TIME</div><div class="hud-value" id="time">60.0</div></div>
+      <div class="hud-item"><div class="hud-label">HI</div><div class="hud-value" id="hi">0</div></div>
+      <div class="hud-item" style="grid-column:1 / span 3;"><div class="hud-label">LANE</div><div class="hud-value" id="lane-label">CENTER</div></div>
+    </div>
+
+    <div class="field-wrap" id="field-wrap">
+      <canvas id="game" width="420" height="560"></canvas>
+      <div class="overlay" id="overlay"><span>STARTで開始。<br>画面タップでレーン切替。</span></div>
+    </div>
+
+    <div class="actions"><button id="start-btn">START</button></div>
+    <div class="hint">青 +10 / 赤 -12 ・ 1プレイ60秒</div>
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </div>
+
+  <script>
+    (() => {
+      const KEY = 'arc-latch-hi-v1';
+      const LANES = ['LEFT', 'CENTER', 'RIGHT'];
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const fieldWrap = document.getElementById('field-wrap');
+      const overlay = document.getElementById('overlay');
+      const startBtn = document.getElementById('start-btn');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const laneEl = document.getElementById('lane-label');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      const state = {
+        running: false,
+        score: 0,
+        lane: 1,
+        leftMs: 60000,
+        objs: [],
+        spawnTimer: 0,
+        lastTs: 0,
+        rafId: 0,
+      };
+
+      function resize() {
+        const rect = fieldWrap.getBoundingClientRect();
+        const h = Math.max(300, rect.height);
+        const w = rect.width;
+        canvas.width = Math.floor(w * devicePixelRatio);
+        canvas.height = Math.floor(h * devicePixelRatio);
+        ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      }
+
+      function resetRound() {
+        state.running = false;
+        state.score = 0;
+        state.lane = 1;
+        state.leftMs = 60000;
+        state.objs.length = 0;
+        state.spawnTimer = 0;
+        state.lastTs = 0;
+        scoreEl.textContent = '0';
+        timeEl.textContent = '60.0';
+        laneEl.textContent = LANES[state.lane];
+      }
+
+      function difficultyRatio() {
+        const elapsed = 60000 - state.leftMs;
+        if (elapsed < 30000) return 1;
+        if (elapsed < 45000) return 1.2;
+        return 1.45;
+      }
+
+      function spawnGap() {
+        const elapsed = 60000 - state.leftMs;
+        if (elapsed < 30000) return 760;
+        if (elapsed < 45000) return 620;
+        return 500;
+      }
+
+      function noiseRate() {
+        return state.leftMs > 15000 ? 0.3 : 0.42;
+      }
+
+      function spawn() {
+        const lane = Math.floor(Math.random() * 3);
+        const bad = Math.random() < noiseRate();
+        const speed = (130 + Math.random() * 55) * difficultyRatio();
+        state.objs.push({ lane, y: -18, bad, speed, r: 11 });
+      }
+
+      function laneX(i, width) {
+        const margin = 26;
+        const span = (width - margin * 2) / 3;
+        return margin + span * i + span / 2;
+      }
+
+      function onPointerDown(e) {
+        if (e.cancelable) e.preventDefault();
+        if (!state.running) return;
+        state.lane = (state.lane + 1) % 3;
+        laneEl.textContent = LANES[state.lane];
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+        state.leftMs -= dt;
+        if (state.leftMs <= 0) {
+          state.leftMs = 0;
+          endGame();
+        }
+        timeEl.textContent = (state.leftMs / 1000).toFixed(1);
+
+        state.spawnTimer += dt;
+        while (state.spawnTimer >= spawnGap()) {
+          state.spawnTimer -= spawnGap();
+          spawn();
+        }
+
+        const h = canvas.height / devicePixelRatio;
+        const catchY = h - 52;
+
+        for (let i = state.objs.length - 1; i >= 0; i--) {
+          const o = state.objs[i];
+          o.y += o.speed * (dt / 1000);
+
+          if (o.y >= catchY - 7 && o.y <= catchY + 10 && o.lane === state.lane) {
+            state.score += o.bad ? -12 : 10;
+            state.objs.splice(i, 1);
+            continue;
+          }
+
+          if (o.y > h + 20) state.objs.splice(i, 1);
+        }
+
+        if (state.score < 0) state.score = 0;
+        scoreEl.textContent = String(state.score);
+      }
+
+      function draw() {
+        const w = canvas.width / devicePixelRatio;
+        const h = canvas.height / devicePixelRatio;
+        ctx.clearRect(0, 0, w, h);
+
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, 'rgba(83,123,255,0.11)');
+        grad.addColorStop(1, 'rgba(10,16,35,0.2)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        const margin = 26;
+        const span = (w - margin * 2) / 3;
+        for (let i = 0; i < 3; i++) {
+          const x = margin + i * span;
+          ctx.strokeStyle = 'rgba(130,162,255,0.2)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, 0, span, h);
+        }
+
+        const catchY = h - 52;
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(margin, catchY, w - margin * 2, 4);
+
+        const px = laneX(state.lane, w);
+        ctx.fillStyle = 'rgba(87,233,255,0.26)';
+        ctx.fillRect(px - 34, catchY - 16, 68, 30);
+        ctx.strokeStyle = '#57e9ff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(px - 34, catchY - 16, 68, 30);
+
+        for (const o of state.objs) {
+          const x = laneX(o.lane, w);
+          ctx.beginPath();
+          ctx.arc(x, o.y, o.r, 0, Math.PI * 2);
+          ctx.fillStyle = o.bad ? 'rgba(255,90,157,0.95)' : 'rgba(87,233,255,0.95)';
+          ctx.fill();
+          ctx.strokeStyle = o.bad ? 'rgba(255,166,200,0.9)' : 'rgba(182,248,255,0.9)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      function tick(ts) {
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min(40, ts - state.lastTs);
+        state.lastTs = ts;
+
+        update(dt);
+        draw();
+
+        state.rafId = requestAnimationFrame(tick);
+      }
+
+      function startGame() {
+        resetRound();
+        state.running = true;
+        overlay.innerHTML = '';
+        startBtn.textContent = 'RESTART';
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > hi) {
+          hi = state.score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = String(hi);
+        }
+        overlay.innerHTML = `<span>TIME UP<br>Score: ${state.score}<br>High: ${hi}</span>`;
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        if (e.cancelable) e.preventDefault();
+        startGame();
+      });
+      fieldWrap.addEventListener('pointerdown', onPointerDown, { passive: false });
+      window.addEventListener('resize', resize);
+
+      resize();
+      resetRound();
+      draw();
+      state.rafId = requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
