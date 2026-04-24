@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>グリッドスタンピード</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #070b1f; color: #eaf2ff; font-family: system-ui, -apple-system, sans-serif; }
+    body { display: flex; justify-content: center; }
+    .app { width: min(100vw, 480px); height: 100dvh; padding: 14px 14px 10px; display: grid; grid-template-rows: auto auto 1fr auto auto; gap: 10px; }
+    h1 { margin: 0; font-size: 1.35rem; letter-spacing: .04em; }
+    .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .panel { background: #111939; border: 1px solid #293469; border-radius: 10px; padding: 8px; text-align: center; }
+    .label { font-size: .68rem; color: #9cb0ee; }
+    .value { font-size: 1.15rem; font-weight: 700; margin-top: 2px; }
+    .board { background: linear-gradient(180deg, #0f1633, #0b1128); border: 1px solid #2b3769; border-radius: 12px; padding: 10px; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(6, 1fr); gap: 6px; min-height: 0; }
+    .cell { border-radius: 8px; border: 1px solid #2a3359; background: #121a35; }
+    .cell.good { background: radial-gradient(circle at 35% 35%, #7ee7ff, #278cff); box-shadow: 0 0 10px rgba(66,162,255,.45) inset; }
+    .cell.bad { background: radial-gradient(circle at 35% 35%, #ff8ca5, #d83167); box-shadow: 0 0 10px rgba(255,88,125,.4) inset; }
+    .cell.cursor { outline: 2px solid #ffe07d; outline-offset: -2px; }
+    .cell.hit { animation: hit .22s ease-out; }
+    .cell.miss { animation: miss .22s ease-out; }
+    @keyframes hit { from { transform: scale(.9); } to { transform: scale(1); } }
+    @keyframes miss { from { transform: translateX(-2px); } 50% { transform: translateX(2px); } to { transform: translateX(0); } }
+    .controls { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    button { border: 0; border-radius: 10px; padding: 13px; font-size: 1rem; font-weight: 700; color: #07122d; background: linear-gradient(135deg,#76e7ff,#ffe380); }
+    .msg { min-height: 20px; text-align: center; color: #9cb0ee; font-size: .88rem; }
+    .back { text-align: center; font-size: .9rem; color: #9db7ff; text-decoration: none; padding-bottom: max(2px, env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🟦 グリッドスタンピード</h1>
+    <section class="hud" aria-label="status">
+      <div class="panel"><div class="label">SCORE</div><div id="score" class="value">0</div></div>
+      <div class="panel"><div class="label">TIME</div><div id="time" class="value">60.0</div></div>
+      <div class="panel"><div class="label">HI</div><div id="hi" class="value">0</div></div>
+    </section>
+    <section id="board" class="board" aria-label="grid"></section>
+    <section class="controls">
+      <button id="startBtn" type="button">スタート</button>
+      <div id="msg" class="msg">カーソル位置でタップ判定。青+1 / 赤-2</div>
+    </section>
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </main>
+
+<script>
+(() => {
+  const COLS = 5, ROWS = 6, CELL_COUNT = COLS * ROWS;
+  const PLAY_MS = 60000;
+  const KEY_HI = 'grid-stampede-hi-v1';
+
+  const boardEl = document.getElementById('board');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const msgEl = document.getElementById('msg');
+  const startBtn = document.getElementById('startBtn');
+
+  const cells = [];
+  let states = new Array(CELL_COUNT).fill('empty');
+  let cursor = 0, dir = 1;
+  let score = 0, hi = Number(localStorage.getItem(KEY_HI) || 0);
+  let running = false, startAt = 0;
+  let tickTimer = null, spawnTimer = null;
+
+  hiEl.textContent = hi;
+
+  for (let i = 0; i < CELL_COUNT; i++) {
+    const d = document.createElement('div');
+    d.className = 'cell';
+    d.dataset.i = i;
+    boardEl.appendChild(d);
+    cells.push(d);
+  }
+
+  function phase(seconds) {
+    if (seconds < 30) return { tick: 150, spawn: 680, badRate: 0.18 };
+    if (seconds < 45) return { tick: 110, spawn: 560, badRate: 0.28 };
+    return { tick: 80, spawn: 470, badRate: 0.36 };
+  }
+
+  function randomEmptyIndex() {
+    const idxs = [];
+    for (let i = 0; i < CELL_COUNT; i++) if (states[i] === 'empty') idxs.push(i);
+    if (!idxs.length) return -1;
+    return idxs[(Math.random() * idxs.length) | 0];
+  }
+
+  function spawnOne(kind) {
+    const idx = randomEmptyIndex();
+    if (idx < 0) return;
+    states[idx] = kind;
+  }
+
+  function trimPopulation() {
+    const active = states.filter(s => s !== 'empty').length;
+    if (active < 8) spawnOne(Math.random() < 0.75 ? 'good' : 'bad');
+  }
+
+  function spawnPulse() {
+    if (!running) return;
+    const sec = (Date.now() - startAt) / 1000;
+    const p = phase(sec);
+    spawnOne(Math.random() < p.badRate ? 'bad' : 'good');
+    if (Math.random() < 0.35) spawnOne(Math.random() < p.badRate ? 'bad' : 'good');
+    trimPopulation();
+    render();
+    clearTimeout(spawnTimer);
+    spawnTimer = setTimeout(spawnPulse, p.spawn);
+  }
+
+  function moveCursor() {
+    if (!running) return;
+    const sec = (Date.now() - startAt) / 1000;
+    const p = phase(sec);
+    cursor += dir;
+    if (cursor >= CELL_COUNT - 1 || cursor <= 0) dir *= -1;
+    render();
+    clearInterval(tickTimer);
+    tickTimer = setInterval(moveCursor, p.tick);
+  }
+
+  function render() {
+    for (let i = 0; i < CELL_COUNT; i++) {
+      const c = cells[i];
+      c.className = 'cell';
+      if (states[i] === 'good') c.classList.add('good');
+      if (states[i] === 'bad') c.classList.add('bad');
+      if (i === cursor) c.classList.add('cursor');
+    }
+    scoreEl.textContent = score;
+  }
+
+  function tapJudge() {
+    if (!running) return;
+    const state = states[cursor];
+    const cell = cells[cursor];
+    if (state === 'good') {
+      score += 1;
+      msgEl.textContent = 'GOOD +1';
+      cell.classList.add('hit');
+    } else if (state === 'bad') {
+      score = Math.max(0, score - 2);
+      msgEl.textContent = 'BAD -2';
+      cell.classList.add('miss');
+    } else {
+      msgEl.textContent = '空振り';
+    }
+    states[cursor] = 'empty';
+    render();
+  }
+
+  function endGame() {
+    running = false;
+    clearInterval(tickTimer);
+    clearTimeout(spawnTimer);
+    const final = score;
+    if (final > hi) {
+      hi = final;
+      localStorage.setItem(KEY_HI, String(hi));
+      hiEl.textContent = hi;
+      msgEl.textContent = `終了！ハイスコア更新 ${final}`;
+    } else {
+      msgEl.textContent = `終了！スコア ${final}`;
+    }
+    startBtn.disabled = false;
+    startBtn.textContent = 'もう一度';
+  }
+
+  function startGame() {
+    score = 0;
+    cursor = 0;
+    dir = 1;
+    states = new Array(CELL_COUNT).fill('empty');
+    for (let i = 0; i < 6; i++) spawnOne(Math.random() < 0.75 ? 'good' : 'bad');
+    startAt = Date.now();
+    running = true;
+    startBtn.disabled = true;
+    msgEl.textContent = '開始！カーソル位置でタップ';
+    render();
+
+    const timerLoop = () => {
+      if (!running) return;
+      const left = Math.max(0, PLAY_MS - (Date.now() - startAt));
+      timeEl.textContent = (left / 1000).toFixed(1);
+      if (left <= 0) return endGame();
+      requestAnimationFrame(timerLoop);
+    };
+    requestAnimationFrame(timerLoop);
+
+    clearInterval(tickTimer);
+    clearTimeout(spawnTimer);
+    tickTimer = setInterval(moveCursor, 150);
+    spawnTimer = setTimeout(spawnPulse, 500);
+  }
+
+  boardEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    tapJudge();
+  }, { passive: false });
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (!running) startGame();
+  }, { passive: false });
+
+  render();
+})();
+</script>
+</body>
+</html>
