@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>オービットクラスプ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b1a;
+      --panel: #131b32;
+      --ink: #edf2ff;
+      --accent: #6be8ff;
+      --good: #52ffa8;
+      --bad: #ff5b85;
+      --warn: #ffd86f;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at 20% 15%, #1f2d5f 0%, transparent 35%),
+        radial-gradient(circle at 80% 85%, #22375c 0%, transparent 40%),
+        var(--bg);
+      color: var(--ink);
+    }
+    body { display: grid; place-items: center; }
+    .game {
+      width: min(100vw, 430px);
+      height: min(100dvh, 900px);
+      padding: 14px 14px 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 5.2vw, 1.55rem);
+      letter-spacing: 0.05em;
+      text-align: center;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .pill {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 8px 6px;
+      text-align: center;
+    }
+    .pill .k { font-size: 0.62rem; opacity: 0.75; letter-spacing: 0.08em; }
+    .pill .v { font-weight: 700; font-size: 1.04rem; margin-top: 2px; }
+    .arena {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+      padding: 8px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    canvas {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      display: block;
+    }
+    .flash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .16s ease;
+    }
+    .flash.good { background: radial-gradient(circle, rgba(82,255,168,0.18), transparent 60%); }
+    .flash.bad { background: radial-gradient(circle, rgba(255,91,133,0.2), transparent 60%); }
+    .controls {
+      display: grid;
+      gap: 8px;
+    }
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 800;
+      color: #061022;
+      background: linear-gradient(135deg, var(--accent), #96f5ff);
+      font-size: 1rem;
+    }
+    button:active { transform: translateY(1px) scale(0.995); }
+    .message {
+      text-align: center;
+      min-height: 1.35em;
+      font-size: 0.9rem;
+      color: #d9e6ff;
+    }
+    .back {
+      text-align: center;
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+    .back a { color: #b4d5ff; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>🛰️ オービットクラスプ</h1>
+
+    <section class="hud" aria-label="ステータス">
+      <div class="pill"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="pill"><div class="k">TIME</div><div class="v" id="time">60</div></div>
+      <div class="pill"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+      <div class="pill"><div class="k">COMBO</div><div class="v" id="combo">x0</div></div>
+    </section>
+
+    <section class="arena" id="arena" aria-label="ゲームエリア">
+      <canvas id="cv" width="360" height="360"></canvas>
+      <div class="flash" id="flash"></div>
+    </section>
+
+    <section class="controls">
+      <button id="startBtn" type="button">START</button>
+      <div class="message" id="msg">青アークでタップして固定。赤で減点。</div>
+    </section>
+
+    <div class="back"><a href="../../">← 作品集へ戻る</a></div>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'orbit-clasp-hi-v1';
+      const PLAY_MS = 60000;
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const comboEl = document.getElementById('combo');
+      const msgEl = document.getElementById('msg');
+      const startBtn = document.getElementById('startBtn');
+      const arena = document.getElementById('arena');
+      const flash = document.getElementById('flash');
+      const cv = document.getElementById('cv');
+      const ctx = cv.getContext('2d');
+
+      let hi = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      let score = 0;
+      let combo = 0;
+      let running = false;
+      let startAt = 0;
+      let lastTs = 0;
+      let pointer = -Math.PI / 2;
+      let speed = 2.1;
+      let goodArc = { start: 0, span: Math.PI / 4.5 };
+      let badArcs = [];
+      hiEl.textContent = hi;
+
+      function randRange(a, b) { return a + Math.random() * (b - a); }
+      function norm(a) {
+        const two = Math.PI * 2;
+        a %= two;
+        return a < 0 ? a + two : a;
+      }
+      function inArc(angle, arc) {
+        const x = norm(angle);
+        const s = norm(arc.start);
+        const e = norm(arc.start + arc.span);
+        if (arc.span >= Math.PI * 2) return true;
+        return s <= e ? (x >= s && x <= e) : (x >= s || x <= e);
+      }
+
+      function setupArcs(progress = 0) {
+        const baseGood = progress < 0.5 ? 0.7 : (progress < 0.75 ? 0.56 : 0.42);
+        goodArc.span = baseGood;
+        goodArc.start = randRange(0, Math.PI * 2);
+
+        const badSpan = progress < 0.5 ? 0.55 : (progress < 0.75 ? 0.7 : 0.78);
+        const count = progress < 0.75 ? 1 : 2;
+        badArcs = Array.from({ length: count }, (_, i) => ({
+          start: norm(goodArc.start + (i ? -1 : 1) * randRange(1.1, 2.4)),
+          span: badSpan
+        }));
+      }
+
+      function resetRound() {
+        score = 0;
+        combo = 0;
+        pointer = -Math.PI / 2;
+        speed = 2.1;
+        scoreEl.textContent = '0';
+        comboEl.textContent = 'x0';
+        timeEl.textContent = '60';
+        msgEl.textContent = '青アークでタップして固定。赤で減点。';
+        setupArcs(0);
+      }
+
+      function pulse(kind) {
+        flash.className = 'flash ' + kind;
+        flash.style.opacity = '1';
+        setTimeout(() => { flash.style.opacity = '0'; }, 90);
+      }
+
+      function judgeTap() {
+        if (!running) return;
+        const progress = Math.min(1, (performance.now() - startAt) / PLAY_MS);
+        const isBad = badArcs.some(a => inArc(pointer, a));
+        const isGood = inArc(pointer, goodArc);
+
+        if (isGood && !isBad) {
+          combo += 1;
+          const gain = 10 + Math.min(20, combo * 2);
+          score += gain;
+          msgEl.textContent = `NICE +${gain}`;
+          pulse('good');
+        } else {
+          combo = 0;
+          score = Math.max(0, score - 14);
+          msgEl.textContent = 'MISS -14';
+          pulse('bad');
+        }
+
+        scoreEl.textContent = String(score);
+        comboEl.textContent = 'x' + combo;
+        setupArcs(progress);
+      }
+
+      function drawRing(arc, color, width) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.arc(180, 180, 118, arc.start, arc.start + arc.span);
+        ctx.stroke();
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, 360, 360);
+
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = 18;
+        ctx.arc(180, 180, 118, 0, Math.PI * 2);
+        ctx.stroke();
+
+        drawRing(goodArc, 'rgba(82,255,168,0.98)', 18);
+        badArcs.forEach(a => drawRing(a, 'rgba(255,91,133,0.92)', 18));
+
+        const px = 180 + Math.cos(pointer) * 118;
+        const py = 180 + Math.sin(pointer) * 118;
+        ctx.beginPath();
+        ctx.moveTo(180, 180);
+        ctx.lineTo(px, py);
+        ctx.strokeStyle = '#8de8ff';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.fillStyle = '#dff7ff';
+        ctx.arc(180, 180, 13, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.fillStyle = '#8de8ff';
+        ctx.arc(px, py, 8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function endGame() {
+        running = false;
+        startBtn.textContent = 'RETRY';
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(STORAGE_KEY, String(hi));
+          hiEl.textContent = String(hi);
+          msgEl.textContent = `NEW HIGH SCORE! ${score}`;
+        } else {
+          msgEl.textContent = `FINISH: ${score}pt`; 
+        }
+      }
+
+      function tick(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        if (running) {
+          const elapsed = ts - startAt;
+          const left = Math.max(0, Math.ceil((PLAY_MS - elapsed) / 1000));
+          timeEl.textContent = String(left);
+
+          const p = Math.min(1, elapsed / PLAY_MS);
+          speed = p < 0.5 ? 2.2 : (p < 0.75 ? 2.9 : 3.55);
+          pointer = norm(pointer + dt * speed);
+
+          if (elapsed >= PLAY_MS) {
+            timeEl.textContent = '0';
+            endGame();
+          }
+        }
+
+        render();
+        requestAnimationFrame(tick);
+      }
+
+      function startGame() {
+        resetRound();
+        running = true;
+        startAt = performance.now();
+        lastTs = 0;
+        startBtn.textContent = 'PLAYING...';
+        msgEl.textContent = 'タップで判定！';
+      }
+
+      startBtn.addEventListener('pointerdown', () => {
+        if (!running) startGame();
+      });
+      arena.addEventListener('pointerdown', judgeTap);
+
+      setupArcs(0);
+      render();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
