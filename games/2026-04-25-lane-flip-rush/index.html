@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>レーンフリップ・ラッシュ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #090b1a;
+      --panel: #131831;
+      --ink: #e8ecff;
+      --sub: #a8b2dd;
+      --ok: #5de2ff;
+      --bad: #ff6b8f;
+      --line: rgba(255,255,255,.12);
+      --accent: #8d7bff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    body {
+      font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+      background: radial-gradient(120% 100% at 50% 0%, #1a2052 0%, var(--bg) 50%, #060710 100%);
+      color: var(--ink);
+      display: grid;
+      place-items: center;
+    }
+    .app {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      max-height: 100dvh;
+      padding: 12px 12px 10px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+    }
+    .top {
+      background: rgba(19,24,49,.9);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.05rem; letter-spacing: .04em; }
+    .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .chip { background: #0c1128; border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+    .k { font-size: .66rem; color: var(--sub); }
+    .v { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1.02rem; font-weight: 700; }
+    #startBtn {
+      border: 0; border-radius: 12px; padding: 10px 14px;
+      font-weight: 700; color: #0b1030; background: linear-gradient(135deg, #7cf0ff, #8d7bff);
+    }
+    .field {
+      position: relative;
+      border-radius: 16px;
+      background: linear-gradient(180deg, rgba(20,27,58,.92), rgba(10,14,32,.92));
+      border: 1px solid var(--line);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .lane-lines {
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(to right, transparent 33.33%, rgba(255,255,255,.1) 33.33%, rgba(255,255,255,.1) 34%, transparent 34%, transparent 66.66%, rgba(255,255,255,.1) 66.66%, rgba(255,255,255,.1) 67%, transparent 67%),
+        repeating-linear-gradient(to bottom, rgba(255,255,255,.03), rgba(255,255,255,.03) 10px, transparent 10px, transparent 20px);
+      pointer-events: none;
+    }
+    .catcher {
+      position: absolute; bottom: 12px;
+      width: calc((100% - 8px) / 3); height: 12px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #72f0ff, #bc7dff);
+      box-shadow: 0 0 16px rgba(114,240,255,.55);
+      transition: left .08s linear;
+      pointer-events: none;
+    }
+    .node {
+      position: absolute;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 12px rgba(0,0,0,.35);
+    }
+    .node.blue { background: var(--ok); }
+    .node.red { background: var(--bad); }
+    .msg {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      text-align: center; padding: 20px;
+      font-weight: 700; color: #d8e0ff;
+      background: rgba(7,10,23,.4);
+      pointer-events: none;
+    }
+    .msg.hidden { display: none; }
+    .footer { display: flex; justify-content: space-between; align-items: center; font-size: .84rem; color: var(--sub); }
+    a { color: #98d5ff; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top">
+      <h1>レーンフリップ・ラッシュ</h1>
+      <div class="hud">
+        <div class="chip"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+        <div class="chip"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+        <div class="chip"><div class="k">HI-SCORE</div><div class="v" id="hi">0</div></div>
+      </div>
+    </section>
+
+    <button id="startBtn" type="button">スタート</button>
+
+    <section id="field" class="field" aria-label="game field">
+      <div class="lane-lines"></div>
+      <div id="catcher" class="catcher"></div>
+      <div id="msg" class="msg">タップでレーン切替（左→中→右）<br>青を取って赤を避けろ</div>
+    </section>
+
+    <div class="footer">
+      <a href="../../">← 作品集へ戻る</a>
+      <span>pointerdown 対応</span>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const LS_KEY = 'dgf-20260425-lane-flip-rush-hi';
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const startBtn = document.getElementById('startBtn');
+      const field = document.getElementById('field');
+      const catcherEl = document.getElementById('catcher');
+      const msgEl = document.getElementById('msg');
+
+      let hi = Number(localStorage.getItem(LS_KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let score = 0;
+      let lane = 1;
+      let left = 0;
+      let width = 0;
+      let laneW = 0;
+      let nodes = [];
+      let lastTs = 0;
+      let remain = 60;
+      let spawnAcc = 0;
+      let spawnEvery = .7;
+      let speed = 170;
+      let redRate = 0.2;
+      let rafId = 0;
+
+      function layout() {
+        const r = field.getBoundingClientRect();
+        left = r.left;
+        width = r.width;
+        laneW = width / 3;
+        updateCatcher();
+      }
+
+      function updateCatcher() {
+        catcherEl.style.left = `${lane * laneW + 4}px`;
+      }
+
+      function reset() {
+        nodes.forEach(n => n.el.remove());
+        nodes = [];
+        score = 0;
+        remain = 60;
+        spawnAcc = 0;
+        spawnEvery = .7;
+        speed = 170;
+        redRate = .2;
+        lane = 1;
+        scoreEl.textContent = score;
+        timeEl.textContent = remain.toFixed(1);
+        msgEl.classList.add('hidden');
+        layout();
+      }
+
+      function spawnNode() {
+        const type = Math.random() < redRate ? 'red' : 'blue';
+        const nLane = Math.floor(Math.random() * 3);
+        const el = document.createElement('div');
+        el.className = `node ${type}`;
+        field.appendChild(el);
+        nodes.push({ el, lane: nLane, y: -20, type });
+      }
+
+      function setDifficulty() {
+        if (remain <= 15) {
+          speed = 265; spawnEvery = .36; redRate = .38;
+        } else if (remain <= 30) {
+          speed = 220; spawnEvery = .48; redRate = .30;
+        } else {
+          speed = 170; spawnEvery = .7; redRate = .20;
+        }
+      }
+
+      function endGame() {
+        running = false;
+        cancelAnimationFrame(rafId);
+        msgEl.classList.remove('hidden');
+        msgEl.innerHTML = `終了！<br>スコア: ${score}`;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(LS_KEY, String(hi));
+          hiEl.textContent = hi;
+        }
+        startBtn.disabled = false;
+        startBtn.textContent = 'もう一度';
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        remain = Math.max(0, remain - dt);
+        timeEl.textContent = remain.toFixed(1);
+        setDifficulty();
+
+        spawnAcc += dt;
+        while (spawnAcc >= spawnEvery) {
+          spawnAcc -= spawnEvery;
+          spawnNode();
+          if (Math.random() < 0.28) spawnNode();
+        }
+
+        const catchY = field.clientHeight - 20;
+        for (let i = nodes.length - 1; i >= 0; i--) {
+          const n = nodes[i];
+          n.y += speed * dt;
+          const x = n.lane * laneW + laneW * 0.5;
+          n.el.style.left = `${x}px`;
+          n.el.style.top = `${n.y}px`;
+
+          if (Math.abs(n.y - catchY) < 12 && n.lane === lane) {
+            if (n.type === 'blue') score += 10;
+            else score = Math.max(0, score - 12);
+            scoreEl.textContent = score;
+            n.el.remove();
+            nodes.splice(i, 1);
+            continue;
+          }
+
+          if (n.y > field.clientHeight + 24) {
+            if (n.type === 'blue') {
+              score = Math.max(0, score - 3);
+              scoreEl.textContent = score;
+            }
+            n.el.remove();
+            nodes.splice(i, 1);
+          }
+        }
+
+        if (remain <= 0) {
+          endGame();
+          return;
+        }
+        rafId = requestAnimationFrame(frame);
+      }
+
+      field.addEventListener('pointerdown', () => {
+        if (!running) return;
+        lane = (lane + 1) % 3;
+        updateCatcher();
+      });
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (running) return;
+        startBtn.disabled = true;
+        startBtn.textContent = 'プレイ中';
+        running = true;
+        lastTs = 0;
+        reset();
+        rafId = requestAnimationFrame(frame);
+      });
+
+      addEventListener('resize', layout, { passive: true });
+      layout();
+    })();
+  </script>
+</body>
+</html>
