@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>チャージバケット</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, sans-serif; background:#090c1a; color:#eef3ff; }
+    .wrap { height: 100%; display:flex; flex-direction:column; max-width: 430px; margin:0 auto; padding: 14px 14px 10px; gap:10px; }
+    h1 { margin:0; font-size: clamp(22px, 6vw, 30px); letter-spacing:.04em; }
+    .hud { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; font-size:13px; }
+    .panel { background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); border-radius:12px; padding:8px; text-align:center; }
+    #stage { position:relative; flex:1; border-radius:16px; overflow:hidden; border:1px solid rgba(255,255,255,.16);
+      background: linear-gradient(180deg,#15213b 0%,#0a1224 60%,#070b15 100%); }
+    .drop { position:absolute; width:28px; height:28px; border-radius:50%; box-shadow:0 0 12px rgba(255,255,255,.35) inset; }
+    .blue { background:#53b7ff; }
+    .red { background:#ff5d7a; }
+    #bucket { position:absolute; left:50%; transform:translateX(-50%); bottom:12px; width:118px; height:26px; border-radius:14px;
+      border:2px solid rgba(255,255,255,.8); box-shadow:0 0 14px rgba(255,255,255,.2); }
+    #bucket.blue { background:rgba(83,183,255,.35); }
+    #bucket.red { background:rgba(255,93,122,.35); }
+    .controls { display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:center; }
+    button { border:0; border-radius:12px; padding:12px 14px; font-weight:700; background:#7af0ff; color:#031420; }
+    button:active { transform: translateY(1px); }
+    a { color:#b8d4ff; text-decoration:none; font-size:13px; }
+    #msg { min-height: 1.2em; font-size:13px; opacity:.9; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="gameArea">
+    <h1>🪣 チャージバケット</h1>
+    <div class="hud">
+      <div class="panel">Score<br><strong id="score">0</strong></div>
+      <div class="panel">Time<br><strong id="time">60.0</strong></div>
+      <div class="panel">Hi<br><strong id="hi">0</strong></div>
+    </div>
+    <div class="panel">極性: <strong id="polarity">BLUE</strong></div>
+    <div id="stage" aria-label="game stage">
+      <div id="bucket" class="blue"></div>
+    </div>
+    <div id="msg">スタートで開始。画面タップで極性切替。</div>
+    <div class="controls">
+      <button id="startBtn" type="button">START</button>
+      <a href="../../">← 作品集へ戻る</a>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const KEY = 'webgame-2026-04-26-charge-bucket-hi';
+  const stage = document.getElementById('stage');
+  const bucket = document.getElementById('bucket');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const polarityEl = document.getElementById('polarity');
+  const msgEl = document.getElementById('msg');
+  const startBtn = document.getElementById('startBtn');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = hi;
+
+  let running = false;
+  let score = 0;
+  let timeLeft = 60;
+  let polarity = 'blue';
+  let drops = [];
+  let tickTimer = null;
+  let spawnAcc = 0;
+
+  function setPolarity(next) {
+    polarity = next;
+    bucket.classList.toggle('blue', polarity === 'blue');
+    bucket.classList.toggle('red', polarity === 'red');
+    polarityEl.textContent = polarity.toUpperCase();
+  }
+
+  function reset() {
+    drops.forEach(d => d.el.remove());
+    drops = [];
+    score = 0;
+    timeLeft = 60;
+    spawnAcc = 0;
+    setPolarity('blue');
+    scoreEl.textContent = '0';
+    timeEl.textContent = '60.0';
+  }
+
+  function spawnDrop() {
+    const el = document.createElement('div');
+    const color = Math.random() < 0.5 ? 'blue' : 'red';
+    el.className = `drop ${color}`;
+    const x = Math.random() * (stage.clientWidth - 28);
+    const y = -30;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    stage.appendChild(el);
+    drops.push({ el, x, y, color });
+  }
+
+  function difficulty(now) {
+    if (now > 45) return { speed: 5.5, spawn: 280 };
+    if (now > 30) return { speed: 4.6, spawn: 380 };
+    return { speed: 3.6, spawn: 520 };
+  }
+
+  function endGame() {
+    running = false;
+    clearInterval(tickTimer);
+    if (score > hi) {
+      hi = score;
+      localStorage.setItem(KEY, String(hi));
+      hiEl.textContent = hi;
+      msgEl.textContent = `終了！ハイスコア更新: ${score}`;
+    } else {
+      msgEl.textContent = `終了！スコア: ${score}`;
+    }
+    startBtn.disabled = false;
+  }
+
+  function tick() {
+    if (!running) return;
+    timeLeft -= 0.05;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      timeEl.textContent = '0.0';
+      endGame();
+      return;
+    }
+    timeEl.textContent = timeLeft.toFixed(1);
+
+    const elapsed = 60 - timeLeft;
+    const diff = difficulty(elapsed);
+    spawnAcc += 50;
+    if (spawnAcc >= diff.spawn) {
+      spawnAcc = 0;
+      spawnDrop();
+      if (elapsed > 45 && Math.random() < 0.32) spawnDrop();
+    }
+
+    const bucketTop = stage.clientHeight - 38;
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      d.y += diff.speed;
+      d.el.style.top = d.y + 'px';
+      if (d.y >= bucketTop) {
+        if (d.color === polarity) score += 1;
+        else score -= 2;
+        scoreEl.textContent = String(score);
+        d.el.remove();
+        drops.splice(i, 1);
+      }
+    }
+  }
+
+  function startGame() {
+    reset();
+    running = true;
+    startBtn.disabled = true;
+    msgEl.textContent = 'プレイ中... タップで極性を切り替えろ';
+    tickTimer = setInterval(tick, 50);
+  }
+
+  document.getElementById('gameArea').addEventListener('pointerdown', (e) => {
+    if (e.target === startBtn || !running) return;
+    setPolarity(polarity === 'blue' ? 'red' : 'blue');
+  }, { passive: true });
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (!running) startGame();
+  });
+})();
+</script>
+</body>
+</html>
