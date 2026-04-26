@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>ドリフトゲート</title>
+  <meta name="description" content="流れるビーコンをドリフトするゲート内で叩く60秒タイミングゲーム" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161"
+    crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #11182e;
+      --text: #e8edff;
+      --accent: #63e6ff;
+      --hit: #49e27d;
+      --miss: #ff6b8a;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; height: 100%; overflow: hidden;
+      background: radial-gradient(circle at top, #1a2450, var(--bg) 58%);
+      color: var(--text); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif;
+    }
+    body { display: grid; place-items: center; }
+    .game {
+      width: min(100vw, 460px); height: 100dvh;
+      padding: 16px 14px calc(18px + env(safe-area-inset-bottom));
+      display: grid; gap: 10px;
+      grid-template-rows: auto auto 1fr auto auto;
+    }
+    h1 { margin: 4px 0 0; font-size: 1.4rem; letter-spacing: .04em; text-align: center; }
+    .hud {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    }
+    .cell {
+      background: color-mix(in oklab, var(--panel), white 5%);
+      border: 1px solid #2a355f; border-radius: 12px;
+      padding: 8px; text-align: center;
+    }
+    .k { font-size: .72rem; opacity: .8; }
+    .v { font-weight: 800; font-size: 1.1rem; margin-top: 2px; }
+    .arena {
+      position: relative; border-radius: 16px;
+      border: 1px solid #31427c; background: linear-gradient(180deg, #0f1731, #0a1022);
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    .lane {
+      position: absolute; left: 0; right: 0; top: 46%; height: 8%;
+      border-top: 1px dashed #3a4e90; border-bottom: 1px dashed #3a4e90;
+      opacity: .7;
+    }
+    .gate {
+      position: absolute; top: 40%; height: 20%;
+      border-radius: 10px;
+      background: linear-gradient(180deg, rgba(99,230,255,.32), rgba(99,230,255,.16));
+      border: 1px solid rgba(99,230,255,.9);
+      box-shadow: 0 0 18px rgba(99,230,255,.35);
+    }
+    .beacon {
+      position: absolute; top: 50%; width: 30px; height: 30px;
+      margin-top: -15px; margin-left: -15px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #fff, var(--accent) 60%, #2ea0ff);
+      box-shadow: 0 0 20px rgba(99,230,255,.9);
+    }
+    .feedback {
+      text-align: center; font-weight: 800; min-height: 1.5em;
+      letter-spacing: .08em;
+    }
+    .feedback.hit { color: var(--hit); }
+    .feedback.miss { color: var(--miss); }
+    .controls { display: grid; gap: 8px; }
+    button {
+      border: 0; border-radius: 12px; padding: 12px;
+      font-size: 1rem; font-weight: 800; color: #061224;
+      background: linear-gradient(135deg, #7af4ff, #6ea8ff);
+    }
+    .back {
+      text-align: center; color: #b8c8ff; text-decoration: none; font-size: .95rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>ドリフトゲート</h1>
+
+    <section class="hud" aria-label="ステータス">
+      <div class="cell"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="cell"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="cell"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+    </section>
+
+    <section class="arena" id="arena" aria-label="ゲームエリア">
+      <div class="lane"></div>
+      <div class="gate" id="gate"></div>
+      <div class="beacon" id="beacon"></div>
+    </section>
+
+    <div class="feedback" id="feedback">STARTで開始</div>
+
+    <div class="controls">
+      <button id="startBtn" type="button">スタート</button>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'webgame_2026_04_26_drift_gate_hi';
+      const arena = document.getElementById('arena');
+      const gate = document.getElementById('gate');
+      const beacon = document.getElementById('beacon');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const feedback = document.getElementById('feedback');
+      const startBtn = document.getElementById('startBtn');
+
+      let hi = Number(localStorage.getItem(KEY) || 0);
+      hiEl.textContent = hi;
+
+      let running = false;
+      let score = 0;
+      let tapped = 0;
+      let startedAt = 0;
+      let lastTs = 0;
+      let lastTap = 0;
+
+      let beaconX = 0.5;
+      let beaconV = 0.34;
+      let gateX = 0.35;
+      let gateW = 0.28;
+      let gateV = 0.08;
+
+      function setFeedback(text, cls = '') {
+        feedback.textContent = text;
+        feedback.className = 'feedback' + (cls ? ' ' + cls : '');
+      }
+
+      function applyDifficulty(t) {
+        // t = elapsed seconds
+        let speed = 1;
+        let gateScale = 1;
+        let gateDrift = 1;
+        if (t >= 45) {
+          speed = 1.5;
+          gateScale = 0.72;
+          gateDrift = 1.35;
+        } else if (t >= 30) {
+          speed = 1.25;
+          gateScale = 0.86;
+          gateDrift = 1.15;
+        }
+        return { speed, gateScale, gateDrift };
+      }
+
+      function updateUI(remain) {
+        scoreEl.textContent = score;
+        timeEl.textContent = remain.toFixed(1);
+      }
+
+      function layout() {
+        const w = arena.clientWidth;
+        const gLeft = Math.max(0, Math.min(1 - gateW, gateX)) * w;
+        gate.style.left = gLeft + 'px';
+        gate.style.width = Math.max(44, gateW * w) + 'px';
+        beacon.style.left = (Math.max(0.03, Math.min(0.97, beaconX)) * w) + 'px';
+      }
+
+      function finish() {
+        running = false;
+        startBtn.disabled = false;
+        const acc = tapped ? Math.round((score / tapped) * 100) : 0;
+        if (score > hi) {
+          hi = score;
+          localStorage.setItem(KEY, String(hi));
+          hiEl.textContent = hi;
+          setFeedback(`FINISH ${score}点 / NEW HI!`, 'hit');
+        } else {
+          setFeedback(`FINISH ${score}点 / 命中率 ${Math.max(0, acc)}%`);
+        }
+      }
+
+      function frame(ts) {
+        if (!running) return;
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min(0.033, (ts - lastTs) / 1000);
+        lastTs = ts;
+
+        const elapsed = (ts - startedAt) / 1000;
+        const remain = Math.max(0, 60 - elapsed);
+        const d = applyDifficulty(elapsed);
+
+        beaconX += beaconV * d.speed * dt;
+        if (beaconX <= 0.04) { beaconX = 0.04; beaconV = Math.abs(beaconV); }
+        if (beaconX >= 0.96) { beaconX = 0.96; beaconV = -Math.abs(beaconV); }
+
+        gateX += gateV * d.gateDrift * dt;
+        const effectiveGateW = gateW * d.gateScale;
+        if (gateX <= 0) { gateX = 0; gateV = Math.abs(gateV); }
+        if (gateX + effectiveGateW >= 1) { gateX = 1 - effectiveGateW; gateV = -Math.abs(gateV); }
+
+        gate.style.width = Math.max(44, effectiveGateW * arena.clientWidth) + 'px';
+        layout();
+        updateUI(remain);
+
+        if (remain <= 0) return finish();
+        requestAnimationFrame(frame);
+      }
+
+      function startGame() {
+        running = true;
+        startBtn.disabled = true;
+        score = 0;
+        tapped = 0;
+        lastTap = 0;
+        beaconX = 0.5;
+        beaconV = (Math.random() > 0.5 ? 1 : -1) * 0.34;
+        gateX = 0.3;
+        gateW = 0.28;
+        gateV = (Math.random() > 0.5 ? 1 : -1) * 0.08;
+        startedAt = performance.now();
+        lastTs = 0;
+        setFeedback('TAP!');
+        updateUI(60);
+        layout();
+        requestAnimationFrame(frame);
+      }
+
+      function onTap() {
+        if (!running) return;
+        const now = performance.now();
+        if (now - lastTap < 120) return;
+        lastTap = now;
+        tapped += 1;
+
+        const w = arena.clientWidth;
+        const gLeft = gate.offsetLeft;
+        const gRight = gLeft + gate.clientWidth;
+        const bX = beaconX * w;
+
+        if (bX >= gLeft && bX <= gRight) {
+          score += 1;
+          gateW = Math.max(0.17, gateW - 0.004);
+          setFeedback('HIT', 'hit');
+        } else {
+          score = Math.max(0, score - 1);
+          setFeedback('MISS', 'miss');
+        }
+        scoreEl.textContent = score;
+      }
+
+      startBtn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (!running) startGame();
+      });
+
+      arena.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        onTap();
+      });
+
+      window.addEventListener('resize', layout);
+      layout();
+    })();
+  </script>
+</body>
+</html>
