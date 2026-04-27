@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>フリップレール</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:#070b16;color:#e9f1ff;font-family:"Noto Sans JP",system-ui,sans-serif}
+    body{display:flex;justify-content:center;align-items:center}
+    .app{width:min(100vw,430px);height:100dvh;max-height:900px;padding:14px 12px 10px;display:flex;flex-direction:column;gap:10px;background:radial-gradient(120% 120% at 50% 0%,#142445 0%,#070b16 70%)}
+    h1{margin:0;font-size:clamp(20px,6vw,28px);letter-spacing:.06em}
+    .hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .pill{background:#0f1c34;border:1px solid #274169;border-radius:10px;padding:6px 8px;text-align:center}
+    .pill .k{font-size:10px;color:#9eb7da}
+    .pill .v{font-weight:700;font-size:18px}
+    .arena{position:relative;flex:1;min-height:320px;background:linear-gradient(180deg,#0d1830,#0a1326);border:1px solid #284267;border-radius:14px;overflow:hidden}
+    .lane{position:absolute;left:0;right:0;height:50%;border-bottom:1px dashed rgba(160,198,255,.2)}
+    .lane.bottom{top:50%;border-bottom:none}
+    .player{position:absolute;left:16px;width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,#7de8ff,#3e86ff);box-shadow:0 0 16px rgba(97,170,255,.6);transform:translateY(-50%);transition:top .08s linear}
+    .orb{position:absolute;width:28px;height:28px;border-radius:50%;transform:translate(-50%,-50%)}
+    .orb.good{background:radial-gradient(circle at 30% 30%,#d5fbff,#35d7ff 65%)}
+    .orb.bad{background:radial-gradient(circle at 30% 30%,#ffc8c8,#ff4b6b 65%)}
+    .controls{display:grid;grid-template-columns:1fr;gap:8px}
+    button,a{border:none;border-radius:10px;padding:11px 12px;font-weight:700;text-align:center;text-decoration:none}
+    #startBtn{background:linear-gradient(135deg,#ffd66d,#ff9b4a);color:#1d1200}
+    .back{background:#162744;color:#cfe0ff;border:1px solid #2e4e7f}
+    .msg{font-size:12px;color:#8fa8cc;text-align:center;min-height:16px}
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <h1>フリップレール</h1>
+    <section class="hud">
+      <div class="pill"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+      <div class="pill"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+      <div class="pill"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+    </section>
+    <section class="arena" id="arena" aria-label="game area">
+      <div class="lane top"></div><div class="lane bottom"></div>
+      <div class="player" id="player"></div>
+    </section>
+    <div class="msg" id="msg">STARTで開始。画面タップで上下レーン切替。</div>
+    <div class="controls">
+      <button id="startBtn" type="button">スタート</button>
+      <a class="back" href="../../">← 作品集へ戻る</a>
+    </div>
+  </main>
+<script>
+(() => {
+  const KEY = 'flip-rail-hi-v1';
+  const arena = document.getElementById('arena');
+  const player = document.getElementById('player');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const msgEl = document.getElementById('msg');
+  const startBtn = document.getElementById('startBtn');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = hi;
+
+  let running = false, score = 0, lane = 0, timeLeft = 60, last = 0, spawnAcc = 0;
+  let speed = 170;
+  const orbs = [];
+
+  function laneY(i){ return i === 0 ? arena.clientHeight * 0.25 : arena.clientHeight * 0.75; }
+  function syncPlayer(){ player.style.top = laneY(lane) + 'px'; }
+
+  function setPhase(){
+    if (timeLeft > 30){ speed = 170; return 0.95; }
+    if (timeLeft > 15){ speed = 220; return 0.72; }
+    speed = 285; return 0.56;
+  }
+
+  function spawnOrb(){
+    const badRate = timeLeft > 30 ? 0.2 : timeLeft > 15 ? 0.3 : 0.4;
+    const bad = Math.random() < badRate;
+    const el = document.createElement('div');
+    el.className = `orb ${bad ? 'bad' : 'good'}`;
+    arena.appendChild(el);
+    orbs.push({x: arena.clientWidth + 20, lane: Math.random() < 0.5 ? 0 : 1, bad, el, hit:false});
+  }
+
+  function reset(){
+    orbs.splice(0).forEach(o => o.el.remove());
+    score = 0; lane = 0; timeLeft = 60; spawnAcc = 0; last = 0;
+    scoreEl.textContent = '0'; timeEl.textContent = '60.0'; msgEl.textContent = 'タップで切替。青を取って赤を避けろ。';
+    syncPlayer();
+  }
+
+  function endGame(){
+    running = false;
+    startBtn.disabled = false;
+    if (score > hi){ hi = score; localStorage.setItem(KEY, String(hi)); hiEl.textContent = hi; msgEl.textContent = `終了！ 新記録 ${score}`; }
+    else msgEl.textContent = `終了！ スコア ${score}`;
+  }
+
+  function tick(ts){
+    if(!running) return;
+    if(!last) last = ts;
+    const dt = (ts - last) / 1000; last = ts;
+    timeLeft = Math.max(0, timeLeft - dt);
+    timeEl.textContent = timeLeft.toFixed(1);
+
+    const interval = setPhase();
+    spawnAcc += dt;
+    while(spawnAcc >= interval){ spawnAcc -= interval; spawnOrb(); if(timeLeft <= 15 && Math.random() < 0.28) spawnOrb(); }
+
+    for(let i = orbs.length - 1; i >= 0; i--){
+      const o = orbs[i];
+      o.x -= speed * dt;
+      o.el.style.left = o.x + 'px';
+      o.el.style.top = laneY(o.lane) + 'px';
+      const catchX = 32;
+      if(!o.hit && o.x <= catchX + 8 && o.x >= catchX - 18 && o.lane === lane){
+        o.hit = true;
+        score += o.bad ? -2 : 3;
+        if(score < 0) score = 0;
+        scoreEl.textContent = score;
+        o.el.style.transform = 'translate(-50%,-50%) scale(1.35)';
+        o.el.style.opacity = '0';
+      }
+      if(o.x < -30 || o.hit){ o.el.remove(); orbs.splice(i,1); }
+    }
+
+    if(timeLeft <= 0){ endGame(); return; }
+    requestAnimationFrame(tick);
+  }
+
+  function handleFlip(e){
+    if(!running) return;
+    if(e.target.closest('button,a')) return;
+    lane = lane ? 0 : 1;
+    syncPlayer();
+  }
+
+  document.getElementById('app').addEventListener('pointerdown', handleFlip, {passive:true});
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if(running) return;
+    reset();
+    running = true;
+    startBtn.disabled = true;
+    requestAnimationFrame(tick);
+  });
+
+  window.addEventListener('resize', syncPlayer);
+  syncPlayer();
+})();
+</script>
+</body>
+</html>
