@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>シャッタービート</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #070b1a;
+      --panel: #121a33;
+      --line: #26335f;
+      --text: #e9efff;
+      --sub: #9cadde;
+      --good: #63f0c2;
+      --bad: #ff6a9a;
+      --accent: #6ec1ff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 12%, #182856, var(--bg) 58%);
+      color: var(--text);
+      font-family: "Noto Sans JP", system-ui, -apple-system, sans-serif;
+      touch-action: manipulation;
+    }
+    body { display: flex; justify-content: center; align-items: stretch; }
+    .app {
+      width: min(100vw, 480px);
+      height: 100vh;
+      padding: 14px 14px 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 10px;
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: clamp(1.25rem, 5vw, 1.55rem);
+      letter-spacing: .06em;
+    }
+    .hud {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      background: color-mix(in srgb, var(--panel) 88%, #fff 12%);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      text-align: center;
+    }
+    .label { display:block; font-size:.68rem; color: var(--sub); }
+    .value { font-size: 1.1rem; font-weight: 700; }
+    #field {
+      position: relative;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+      overflow: hidden;
+      min-height: 300px;
+    }
+    .lane-line {
+      position: absolute;
+      left: 10%;
+      right: 10%;
+      height: 3px;
+      top: 74%;
+      background: rgba(110,193,255,.65);
+      box-shadow: 0 0 12px rgba(110,193,255,.7);
+    }
+    #shutter {
+      position: absolute;
+      left: 8%;
+      right: 8%;
+      height: 40px;
+      top: calc(74% - 20px);
+      border: 2px solid rgba(255,255,255,.25);
+      border-radius: 999px;
+      transition: transform .09s ease, box-shadow .09s ease, background .09s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: .82rem;
+      letter-spacing: .08em;
+      font-weight: 700;
+      color: #f0f5ff;
+      background: rgba(40,58,102,.35);
+      box-shadow: inset 0 0 0 4px rgba(8,13,31,.65);
+    }
+    #shutter.open {
+      background: rgba(99,240,194,.2);
+      border-color: rgba(99,240,194,.9);
+      box-shadow: 0 0 22px rgba(99,240,194,.42), inset 0 0 0 2px rgba(99,240,194,.35);
+      transform: scale(1.02);
+    }
+    .orb {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      will-change: transform;
+    }
+    .orb.blue { background: radial-gradient(circle at 30% 28%, #d8f7ff, #4ea8ff 60%, #156cc7); box-shadow: 0 0 10px rgba(78,168,255,.8); }
+    .orb.red { background: radial-gradient(circle at 30% 28%, #ffd4e5, #ff5d97 60%, #ba2158); box-shadow: 0 0 10px rgba(255,93,151,.8); }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    #startBtn {
+      appearance: none;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #041122;
+      background: linear-gradient(180deg, #89d4ff, #4ab2ff);
+    }
+    .hint { margin: 0; text-align: center; color: var(--sub); font-size: .78rem; }
+    .footer {
+      text-align: center;
+      font-size: .82rem;
+      color: var(--sub);
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      align-items: center;
+    }
+    .footer a { color: #a7c8ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>シャッタービート</h1>
+
+    <section class="hud" aria-label="スコア情報">
+      <div class="stat"><span class="label">SCORE</span><span class="value" id="score">0</span></div>
+      <div class="stat"><span class="label">TIME</span><span class="value" id="time">60.0</span></div>
+      <div class="stat"><span class="label">HI-SCORE</span><span class="value" id="hi">0</span></div>
+    </section>
+
+    <section id="field" aria-label="ゲームフィールド">
+      <div class="lane-line"></div>
+      <div id="shutter">CLOSED</div>
+    </section>
+
+    <div class="controls">
+      <button id="startBtn" type="button">START</button>
+      <p class="hint">タップでシャッターを一瞬OPEN。OPEN中に青を通して、赤は通さない。</p>
+    </div>
+
+    <div class="footer">
+      <span id="status">READY</span>
+      <span>•</span>
+      <a href="../../">作品集へ戻る</a>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const KEY = 'webgame_2026_04_27_shutter_beat_highscore';
+      const PLAY_TIME = 60;
+      const field = document.getElementById('field');
+      const shutter = document.getElementById('shutter');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const hiEl = document.getElementById('hi');
+      const statusEl = document.getElementById('status');
+      const startBtn = document.getElementById('startBtn');
+
+      const state = {
+        running: false,
+        score: 0,
+        hi: Number(localStorage.getItem(KEY) || 0),
+        remain: PLAY_TIME,
+        tPrev: 0,
+        spawnClock: 0,
+        spawnEvery: 620,
+        speed: 180,
+        redRate: 0.22,
+        orbs: [],
+        shutterOpenUntil: 0,
+        judgedCutY: 0,
+      };
+
+      hiEl.textContent = String(state.hi);
+      const shutterTopRatio = 0.74;
+
+      function resetRound() {
+        state.score = 0;
+        state.remain = PLAY_TIME;
+        state.spawnClock = 0;
+        state.orbs = [];
+        state.shutterOpenUntil = 0;
+        state.tPrev = 0;
+        state.spawnEvery = 620;
+        state.speed = 180;
+        state.redRate = 0.22;
+        scoreEl.textContent = '0';
+        timeEl.textContent = PLAY_TIME.toFixed(1);
+        statusEl.textContent = 'GO';
+        shutter.classList.remove('open');
+        shutter.textContent = 'CLOSED';
+        field.querySelectorAll('.orb').forEach(el => el.remove());
+      }
+
+      function updateDifficulty() {
+        const elapsed = PLAY_TIME - state.remain;
+        if (elapsed >= 45) {
+          state.speed = 295;
+          state.spawnEvery = 340;
+          state.redRate = 0.39;
+        } else if (elapsed >= 30) {
+          state.speed = 240;
+          state.spawnEvery = 450;
+          state.redRate = 0.31;
+        } else {
+          state.speed = 180;
+          state.spawnEvery = 620;
+          state.redRate = 0.22;
+        }
+      }
+
+      function spawnOrb() {
+        const rect = field.getBoundingClientRect();
+        const x = 16 + Math.random() * (rect.width - 38);
+        const isRed = Math.random() < state.redRate;
+        const el = document.createElement('div');
+        el.className = `orb ${isRed ? 'red' : 'blue'}`;
+        el.style.transform = `translate(${x}px, -26px)`;
+        field.appendChild(el);
+        state.orbs.push({ x, y: -26, bad: isRed, judged: false, el });
+      }
+
+      function tapOpen() {
+        if (!state.running) return;
+        const now = performance.now();
+        const elapsed = PLAY_TIME - state.remain;
+        const openMs = elapsed >= 45 ? 120 : elapsed >= 30 ? 150 : 180;
+        state.shutterOpenUntil = Math.max(state.shutterOpenUntil, now + openMs);
+        shutter.classList.add('open');
+        shutter.textContent = 'OPEN';
+      }
+
+      function endRound() {
+        state.running = false;
+        shutter.classList.remove('open');
+        shutter.textContent = 'CLOSED';
+        statusEl.textContent = 'FINISH';
+        if (state.score > state.hi) {
+          state.hi = state.score;
+          localStorage.setItem(KEY, String(state.hi));
+          hiEl.textContent = String(state.hi);
+          statusEl.textContent = 'NEW HI-SCORE!';
+        }
+      }
+
+      function frame(ts) {
+        if (!state.running) return;
+        if (!state.tPrev) state.tPrev = ts;
+        const dt = Math.min(32, ts - state.tPrev);
+        state.tPrev = ts;
+
+        state.remain = Math.max(0, state.remain - dt / 1000);
+        timeEl.textContent = state.remain.toFixed(1);
+        updateDifficulty();
+
+        state.spawnClock += dt;
+        while (state.spawnClock >= state.spawnEvery) {
+          state.spawnClock -= state.spawnEvery;
+          spawnOrb();
+        }
+
+        const rect = field.getBoundingClientRect();
+        const lineY = rect.height * shutterTopRatio;
+        state.judgedCutY = lineY;
+
+        const openNow = ts <= state.shutterOpenUntil;
+        if (!openNow && shutter.classList.contains('open')) {
+          shutter.classList.remove('open');
+          shutter.textContent = 'CLOSED';
+        }
+
+        for (let i = state.orbs.length - 1; i >= 0; i--) {
+          const o = state.orbs[i];
+          o.y += state.speed * (dt / 1000);
+          o.el.style.transform = `translate(${o.x}px, ${o.y}px)`;
+
+          if (!o.judged && o.y + 11 >= lineY) {
+            o.judged = true;
+            if (openNow) {
+              state.score += o.bad ? -12 : 10;
+              scoreEl.textContent = String(state.score);
+            }
+          }
+
+          if (o.y > rect.height + 28) {
+            o.el.remove();
+            state.orbs.splice(i, 1);
+          }
+        }
+
+        if (state.remain <= 0) {
+          endRound();
+          return;
+        }
+        requestAnimationFrame(frame);
+      }
+
+      startBtn.addEventListener('pointerdown', () => {
+        if (state.running) return;
+        resetRound();
+        state.running = true;
+        requestAnimationFrame(frame);
+      });
+
+      field.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        tapOpen();
+      }, { passive: false });
+
+      window.addEventListener('resize', () => {
+        if (!state.running) return;
+        state.orbs.forEach(o => {
+          if (o.x > field.clientWidth - 22) o.x = Math.max(0, field.clientWidth - 22);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
