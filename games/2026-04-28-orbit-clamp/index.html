@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>オービットクランプ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root{--bg:#090b1a;--panel:#151a33;--text:#eef2ff;--sub:#97a2d6;--good:#4ee7a8;--bad:#ff6b8b;--acc:#6ed4ff}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 30% 10%,#1a2048 0%,var(--bg) 56%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .wrap{height:100%;display:flex;flex-direction:column;max-width:430px;margin:0 auto;padding:14px 14px 12px;gap:10px}
+    h1{margin:0;font-size:clamp(20px,6vw,30px);letter-spacing:.04em}
+    .hud{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+    .box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px;text-align:center}
+    .k{font-size:11px;color:var(--sub)} .v{font-weight:700;font-size:19px}
+    .arena{position:relative;flex:1;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));border:1px solid rgba(255,255,255,.14);border-radius:14px;overflow:hidden;touch-action:manipulation}
+    canvas{width:100%;height:100%;display:block}
+    .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+    .msg{background:rgba(8,10,22,.7);padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.16);font-size:13px}
+    .controls{display:flex;gap:8px}
+    button,a{height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:var(--panel);color:var(--text);font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center;flex:1}
+    button{cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🛰️ オービットクランプ</h1>
+    <div class="hud">
+      <div class="box"><div class="k">SCORE</div><div id="score" class="v">0</div></div>
+      <div class="box"><div class="k">TIME</div><div id="time" class="v">60.0</div></div>
+      <div class="box"><div class="k">HI</div><div id="hi" class="v">0</div></div>
+    </div>
+    <div id="arena" class="arena"><canvas id="cv"></canvas><div class="overlay"><div id="msg" class="msg">STARTで開始。画面タップでクランプCLOSE。</div></div></div>
+    <div class="controls"><button id="start">START</button><button id="restart">RESTART</button><a href="../../">戻る</a></div>
+  </div>
+<script>
+(() => {
+  const KEY='orbit-clamp-hi-v1';
+  const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  const arena=document.getElementById('arena');
+  const el={score:score,time:time,hi:hi,msg:msg,start:start,restart:restart};
+  let w=0,h=0,cx=0,cy=0,R=0,clampClose=0,scoreV=0,hiV=+localStorage.getItem(KEY)||0,timeLeft=60,running=false,last=0,angle=0,nodes=[];
+  el.hi.textContent=hiV;
+  function resize(){const r=arena.getBoundingClientRect();cv.width=r.width*devicePixelRatio;cv.height=r.height*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);w=r.width;h=r.height;cx=w/2;cy=h/2;R=Math.min(w,h)*0.3}
+  addEventListener('resize',resize);resize();
+  function stage(){return timeLeft>45?0:timeLeft>15?1:2}
+  function spawn(dt){const s=stage();const rate=[0.9,1.25,1.7][s];if(Math.random()<rate*dt){nodes.push({a:Math.random()*Math.PI*2,t:Math.random()<(s===0?0.2:s===1?0.3:0.4)?'bad':'good',v:[1.4,1.9,2.4][s]*(Math.random()<0.5?-1:1)})}}
+  function tap(){if(!running)return; if(clampClose>0)return; clampClose=0.22; let hit=false; for(const n of nodes){if(n.hit)continue; const d=Math.abs(norm(n.a-angle)); if(d<0.25){n.hit=true;hit=true; scoreV += n.t==='good'?12:-10;}} if(!hit) scoreV-=2; scoreV=Math.max(0,scoreV); el.score.textContent=scoreV;}
+  arena.addEventListener('pointerdown',tap,{passive:true});
+  function norm(a){while(a>Math.PI)a-=Math.PI*2;while(a<-Math.PI)a+=Math.PI*2;return a}
+  function draw(){ctx.clearRect(0,0,w,h);ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=3;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.stroke();
+    for(const n of nodes){const x=cx+Math.cos(n.a)*R,y=cy+Math.sin(n.a)*R;ctx.fillStyle=n.t==='good'?'#4ee7a8':'#ff6b8b';ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fill();}
+    const open=clampClose>0?0.18:0.48;ctx.strokeStyle='#6ed4ff';ctx.lineWidth=8;ctx.lineCap='round';ctx.beginPath();ctx.arc(cx,cy,R+14,angle-open,angle+open);ctx.stroke();}
+  function loop(ts){if(!last)last=ts;const dt=Math.min(0.033,(ts-last)/1000);last=ts; if(running){timeLeft-=dt; if(timeLeft<=0){timeLeft=0;running=false;el.msg.textContent='終了！ RESTARTで再挑戦'; if(scoreV>hiV){hiV=scoreV;localStorage.setItem(KEY,String(hiV));el.hi.textContent=hiV;}} angle+=dt*[1.7,2.3,3.1][stage()]; clampClose=Math.max(0,clampClose-dt); spawn(dt); for(const n of nodes)n.a+=n.v*dt; nodes=nodes.filter(n=>!n.hit); el.time.textContent=timeLeft.toFixed(1);} draw(); requestAnimationFrame(loop)}
+  requestAnimationFrame(loop);
+  function startGame(){running=true;scoreV=0;timeLeft=60;nodes=[];clampClose=0;el.score.textContent='0';el.time.textContent='60.0';el.msg.textContent='タップでクランプを閉じて青を捕まえろ';}
+  el.start.addEventListener('pointerdown',startGame,{passive:true});
+  el.restart.addEventListener('pointerdown',startGame,{passive:true});
+})();
+</script>
+</body></html>
