@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>フェーズダンパー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent} html,body{margin:0;height:100%;overflow:hidden}
+    body{font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;background:radial-gradient(circle at 30% 20%,#1b2a4a,#090d18 60%);color:#ecf4ff}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:12px}
+    .game{width:min(430px,100%);height:min(860px,100%);background:rgba(8,12,24,.82);border:1px solid rgba(140,180,255,.25);border-radius:16px;padding:14px;display:grid;grid-template-rows:auto auto 1fr auto;gap:10px}
+    h1{margin:0;font-size:1.3rem} .hud{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-weight:700}
+    .panel{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px;font-size:.9rem}
+    #field{position:relative;border-radius:12px;border:1px solid rgba(120,170,255,.35);background:linear-gradient(180deg,rgba(96,151,255,.12),rgba(7,13,24,.55));overflow:hidden}
+    .line{position:absolute;left:8%;right:8%;height:3px;bottom:22%;background:#9bc2ff;opacity:.7}
+    .damper{position:absolute;left:8%;right:8%;height:18px;bottom:20%;border-radius:10px;transition:all .08s linear}
+    .closed{background:rgba(255,96,96,.45);border:2px solid #ff8080}.open{background:rgba(90,255,180,.25);border:2px solid #6dffc5}
+    .pulse{position:absolute;width:22px;height:22px;border-radius:50%}
+    .blue{background:#6cc4ff;box-shadow:0 0 10px #6cc4ff}.red{background:#ff7c9f;box-shadow:0 0 10px #ff7c9f}
+    .controls{display:flex;gap:8px;flex-wrap:wrap} button,a{border:0;border-radius:10px;padding:10px 14px;font-weight:700;text-decoration:none}
+    button{background:#6ca8ff;color:#061021} button:disabled{opacity:.5} #retry{display:none} a{background:#1b2439;color:#d2e2ff}
+    #overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:rgba(3,5,9,.62);text-align:center;padding:16px}
+  </style>
+</head>
+<body>
+<div class="wrap"><main class="game">
+  <h1>フェーズダンパー</h1>
+  <section class="hud">
+    <div class="panel">Score: <span id="score">0</span></div>
+    <div class="panel">Time: <span id="time">60.0</span>s</div>
+    <div class="panel">Hi: <span id="hi">0</span></div>
+    <div class="panel">Damper: <span id="state">CLOSED</span></div>
+  </section>
+  <section id="field"><div class="line"></div><div id="damper" class="damper closed"></div><div id="overlay"><strong>60秒で青を吸収、赤は避けろ</strong><button id="start">スタート</button></div></section>
+  <div class="controls"><button id="retry">もう一回</button><a href="../../">← 作品集へ戻る</a></div>
+</main></div>
+<script>
+(() => {
+  const KEY='phase-damper-hi-v1', field=document.getElementById('field'), damper=document.getElementById('damper');
+  const scoreEl=score,timeEl=time,hiEl=hi,stateEl=state,overlay=overlay,startBtn=start,retryBtn=retry;
+  let running=false,open=false,score=0,hi=Number(localStorage.getItem(KEY)||0),timeLeft=60,pulses=[],last=0,spawnAcc=0;
+  hiEl.textContent=hi;
+  const W=()=>field.clientWidth,H=()=>field.clientHeight,hitY=()=>H()*0.78;
+  function setOpen(v){open=v;damper.className='damper '+(open?'open':'closed');stateEl.textContent=open?'OPEN':'CLOSED';}
+  function spawn(){const t=timeLeft;let speed=150,rate=0.75,red=0.25;if(t<30){speed=220;rate=1.15;red=0.35}if(t<15){speed=290;rate=1.55;red=0.45}
+    const isRed=Math.random()<red; pulses.push({x:18+Math.random()*(W()-40),y:-26,v:speed,type:isRed?'red':'blue',scored:false}); return rate;}
+  function update(dt){spawnAcc+=dt;const rate=spawn();const intv=1/rate; if(spawnAcc>=intv){spawnAcc=0;}
+    for(const p of pulses){p.y+=p.v*dt; if(!p.scored && p.y>=hitY()-10 && p.y<=hitY()+8){p.scored=true; if(open){score += p.type==='blue'?2:-3; scoreEl.textContent=score;}}
+    }
+    pulses=pulses.filter(p=>p.y<H()+30);
+  }
+  function draw(){field.querySelectorAll('.pulse').forEach(n=>n.remove()); for(const p of pulses){const d=document.createElement('div');d.className='pulse '+p.type;d.style.left=p.x+'px';d.style.top=p.y+'px';field.appendChild(d);} }
+  function loop(ts){if(!running)return; if(!last)last=ts; const dt=Math.min(.033,(ts-last)/1000); last=ts; timeLeft=Math.max(0,timeLeft-dt); timeEl.textContent=timeLeft.toFixed(1);
+    update(dt); draw(); if(timeLeft<=0) return endGame(); requestAnimationFrame(loop);} 
+  function startGame(){running=true;score=0;timeLeft=60;pulses=[];last=0;spawnAcc=0;scoreEl.textContent='0';setOpen(false);overlay.style.display='none';retryBtn.style.display='none';requestAnimationFrame(loop);} 
+  function endGame(){running=false; if(score>hi){hi=score;localStorage.setItem(KEY,String(hi));hiEl.textContent=hi;} overlay.innerHTML=`<strong>終了: ${score} 点</strong><div>ハイスコア: ${hi}</div><button id="start2">リスタート</button>`; overlay.style.display='flex'; document.getElementById('start2').addEventListener('pointerdown',startGame,{passive:true}); retryBtn.style.display='inline-block';}
+  field.addEventListener('pointerdown',e=>{if(!running)return; e.preventDefault(); setOpen(!open);},{passive:false});
+  startBtn.addEventListener('pointerdown',startGame,{passive:true}); retryBtn.addEventListener('pointerdown',startGame,{passive:true});
+})();
+</script>
+</body></html>
