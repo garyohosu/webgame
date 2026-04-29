@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>グラビティポケット</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: radial-gradient(circle at top, #1a2247, #070a16 65%); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; color: #eef3ff; }
+    .wrap { height: 100%; display: flex; justify-content: center; align-items: center; padding: 12px; }
+    .game { width: min(430px, 100%); aspect-ratio: 9/16; border: 1px solid #ffffff33; border-radius: 18px; background: linear-gradient(180deg, #111933 0%, #0a0f22 100%); padding: 12px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 10px; }
+    h1 { margin: 0; font-size: 1.1rem; letter-spacing: .04em; }
+    .hud { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .panel { background: #ffffff12; border: 1px solid #ffffff22; border-radius: 10px; padding: 6px; text-align: center; font-size: .78rem; }
+    .panel b { display:block; font-size: 1.1rem; margin-top: 2px; }
+    #field { width: 100%; height: 100%; border-radius: 12px; background: linear-gradient(180deg, #1d2f65 0%, #0a122d 70%, #090c18 100%); touch-action: manipulation; }
+    .row { display:flex; justify-content: space-between; align-items:center; gap:8px; }
+    button, a { border-radius: 10px; border: 1px solid #ffffff33; background: #ffffff18; color: #fff; padding: 8px 12px; font-weight: 700; text-decoration:none; }
+    button { flex: 1; }
+    #msg { font-size: .8rem; color: #b8c7ff; min-height: 1.2em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <main class="game">
+      <h1>🕳️ グラビティポケット</h1>
+      <div class="hud">
+        <div class="panel">SCORE<b id="score">0</b></div>
+        <div class="panel">TIME<b id="time">60.0</b></div>
+        <div class="panel">HI<b id="hi">0</b></div>
+      </div>
+      <canvas id="field" width="360" height="540"></canvas>
+      <div>
+        <div class="row">
+          <button id="start">START</button>
+          <a href="../../">← 戻る</a>
+        </div>
+        <div id="msg">タップでポケット位置を切替（左→中→右）</div>
+      </div>
+    </main>
+  </div>
+<script>
+(() => {
+  const KEY = 'gravity-pocket-hi';
+  const canvas = document.getElementById('field');
+  const ctx = canvas.getContext('2d');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  const msgEl = document.getElementById('msg');
+  const startBtn = document.getElementById('start');
+
+  let hi = Number(localStorage.getItem(KEY) || 0);
+  hiEl.textContent = hi;
+  let running = false, score = 0, t = 60, last = 0, spawn = 0, lane = 1;
+  let nodes = [];
+
+  function difficulty(sec) {
+    if (sec > 30) return { speed: 115, red: 0.2, gap: 0.72, multi: 0.08 };
+    if (sec > 15) return { speed: 145, red: 0.3, gap: 0.55, multi: 0.15 };
+    return { speed: 178, red: 0.4, gap: 0.42, multi: 0.26 };
+  }
+
+  function addNode(kind, x, speed) { nodes.push({ kind, x, y: -20, r: 10, speed }); }
+  function spawnNodes(d) {
+    const slots = [canvas.width * 0.22, canvas.width * 0.5, canvas.width * 0.78];
+    const x = slots[Math.floor(Math.random() * 3)];
+    addNode(Math.random() < d.red ? 'red' : 'blue', x, d.speed * (0.9 + Math.random() * 0.25));
+    if (Math.random() < d.multi) {
+      const x2 = slots[Math.floor(Math.random() * 3)];
+      addNode(Math.random() < d.red ? 'red' : 'blue', x2, d.speed * (0.9 + Math.random() * 0.25));
+    }
+  }
+
+  function reset() { score = 0; t = 60; lane = 1; spawn = 0; nodes = []; scoreEl.textContent = score; timeEl.textContent = t.toFixed(1); }
+
+  function update(dt) {
+    const d = difficulty(t);
+    t = Math.max(0, t - dt); timeEl.textContent = t.toFixed(1);
+    spawn -= dt;
+    if (spawn <= 0) { spawnNodes(d); spawn = d.gap; }
+    const pocketX = [canvas.width*0.22, canvas.width*0.5, canvas.width*0.78][lane];
+    const pocketY = canvas.height - 38;
+    for (const n of nodes) n.y += n.speed * dt;
+    nodes = nodes.filter(n => {
+      if (n.y > canvas.height + 18) return false;
+      if (n.y >= pocketY - 8 && Math.abs(n.x - pocketX) < 26) {
+        score = Math.max(0, score + (n.kind === 'blue' ? 1 : -2));
+        scoreEl.textContent = score;
+        return false;
+      }
+      return true;
+    });
+    if (t <= 0) end();
+  }
+
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const w = canvas.width, h = canvas.height;
+    const xs = [w*0.22, w*0.5, w*0.78];
+    ctx.strokeStyle = '#ffffff25'; ctx.lineWidth = 2;
+    xs.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); });
+    const pocketX = xs[lane], y = h-30;
+    ctx.fillStyle = '#7ee8fa'; ctx.beginPath(); ctx.ellipse(pocketX, y, 30, 12, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#04070f'; ctx.beginPath(); ctx.ellipse(pocketX, y, 17, 7, 0, 0, Math.PI*2); ctx.fill();
+    for (const n of nodes) {
+      ctx.fillStyle = n.kind === 'blue' ? '#68b5ff' : '#ff5f7a';
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  function loop(ts) {
+    if (!running) return;
+    if (!last) last = ts;
+    const dt = Math.min(0.033, (ts - last) / 1000); last = ts;
+    update(dt); draw();
+    requestAnimationFrame(loop);
+  }
+
+  function end() {
+    running = false;
+    if (score > hi) { hi = score; localStorage.setItem(KEY, String(hi)); hiEl.textContent = hi; msgEl.textContent = `終了！新記録 ${hi}`; }
+    else msgEl.textContent = `終了！スコア ${score}`;
+    startBtn.disabled = false; startBtn.textContent = 'RETRY';
+  }
+
+  canvas.addEventListener('pointerdown', () => {
+    if (!running) return;
+    lane = (lane + 1) % 3;
+  });
+
+  startBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (running) return;
+    reset(); running = true; last = 0; startBtn.disabled = true; msgEl.textContent = '青を吸って、赤を避けろ。';
+    requestAnimationFrame(loop);
+  });
+
+  reset(); draw();
+})();
+</script>
+</body>
+</html>
