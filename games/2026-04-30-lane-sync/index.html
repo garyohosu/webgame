@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>レーンシンク</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;height:100%;overflow:hidden;background:#070b1a;color:#eaf2ff;font-family:system-ui,sans-serif}
+    body{display:flex;justify-content:center;align-items:center}
+    .app{width:min(100vw,430px);height:100dvh;padding:12px;display:flex;flex-direction:column;gap:10px}
+    h1{margin:0;font-size:clamp(20px,6vw,28px);text-align:center}
+    .hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.box{background:#131b36;border:1px solid #2f4478;border-radius:10px;padding:8px;text-align:center}.k{font-size:11px;color:#9fb3df}.v{font-weight:700}
+    #game{position:relative;flex:1;border-radius:14px;border:1px solid #2f4478;background:linear-gradient(180deg,#101a35,#0c1328);overflow:hidden}
+    .lane{position:absolute;top:0;bottom:0;width:33.33%;border-left:1px dashed rgba(170,190,255,.16)}.lane:first-child{border-left:0}
+    #catcher{position:absolute;bottom:14px;width:28%;height:14px;left:3%;border-radius:999px;background:#5de6ff;box-shadow:0 0 14px #5de6ff88;transition:left .08s linear}
+    .pulse{position:absolute;width:18px;height:18px;border-radius:50%}
+    .good{background:#58f5a0;box-shadow:0 0 12px #58f5a088}.bad{background:#ff5f7d;box-shadow:0 0 12px #ff5f7d88}
+    .controls{display:flex;gap:8px}.btn{flex:1;padding:12px;border:0;border-radius:10px;background:#3a67ff;color:#fff;font-weight:700}
+    a{color:#9fc2ff;text-align:center}
+    #msg{font-size:13px;text-align:center;color:#b9c7e9;min-height:1.2em}
+  </style>
+</head><body>
+<div class="app">
+  <h1>レーンシンク</h1>
+  <div class="hud">
+    <div class="box"><div class="k">SCORE</div><div class="v" id="score">0</div></div>
+    <div class="box"><div class="k">TIME</div><div class="v" id="time">60.0</div></div>
+    <div class="box"><div class="k">HI</div><div class="v" id="hi">0</div></div>
+  </div>
+  <div id="game"><div class="lane" style="left:0%"></div><div class="lane" style="left:33.33%"></div><div class="lane" style="left:66.66%"></div><div id="catcher"></div></div>
+  <div id="msg">タップでレーン切替。青を取って赤を避けろ。</div>
+  <div class="controls"><button class="btn" id="start">スタート</button></div>
+  <a href="../../">← 作品集へ戻る</a>
+</div>
+<script>
+(()=>{const KEY='lane-sync-hi-v1';const game=document.getElementById('game'),catcher=document.getElementById('catcher');const scoreEl=document.getElementById('score'),timeEl=document.getElementById('time'),hiEl=document.getElementById('hi'),msg=document.getElementById('msg'),startBtn=document.getElementById('start');
+let hi=+localStorage.getItem(KEY)||0;hiEl.textContent=hi;let running=false,score=0,time=60,lane=0,pulses=[],last=0,spawnAcc=0;
+function laneLeft(i){return 3+i*33.33}function setLane(){catcher.style.left=laneLeft(lane)+'%'}setLane();
+function spawn(){const t=time;let speed=170,badRate=.2,interval=.65;if(t<30){speed=205;badRate=.3;interval=.52}if(t<15){speed=240;badRate=.4;interval=.42}
+const count=(t<30&&Math.random()<.35)||(t<15&&Math.random()<.55)?2:1;for(let c=0;c<count;c++){const l=Math.floor(Math.random()*3),bad=Math.random()<badRate,e=document.createElement('div');e.className='pulse '+(bad?'bad':'good');const x=(l*33.33)+16+Math.random()*12;e.style.left=`calc(${x}% - 9px)`;e.style.top='-20px';game.appendChild(e);pulses.push({e,l,y:-20,v:speed,bad});}return interval;}
+let dynInterval=.65;
+function start(){running=true;score=0;time=60;lane=0;setLane();scoreEl.textContent=0;msg.textContent='';pulses.forEach(p=>p.e.remove());pulses=[];last=performance.now();spawnAcc=0;dynInterval=.65;requestAnimationFrame(loop)}
+function end(){running=false;msg.textContent=`終了！ スコア ${score}`;if(score>hi){hi=score;localStorage.setItem(KEY,hi);hiEl.textContent=hi;msg.textContent+='  ハイスコア更新！'}}
+function loop(ts){if(!running)return;const dt=Math.min(.033,(ts-last)/1000);last=ts;time=Math.max(0,time-dt);timeEl.textContent=time.toFixed(1);spawnAcc+=dt;if(spawnAcc>=dynInterval){spawnAcc=0;dynInterval=spawn();}
+const catchY=game.clientHeight-28;for(let i=pulses.length-1;i>=0;i--){const p=pulses[i];p.y+=p.v*dt;p.e.style.top=p.y+'px';if(p.y>=catchY&&p.y<=catchY+16&&p.l===lane){score+=p.bad?-2:1;scoreEl.textContent=score;p.e.remove();pulses.splice(i,1);continue}if(p.y>game.clientHeight+24){p.e.remove();pulses.splice(i,1)}}if(time<=0){end();return}requestAnimationFrame(loop)}
+function tap(){if(!running)return;lane=(lane+1)%3;setLane()}game.addEventListener('pointerdown',tap,{passive:true});document.body.addEventListener('pointerdown',e=>{if(e.target===startBtn)start()},{passive:true});startBtn.addEventListener('pointerdown',e=>e.preventDefault());
+})();
+</script>
+</body></html>
