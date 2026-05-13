@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>フェーズホッパー</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root { --bg:#070b1a; --panel:#141a2e; --line:#2b3c67; --txt:#e9f0ff; --sub:#9cb0da; --blue:#5fd1ff; --red:#ff6d7a; --good:#6dffb3; }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at top,#142246,#070b1a 60%);color:var(--txt);font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif}
+    .wrap{height:100%;display:flex;align-items:center;justify-content:center;padding:10px}
+    .game{width:min(96vw,430px);height:min(96vh,900px);background:rgba(20,26,46,.92);border:1px solid #2a3760;border-radius:20px;padding:14px;display:grid;grid-template-rows:auto auto 1fr auto;gap:10px}
+    h1{margin:0;font-size:1.15rem}
+    .hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.pill{background:#1b2340;border:1px solid #32467b;border-radius:12px;padding:8px;text-align:center;font-size:.82rem}.pill b{display:block;font-size:1.1rem}
+    #field{position:relative;border:1px solid var(--line);border-radius:14px;background:linear-gradient(#0a1126,#070c1a);overflow:hidden}
+    .lane{position:absolute;top:0;bottom:0;width:33.333%;border-right:1px dashed rgba(140,170,240,.17)}.lane:last-child{border-right:none}
+    #judge{position:absolute;left:0;right:0;bottom:18%;height:3px;background:rgba(95,209,255,.8);box-shadow:0 0 10px rgba(95,209,255,.7)}
+    #hopper{position:absolute;bottom:10%;width:22%;height:7%;background:linear-gradient(180deg,#79e3ff,#2aa4e0);border-radius:12px;box-shadow:0 0 18px rgba(95,209,255,.65);transition:left .08s}
+    .node{position:absolute;width:18%;aspect-ratio:1;border-radius:50%}
+    .blue{background:radial-gradient(circle at 35% 30%,#c5f3ff,#3da8e8 70%)}
+    .red{background:radial-gradient(circle at 35% 30%,#ffd2d7,#d43851 70%)}
+    .controls{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    button,a{border-radius:10px;border:1px solid #36508d;background:#1f2b4f;color:var(--txt);padding:10px 12px;text-decoration:none;font-weight:700}
+    button:disabled{opacity:.45}
+    .msg{font-size:.88rem;color:var(--sub);min-height:1.2em}
+  </style>
+</head>
+<body>
+<div class="wrap"><div class="game" id="game">
+  <h1>フェーズホッパー</h1>
+  <div class="hud">
+    <div class="pill">SCORE<b id="score">0</b></div>
+    <div class="pill">TIME<b id="time">60.0</b></div>
+    <div class="pill">HI<b id="hi">0</b></div>
+  </div>
+  <div id="field">
+    <div class="lane" style="left:0"></div><div class="lane" style="left:33.333%"></div><div class="lane" style="left:66.666%"></div>
+    <div id="judge"></div><div id="hopper"></div>
+  </div>
+  <div class="controls"><button id="start">START</button><a href="../../">← 戻る</a></div>
+  <div class="msg" id="msg">タップでホッパーを切り替え、青を取って赤を避けろ。</div>
+</div></div>
+<script>
+(()=>{const KEY='phase-hopper-hi-v1',field=document.getElementById('field'),hopper=document.getElementById('hopper');
+const scoreEl=score,timeEl=time,hiEl=hi,msgEl=msg,startBtn=start;let hiScore=+localStorage.getItem(KEY)||0;hiEl.textContent=hiScore;
+let running=false,scoreV=0,timeLeft=60,lane=1,nodes=[],last=0,spawnT=0;const lanes=[6,39,72],judgeY=0.82;
+function setLane(){hopper.style.left=lanes[lane]+'%'} setLane();
+function reset(){scoreV=0;timeLeft=60;nodes.forEach(n=>n.el.remove());nodes=[];spawnT=0;last=0;scoreEl.textContent=0;timeEl.textContent='60.0';msgEl.textContent='タップで先読みホップ。';lane=1;setLane();}
+function addNode(diff){const type=Math.random()<(0.72-diff*0.07)?'blue':'red';const ln=Math.floor(Math.random()*3);const el=document.createElement('div');el.className='node '+type;el.style.left=(lanes[ln]+2)+'%';el.style.top='-10%';field.appendChild(el);nodes.push({el,lane:ln,type,y:-0.1,speed:0.24+diff*0.1+Math.random()*0.06,hit:false});}
+function tick(ts){if(!running)return;if(!last)last=ts;const dt=(ts-last)/1000;last=ts;timeLeft=Math.max(0,timeLeft-dt);
+const elapsed=60-timeLeft,diff=elapsed<30?0:elapsed<45?1:2;spawnT-=dt;if(spawnT<=0){const burst=diff===2&&Math.random()<0.35?2:1;for(let i=0;i<burst;i++)addNode(diff);spawnT=0.5-diff*0.1+Math.random()*0.35;}
+for(let i=nodes.length-1;i>=0;i--){const n=nodes[i];n.y+=n.speed*dt;n.el.style.top=(n.y*100)+'%';if(!n.hit&&n.y>=judgeY){n.hit=true;if(n.lane===lane){scoreV=Math.max(0,scoreV+(n.type==='blue'?10:-8));msgEl.textContent=n.type==='blue'?'GOOD +10':'NOISE -8';} }
+if(n.y>1.08){n.el.remove();nodes.splice(i,1);} }
+scoreEl.textContent=scoreV;timeEl.textContent=timeLeft.toFixed(1);if(timeLeft<=0){end();return;}requestAnimationFrame(tick);}
+function end(){running=false;startBtn.disabled=false;if(scoreV>hiScore){hiScore=scoreV;localStorage.setItem(KEY,hiScore);}hiEl.textContent=hiScore;msgEl.textContent=`終了！ SCORE ${scoreV}`;}
+startBtn.addEventListener('pointerdown',()=>{if(running)return;reset();running=true;startBtn.disabled=true;requestAnimationFrame(tick);});
+document.getElementById('game').addEventListener('pointerdown',(e)=>{if(e.target===startBtn||e.target.closest('a'))return;if(!running)return;lane=(lane+1)%3;setLane();});
+})();
+</script>
+</body></html>
