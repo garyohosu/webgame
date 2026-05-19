@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>オービットハーベスター</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background:#070b1a; color:#eaf0ff; font-family: system-ui, -apple-system, sans-serif; }
+    .app { height:100%; display:flex; flex-direction:column; padding:12px; gap:10px; max-width:430px; margin:0 auto; }
+    h1 { font-size:1.25rem; margin:0; }
+    .hud { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-weight:700; font-size:.9rem; }
+    .pill { background:#111a36; border:1px solid #26355f; border-radius:10px; padding:8px; text-align:center; }
+    #game { flex:1; width:100%; background:radial-gradient(circle at 50% 25%,#1b2a52,#0a1023 70%); border:1px solid #2a3e71; border-radius:14px; }
+    .controls { display:flex; gap:8px; }
+    button,a { flex:1; border:none; border-radius:12px; padding:12px; font-size:1rem; text-align:center; text-decoration:none; }
+    button { background:#4f7cff; color:white; font-weight:700; }
+    a { background:#1b274c; color:#d7e2ff; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>オービットハーベスター</h1>
+    <div class="hud">
+      <div class="pill">Score <span id="score">0</span></div>
+      <div class="pill">Time <span id="time">60.0</span></div>
+      <div class="pill">Hi <span id="hi">0</span></div>
+    </div>
+    <canvas id="game" width="390" height="620"></canvas>
+    <div class="controls">
+      <button id="start">スタート</button>
+      <button id="retry">リトライ</button>
+      <a href="../../">戻る</a>
+    </div>
+  </div>
+<script>
+(() => {
+  const key='orbit-harvester-hi-v1';
+  const cvs=document.getElementById('game'),ctx=cvs.getContext('2d');
+  const scoreEl=document.getElementById('score'),timeEl=document.getElementById('time'),hiEl=document.getElementById('hi');
+  const hi=+localStorage.getItem(key)||0; hiEl.textContent=hi;
+  let running=false, score=0, t=60, last=0, angle=0, spawn=0, combo=0;
+  let orbs=[];
+  const center={x:cvs.width/2,y:cvs.height*0.62}, armLen=140;
+  const lanes=[{x:center.x,y:90},{x:cvs.width-48,y:center.y},{x:center.x,y:cvs.height-48},{x:48,y:center.y}];
+  function phase(){ return t>45?0:t>15?1:2; }
+  function reset(){ running=false; score=0; t=60; angle=0; spawn=0; combo=0; orbs=[]; paint(); }
+  function start(){ if(running) return; running=true; last=performance.now(); requestAnimationFrame(loop); }
+  function tap(){ if(!running) return; angle=(angle+1)%4; }
+  function spawnOrb(){ const p=phase(); const speed=[120,170,230][p]; const badRate=[0.22,0.33,0.42][p];
+    const lane=Math.floor(Math.random()*4); const target=lanes[lane];
+    let x=target.x,y=target.y; if(lane===0) y=-15; if(lane===2) y=cvs.height+15; if(lane===1) x=cvs.width+15; if(lane===3) x=-15;
+    const dx=(center.x-x), dy=(center.y-y); const mag=Math.hypot(dx,dy);
+    orbs.push({x,y,vx:dx/mag*speed,vy:dy/mag*speed,lane,bad:Math.random()<badRate,r:10});
+  }
+  function update(dt){ t=Math.max(0,t-dt); if(t===0) running=false; spawn-=dt; if(spawn<=0){ spawnOrb(); spawn=[0.65,0.5,0.38][phase()]; }
+    orbs.forEach(o=>{o.x+=o.vx*dt;o.y+=o.vy*dt;});
+    orbs=orbs.filter(o=>{
+      const d=Math.hypot(o.x-center.x,o.y-center.y);
+      if(d<26){
+        if(o.lane===angle){ if(o.bad){score=Math.max(0,score-2); combo=0;} else { combo++; score+=1+Math.min(4,Math.floor(combo/5)); } }
+        else if(!o.bad) combo=0;
+        return false;
+      }
+      return o.x>-30&&o.x<cvs.width+30&&o.y>-30&&o.y<cvs.height+30;
+    });
+    scoreEl.textContent=score; timeEl.textContent=t.toFixed(1);
+    if(!running){ const old=+localStorage.getItem(key)||0; if(score>old){localStorage.setItem(key,score); hiEl.textContent=score;} }
+  }
+  function paint(){
+    ctx.clearRect(0,0,cvs.width,cvs.height);
+    ctx.strokeStyle='#2c447a'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(center.x,center.y,120,0,Math.PI*2); ctx.stroke();
+    ctx.save(); ctx.translate(center.x,center.y); ctx.rotate(angle*Math.PI/2);
+    ctx.fillStyle='#8cd2ff'; ctx.fillRect(-8,-armLen,16,armLen); ctx.restore();
+    ctx.fillStyle='#ffffff'; ctx.beginPath(); ctx.arc(center.x,center.y,18,0,Math.PI*2); ctx.fill();
+    for(const o of orbs){ ctx.fillStyle=o.bad?'#ff5b7f':'#53f2b8'; ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill(); }
+    if(!running){ ctx.fillStyle='rgba(3,8,20,.72)'; ctx.fillRect(0,0,cvs.width,cvs.height); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='700 28px system-ui'; ctx.fillText('TAP START',cvs.width/2,cvs.height/2); }
+  }
+  function loop(ts){ if(!running){paint(); return;} const dt=Math.min(0.05,(ts-last)/1000); last=ts; update(dt); paint(); requestAnimationFrame(loop); }
+  document.body.addEventListener('pointerdown', tap, {passive:true});
+  document.getElementById('start').addEventListener('pointerdown', e=>{e.stopPropagation(); start();});
+  document.getElementById('retry').addEventListener('pointerdown', e=>{e.stopPropagation(); reset(); start();});
+  reset();
+})();
+</script>
+</body>
+</html>
