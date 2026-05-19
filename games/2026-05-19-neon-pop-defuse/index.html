@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Neon Pop Defuse</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root { --bg:#080b16; --panel:#12182a; --safe:#57d9ff; --danger:#ff4f7a; --text:#eaf1ff; --muted:#9ea8c7; }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(circle at 20% 10%,#1b2a4b,#080b16 70%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);}
+    .game{height:100%;display:grid;grid-template-rows:auto auto 1fr auto;max-width:430px;margin:0 auto;padding:12px;gap:10px;}
+    h1{margin:2px 0 0;font-size:1.25rem;letter-spacing:.03em;}
+    .hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .stat{background:var(--panel);border:1px solid #2b3658;border-radius:12px;padding:8px;text-align:center;font-weight:700;font-size:.9rem}
+    .label{display:block;font-size:.68rem;color:var(--muted);font-weight:600}
+    #field{position:relative;background:linear-gradient(180deg,#10162a,#0b1020);border:1px solid #2b3658;border-radius:14px;overflow:hidden;touch-action:manipulation;}
+    .bubble{position:absolute;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;color:#00101a;user-select:none;}
+    .safe{background:radial-gradient(circle at 30% 30%,#d9f8ff,var(--safe));box-shadow:0 0 20px rgba(87,217,255,.45)}
+    .danger{background:radial-gradient(circle at 30% 30%,#ffd7e2,var(--danger));box-shadow:0 0 20px rgba(255,79,122,.45)}
+    .controls{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+    button,a{border:none;border-radius:12px;padding:11px 14px;font-weight:800;font-size:.92rem}
+    #start{flex:1;background:#79ffbf;color:#052012}
+    a{background:#1a223c;color:#c8d5ff;text-decoration:none;text-align:center;min-width:92px}
+    #msg{font-size:.84rem;color:var(--muted);min-height:1.2em}
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>Neon Pop Defuse</h1>
+    <section class="hud">
+      <div class="stat"><span class="label">SCORE</span><span id="score">0</span></div>
+      <div class="stat"><span class="label">TIME</span><span id="time">60.0</span></div>
+      <div class="stat"><span class="label">HI</span><span id="hi">0</span></div>
+    </section>
+    <section id="field" aria-label="game field"></section>
+    <div class="controls">
+      <button id="start" type="button">START</button>
+      <a href="../../">戻る</a>
+    </div>
+    <div id="msg">青をタップ、赤は触らない。</div>
+  </main>
+<script>
+(() => {
+  const KEY='neon-pop-defuse-hi';
+  const field=document.getElementById('field'),scoreEl=document.getElementById('score'),timeEl=document.getElementById('time'),hiEl=document.getElementById('hi'),msg=document.getElementById('msg'),startBtn=document.getElementById('start');
+  let score=0,time=60,hi=Number(localStorage.getItem(KEY)||0),running=false,last=0,spawnAcc=0,idSeq=0; hiEl.textContent=hi;
+  const bubbles=new Map();
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  function diff(){ if(time>45) return [900,.2]; if(time>15) return [700,.28]; return [520,.36]; }
+  function spawn(){ const rect=field.getBoundingClientRect(),size=34+Math.random()*34,[,dangerRate]=diff(); const danger=Math.random()<dangerRate; const x=Math.random()*(rect.width-size), y=Math.random()*(rect.height-size); const life=900+(danger?900:1300)+Math.random()*1200; const id=++idSeq;
+    const el=document.createElement('div'); el.className='bubble '+(danger?'danger':'safe'); el.style.width=el.style.height=size+'px'; el.style.left=x+'px'; el.style.top=y+'px'; el.dataset.id=id; el.textContent=danger?'!':'+'; field.appendChild(el);
+    bubbles.set(id,{el,danger,die:performance.now()+life});
+  }
+  function hit(e){ if(!running) return; const b=e.target.closest('.bubble'); if(!b) return; const id=Number(b.dataset.id); const obj=bubbles.get(id); if(!obj) return;
+    if(obj.danger){ score=clamp(score-2,0,1e9); msg.textContent='ミス！赤で -2'; }
+    else { score+=1+(time>40?1:0); msg.textContent='ナイス！'; }
+    scoreEl.textContent=Math.floor(score); obj.el.remove(); bubbles.delete(id);
+  }
+  field.addEventListener('pointerdown',hit);
+  function reset(){ bubbles.forEach(v=>v.el.remove()); bubbles.clear(); score=0;time=60;scoreEl.textContent='0';timeEl.textContent='60.0';msg.textContent='青をタップ、赤は触らない。'; }
+  function end(){ running=false; startBtn.disabled=false; startBtn.textContent='RETRY'; if(score>hi){ hi=score; localStorage.setItem(KEY,String(hi)); hiEl.textContent=hi; msg.textContent='ハイスコア更新！'; } else { msg.textContent='終了！もう一回。'; } }
+  function loop(ts){ if(!running) return; if(!last) last=ts; const dt=ts-last; last=ts; time=clamp(time-dt/1000,0,60); timeEl.textContent=time.toFixed(1);
+    const [interval]=diff(); spawnAcc+=dt; while(spawnAcc>=interval){ spawnAcc-=interval; spawn(); }
+    bubbles.forEach((o,id)=>{ if(ts>=o.die){ o.el.remove(); bubbles.delete(id); } });
+    if(time<=0){ end(); return; }
+    requestAnimationFrame(loop);
+  }
+  startBtn.addEventListener('pointerdown',()=>{ if(running) return; reset(); running=true; startBtn.disabled=true; startBtn.textContent='PLAYING'; last=0; spawnAcc=0; requestAnimationFrame(loop); });
+})();
+</script>
+</body>
+</html>
