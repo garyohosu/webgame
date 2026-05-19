@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>フェーズピボット</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;height:100%;overflow:hidden;background:#080b18;color:#eaf2ff;font-family:system-ui,sans-serif}
+    body{display:flex;justify-content:center}
+    .app{width:min(100vw,460px);height:100%;padding:12px;display:flex;flex-direction:column;gap:10px}
+    .hud{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .tile{background:#121a32;border:1px solid #2a3768;border-radius:12px;padding:8px;text-align:center}
+    .v{font-weight:700;font-size:1.1rem}
+    .title{text-align:center;font-weight:800;letter-spacing:.04em}
+    .state{color:#8ee7ff}
+    canvas{width:100%;aspect-ratio:1/1;border-radius:16px;background:radial-gradient(circle at 50% 20%,#1a2650,#0a1125 65%);border:1px solid #334579}
+    .controls{display:flex;gap:8px}
+    button,a{flex:1;padding:12px;border-radius:12px;border:1px solid #3a4f86;background:#1b284f;color:#fff;text-align:center;text-decoration:none;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="title">🧭 フェーズピボット</div>
+    <div class="hud">
+      <div class="tile">SCORE<div id="score" class="v">0</div></div>
+      <div class="tile">TIME<div id="time" class="v">60.0</div></div>
+      <div class="tile">HI-SCORE<div id="hi" class="v">0</div></div>
+      <div class="tile">STATE<div id="state" class="v state">READY</div></div>
+    </div>
+    <canvas id="game" width="420" height="420"></canvas>
+    <div class="controls">
+      <button id="start">START</button>
+      <a href="../../">戻る</a>
+    </div>
+  </div>
+<script>
+(() => {
+  const KEY='webgame_phase_pivot_hi';
+  const c=document.getElementById('game'),x=c.getContext('2d');
+  const scoreEl=score,timeEl=time,hiEl=hi,stateEl=state,startBtn=start;
+  let hiScore=+localStorage.getItem(KEY)||0; hiEl.textContent=hiScore;
+  let running=false,spin=true,score=0,t=60,last=0,arm=0,nodes=[],spawn=0;
+  const center={x:210,y:210},ring=120;
+  function reset(){running=true;spin=true;score=0;t=60;last=performance.now();arm=0;nodes=[];spawn=0;scoreEl.textContent=0;stateEl.textContent='RUN';}
+  function phaseMult(){return t>30?1:t>15?1.2:1.45}
+  function redRate(){return t>30?0.25:t>15?0.35:0.45}
+  function spawnNode(){
+    const a=Math.random()*Math.PI*2;
+    nodes.push({a,d:190,color:Math.random()<redRate()?'#ff5577':'#55d5ff'});
+  }
+  function tick(now){
+    const dt=(now-last)/1000;last=now;
+    if(running){
+      t=Math.max(0,t-dt); timeEl.textContent=t.toFixed(1);
+      if(spin) arm=(arm+dt*1.9*phaseMult())%(Math.PI*2);
+      spawn-=dt; if(spawn<=0){spawn=0.45/phaseMult();spawnNode();}
+      for(let i=nodes.length-1;i>=0;i--){
+        const n=nodes[i]; n.d-=90*phaseMult()*dt;
+        if(n.d<=ring){
+          let diff=Math.abs(Math.atan2(Math.sin(n.a-arm),Math.cos(n.a-arm)));
+          if(diff<0.25){ score += n.color==='#55d5ff'?10:-12; score=Math.max(0,score); }
+          nodes.splice(i,1);
+        }
+      }
+      scoreEl.textContent=score;
+      if(t<=0){running=false;stateEl.textContent='FIN';if(score>hiScore){hiScore=score;localStorage.setItem(KEY,hiScore);hiEl.textContent=hiScore;}}
+    }
+    draw(); requestAnimationFrame(tick);
+  }
+  function draw(){
+    x.clearRect(0,0,420,420);
+    x.strokeStyle='#2d3f75';x.lineWidth=2;x.beginPath();x.arc(center.x,center.y,ring,0,Math.PI*2);x.stroke();
+    for(const n of nodes){
+      const px=center.x+Math.cos(n.a)*n.d,py=center.y+Math.sin(n.a)*n.d;
+      x.fillStyle=n.color;x.beginPath();x.arc(px,py,10,0,Math.PI*2);x.fill();
+    }
+    const ax=center.x+Math.cos(arm)*ring, ay=center.y+Math.sin(arm)*ring;
+    x.strokeStyle=spin?'#8ef7a8':'#ffd166';x.lineWidth=8;x.beginPath();x.moveTo(center.x,center.y);x.lineTo(ax,ay);x.stroke();
+    x.fillStyle='#cfe0ff';x.beginPath();x.arc(center.x,center.y,8,0,Math.PI*2);x.fill();
+  }
+  c.addEventListener('pointerdown',()=>{ if(running){spin=!spin;stateEl.textContent=spin?'RUN':'HOLD';}});
+  startBtn.addEventListener('pointerdown',reset);
+  requestAnimationFrame((n)=>{last=n;tick(n);});
+})();
+</script>
+</body>
+</html>
