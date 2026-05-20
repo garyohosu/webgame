@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ジャイロブレーキ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;background:#090b1a;color:#eaf2ff;font-family:system-ui,sans-serif;height:100%;overflow:hidden}
+    body{display:flex;justify-content:center;align-items:center}
+    .app{width:min(100vw,430px);height:100dvh;padding:14px;display:grid;grid-template-rows:auto auto 1fr auto auto;gap:10px}
+    h1{margin:0;font-size:clamp(22px,7vw,30px);letter-spacing:.04em}
+    .hud{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .pill{background:#131933;border:1px solid #2a356a;border-radius:12px;padding:8px 10px;font-weight:700;font-size:14px}
+    .arena{position:relative;border:1px solid #2a356a;border-radius:18px;background:radial-gradient(circle at 50% 30%,#1a2450,#0d1228 70%);display:grid;place-items:center}
+    canvas{width:100%;max-width:360px;aspect-ratio:1/1}
+    .hint{font-size:12px;opacity:.85;text-align:center}
+    .row{display:flex;gap:10px}
+    button,a{flex:1;padding:12px;border-radius:12px;border:1px solid #3a4d91;background:#1a2550;color:#fff;text-decoration:none;text-align:center;font-weight:700}
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>🧭 ジャイロブレーキ</h1>
+    <div class="hud">
+      <div class="pill">SCORE <span id="score">0</span></div>
+      <div class="pill">TIME <span id="time">60.0</span></div>
+      <div class="pill">HI <span id="hi">0</span></div>
+      <div class="pill">COMBO <span id="combo">0</span></div>
+    </div>
+    <section class="arena" id="arena"><canvas id="cv" width="360" height="360"></canvas></section>
+    <div class="hint">青でタップ=加点 / 赤=減点 / 何もない所=小減点</div>
+    <div class="row"><button id="start">START</button><a href="../../">戻る</a></div>
+  </main>
+<script>
+(() => {
+  const KEY='gyro-brake-hi-v1';
+  const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+  const el={score:score,time:time,hi:hi,combo:combo,start:start,arena:arena};
+  let st={run:false,t:60,score:0,combo:0,ang:0,speed:1.8,brake:0,hi:+localStorage.getItem(KEY)||0,last:0};
+  let arcs=[];
+  const TAU=Math.PI*2;
+
+  function reset(){st={...st,run:false,t:60,score:0,combo:0,ang:0,speed:1.8,brake:0,last:0,combo:0};spawnArcs();paintUI();el.start.textContent='START';}
+  function spawnArcs(){
+    const phase=st.t>45?0:st.t>15?1:2;
+    const blueW=[0.6,0.48,0.36][phase], redW=[0.4,0.52,0.62][phase];
+    const a=Math.random()*TAU;
+    arcs=[{type:'blue',a0:a,a1:a+blueW},{type:'red',a0:a+Math.PI*0.9,a1:a+Math.PI*0.9+redW}];
+  }
+  function inArc(a,s,e){a=(a+TAU)%TAU; s=(s+TAU)%TAU; e=(e+TAU)%TAU; return s<e?(a>=s&&a<=e):(a>=s||a<=e)}
+  function tap(){
+    if(!st.run)return;
+    st.brake=0.22;
+    const hit=arcs.find(x=>inArc(st.ang,x.a0,x.a1));
+    if(hit?.type==='blue'){st.combo++; st.score+=8+Math.min(20,st.combo); spawnArcs();}
+    else if(hit?.type==='red'){st.combo=0; st.score=Math.max(0,st.score-10);}
+    else{st.combo=0; st.score=Math.max(0,st.score-2);} 
+    paintUI();
+  }
+  function paintUI(){el.score.textContent=st.score;el.time.textContent=st.t.toFixed(1);el.combo.textContent=st.combo;el.hi.textContent=st.hi;}
+  function draw(){
+    ctx.clearRect(0,0,360,360); ctx.save(); ctx.translate(180,180);
+    ctx.beginPath();ctx.arc(0,0,120,0,TAU);ctx.strokeStyle='#22305f';ctx.lineWidth=22;ctx.stroke();
+    arcs.forEach(a=>{ctx.beginPath();ctx.arc(0,0,120,a.a0,a.a1);ctx.strokeStyle=a.type==='blue'?'#41d8ff':'#ff5577';ctx.lineWidth=22;ctx.stroke();});
+    ctx.rotate(st.ang); ctx.beginPath(); ctx.moveTo(-10,0);ctx.lineTo(105,0);ctx.strokeStyle='#fff';ctx.lineWidth=6;ctx.stroke();
+    ctx.beginPath();ctx.arc(0,0,12,0,TAU);ctx.fillStyle='#ffe17a';ctx.fill(); ctx.restore();
+  }
+  function step(ts){
+    if(!st.last) st.last=ts; const dt=Math.min(.05,(ts-st.last)/1000); st.last=ts;
+    if(st.run){
+      st.t=Math.max(0,st.t-dt);
+      const phase=st.t>30?0:st.t>15?1:2;
+      st.speed=[1.9,2.4,3.1][phase] * (st.brake>0?0.2:1);
+      st.ang=(st.ang+st.speed*dt)%TAU;
+      st.brake=Math.max(0,st.brake-dt);
+      if(st.t<=0){st.run=false;el.start.textContent='RESTART'; if(st.score>st.hi){st.hi=st.score;localStorage.setItem(KEY,String(st.hi));}}
+      paintUI();
+    }
+    draw(); requestAnimationFrame(step);
+  }
+  el.start.addEventListener('pointerdown',()=>{if(!st.run){reset();st.run=true;el.start.textContent='RUNNING';}});
+  el.arena.addEventListener('pointerdown',tap,{passive:true});
+  reset(); requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
