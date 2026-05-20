@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>オービットラッチ</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root { --bg:#090b1a; --panel:#12162a; --line:#31406d; --fg:#ebefff; --blue:#53c8ff; --red:#ff5f7d; --good:#68ffd4; }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;margin:0;background:radial-gradient(circle at 20% 10%,#182548,#090b1a 56%);color:var(--fg);font-family:system-ui,sans-serif;overflow:hidden}
+    .app{height:100%;max-width:440px;margin:0 auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+    h1{margin:0;font-size:1.2rem;letter-spacing:.04em}
+    .hud{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+    .box{background:rgba(18,22,42,.9);border:1px solid #2a3356;border-radius:12px;padding:8px;text-align:center}
+    .k{font-size:.68rem;color:#aab4da}.v{font-size:1.1rem;font-weight:700}
+    #field{position:relative;flex:1;min-height:0;border:1px solid #2a3356;border-radius:16px;background:linear-gradient(180deg,#0f1428,#0b0f1f);overflow:hidden;touch-action:manipulation}
+    .ring{position:absolute;inset:0;display:grid;place-items:center}
+    .orb{position:absolute;width:16px;height:16px;border-radius:50%;transform:translate(-50%,-50%)}
+    .orb.blue{background:var(--blue);box-shadow:0 0 12px rgba(83,200,255,.8)}
+    .orb.red{background:var(--red);box-shadow:0 0 12px rgba(255,95,125,.75)}
+    #cursor{position:absolute;width:22px;height:22px;border-radius:50%;border:3px solid var(--good);box-shadow:0 0 18px rgba(104,255,212,.9);transform:translate(-50%,-50%)}
+    .center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:10px;height:10px;border-radius:50%;background:#c9d5ff}
+    .overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(8,10,22,.5);padding:20px}
+    .panel{background:rgba(12,16,32,.95);border:1px solid #2d3a63;border-radius:14px;padding:14px;text-align:center;max-width:280px}
+    button,a.back{appearance:none;border:none;border-radius:999px;padding:10px 16px;font-weight:700}
+    button{background:linear-gradient(135deg,#5fb2ff,#53ffd4);color:#081126}
+    a.back{display:inline-block;background:#1a2342;color:#dfe6ff;text-decoration:none;text-align:center}
+    .foot{display:flex;justify-content:space-between;gap:8px}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>🛰️ オービットラッチ</h1>
+    <div class="hud">
+      <div class="box"><div class="k">SCORE</div><div id="score" class="v">0</div></div>
+      <div class="box"><div class="k">TIME</div><div id="time" class="v">60.0</div></div>
+      <div class="box"><div class="k">HI</div><div id="hi" class="v">0</div></div>
+    </div>
+    <div id="field">
+      <div class="ring"><div class="center"></div></div>
+      <div id="cursor"></div>
+      <div id="nodes"></div>
+      <div id="overlay" class="overlay"><div class="panel"><p>タップでカーソルを一瞬停止。<br>青で+10、赤で-12。</p><button id="start">START</button></div></div>
+    </div>
+    <div class="foot">
+      <a class="back" href="../../">← 戻る</a>
+      <button id="retry" style="display:none">RETRY</button>
+    </div>
+  </div>
+<script>
+(() => {
+  const key='orbit-latch-hi-v1';
+  const scoreEl=document.getElementById('score'), timeEl=document.getElementById('time'), hiEl=document.getElementById('hi');
+  const field=document.getElementById('field'), cursor=document.getElementById('cursor'), nodesWrap=document.getElementById('nodes');
+  const overlay=document.getElementById('overlay'), startBtn=document.getElementById('start'), retryBtn=document.getElementById('retry');
+  const hi=Number(localStorage.getItem(key)||0); hiEl.textContent=hi;
+
+  let state='idle', score=0, t=60, angle=0, speed=1.8, holdUntil=0, last=0, nodes=[];
+  const cx=()=>field.clientWidth/2, cy=()=>field.clientHeight/2, r=()=>Math.min(field.clientWidth, field.clientHeight)*0.33;
+
+  function spawnNode(){
+    const p=t>45?0.3:t>30?0.4:0.45; // blue chance
+    const blue=Math.random()<p;
+    nodes.push({a:Math.random()*Math.PI*2, type:blue?'blue':'red', hit:false});
+    if(nodes.length>7) nodes.shift();
+  }
+
+  function draw(){
+    const rr=r(), x=cx()+Math.cos(angle)*rr, y=cy()+Math.sin(angle)*rr;
+    cursor.style.left=x+'px'; cursor.style.top=y+'px';
+    nodesWrap.innerHTML='';
+    for(const n of nodes){
+      const ox=cx()+Math.cos(n.a)*rr, oy=cy()+Math.sin(n.a)*rr;
+      const d=document.createElement('div'); d.className='orb '+n.type; d.style.left=ox+'px'; d.style.top=oy+'px';
+      nodesWrap.appendChild(d);
+    }
+  }
+
+  function judge(){
+    const rr=r(), px=cx()+Math.cos(angle)*rr, py=cy()+Math.sin(angle)*rr;
+    for(const n of nodes){
+      if(n.hit) continue;
+      const ox=cx()+Math.cos(n.a)*rr, oy=cy()+Math.sin(n.a)*rr;
+      const dist=Math.hypot(px-ox,py-oy);
+      const hitRadius=t>45?15:t>30?17:19;
+      if(dist<=hitRadius){
+        n.hit=true;
+        score += n.type==='blue'?10:-12;
+        if(score<0) score=0;
+      }
+    }
+    nodes = nodes.filter(n=>!n.hit);
+    scoreEl.textContent=score;
+  }
+
+  function loop(ts){
+    if(state!=='run') return;
+    if(!last) last=ts;
+    const dt=(ts-last)/1000; last=ts;
+    t=Math.max(0,t-dt);
+    timeEl.textContent=t.toFixed(1);
+    speed=t>45?2.6:t>30?2.2:1.8;
+    if(ts>holdUntil) angle+=dt*speed;
+    if(Math.random()<dt*2.4) spawnNode();
+    draw();
+    if(t<=0){ end(); return; }
+    requestAnimationFrame(loop);
+  }
+
+  function start(){
+    state='run'; score=0; t=60; angle=0; nodes=[]; last=0; holdUntil=0;
+    scoreEl.textContent='0'; timeEl.textContent='60.0';
+    overlay.style.display='none'; retryBtn.style.display='inline-block';
+    spawnNode(); spawnNode();
+    requestAnimationFrame(loop);
+  }
+
+  function end(){
+    state='end';
+    const prev=Number(localStorage.getItem(key)||0);
+    if(score>prev){ localStorage.setItem(key,String(score)); hiEl.textContent=String(score); }
+    overlay.style.display='grid';
+    overlay.querySelector('.panel').innerHTML=`<p>TIME UP<br>Score: <b>${score}</b></p><button id="again">RETRY</button>`;
+    document.getElementById('again').addEventListener('pointerdown',start,{once:true});
+  }
+
+  field.addEventListener('pointerdown',()=>{
+    if(state!=='run') return;
+    holdUntil=performance.now()+240;
+    judge();
+  });
+  startBtn.addEventListener('pointerdown',start);
+  retryBtn.addEventListener('pointerdown',()=>{ if(state!=='run') start(); });
+  draw();
+})();
+</script>
+</body>
+</html>
