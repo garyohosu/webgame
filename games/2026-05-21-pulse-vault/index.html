@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>パルスヴォールト</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root { --bg:#070b1f; --panel:#141a36; --line:#2be7ff; --danger:#ff5b7a; --ok:#66ffa8; --text:#eff3ff; }
+    * { box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+    html,body { margin:0; height:100%; overflow:hidden; background:radial-gradient(circle at 30% 20%, #1d2a59, var(--bg)); color:var(--text); font-family: system-ui, -apple-system, "Noto Sans JP", sans-serif; }
+    .wrap { height:100%; display:flex; flex-direction:column; padding:12px; gap:10px; }
+    .top { display:flex; justify-content:space-between; align-items:center; font-weight:700; }
+    .title { font-size:clamp(20px,5.8vw,28px); letter-spacing:.04em; }
+    .hud { display:flex; gap:8px; font-size:13px; flex-wrap:wrap; justify-content:flex-end; }
+    .pill { background:rgba(255,255,255,.09); border:1px solid rgba(255,255,255,.18); border-radius:999px; padding:6px 10px; }
+    .stage { flex:1; min-height:0; border:1px solid rgba(255,255,255,.2); border-radius:16px; background:linear-gradient(180deg,#0d1532,#090e22); position:relative; overflow:hidden; }
+    .lane { position:absolute; left:0; right:0; height:50%; border-top:1px dashed rgba(255,255,255,.12); border-bottom:1px dashed rgba(255,255,255,.12); }
+    .lane.top { top:0; }
+    .lane.bottom { bottom:0; }
+    .receiver { position:absolute; left:20px; width:20px; height:20px; border-radius:6px; background:var(--ok); box-shadow:0 0 18px rgba(102,255,168,.7); transition:top .08s linear; }
+    .pulse { position:absolute; width:18px; height:18px; border-radius:50%; box-shadow:0 0 14px currentColor; }
+    .pulse.good { color:var(--line); background:var(--line); }
+    .pulse.bad { color:var(--danger); background:var(--danger); }
+    .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background:rgba(4,8,24,.65); text-align:center; padding:16px; }
+    button { border:none; border-radius:12px; padding:12px 22px; font-size:16px; font-weight:700; background:linear-gradient(135deg,#2be7ff,#66ffa8); color:#081326; }
+    .hint { font-size:13px; color:#c8d4ff; opacity:.9; }
+    .back { text-align:center; font-size:14px; color:#bcd1ff; text-decoration:none; padding:4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="title">パルスヴォールト</div>
+      <div class="hud">
+        <div class="pill">Score: <span id="score">0</span></div>
+        <div class="pill">Time: <span id="time">60.0</span>s</div>
+        <div class="pill">Hi: <span id="hi">0</span></div>
+      </div>
+    </div>
+    <div class="stage" id="stage">
+      <div class="lane top"></div><div class="lane bottom"></div>
+      <div class="receiver" id="receiver"></div>
+      <div class="overlay" id="overlay">
+        <div>青を取って、赤を避けろ。</div>
+        <button id="start">START</button>
+        <div class="hint">画面タップでレーン切替（60秒）</div>
+      </div>
+    </div>
+    <a class="back" href="../../">← 作品集へ戻る</a>
+  </div>
+<script>
+(() => {
+  const KEY = 'pulse-vault-hi-v1';
+  const stage = document.getElementById('stage');
+  const receiver = document.getElementById('receiver');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('start');
+  const scoreEl = document.getElementById('score');
+  const timeEl = document.getElementById('time');
+  const hiEl = document.getElementById('hi');
+  let hi = Number(localStorage.getItem(KEY) || 0); hiEl.textContent = hi;
+
+  let playing=false, score=0, lane=0, pulses=[], remain=60, last=0, spawnTimer=0;
+  const lanesY = () => [stage.clientHeight * 0.25 - 10, stage.clientHeight * 0.75 - 10];
+  const setReceiver = () => receiver.style.top = lanesY()[lane] + 'px';
+  setReceiver(); addEventListener('resize', setReceiver);
+
+  const spawn = () => {
+    const t = 60 - remain;
+    const diff = t < 30 ? 1 : t < 45 ? 1.35 : 1.7;
+    const isBad = Math.random() < (0.28 + (diff-1)*0.12);
+    const p = { x: stage.clientWidth + 24, lane: Math.random() < 0.5 ? 0 : 1, bad: isBad, speed: (180 + Math.random()*70) * diff, el: document.createElement('div') };
+    p.el.className = 'pulse ' + (isBad ? 'bad' : 'good');
+    p.el.style.top = (lanesY()[p.lane] + 1) + 'px';
+    stage.appendChild(p.el); pulses.push(p);
+  };
+
+  const endGame = () => {
+    playing = false;
+    if (score > hi) { hi = score; localStorage.setItem(KEY, String(hi)); hiEl.textContent = hi; }
+    overlay.innerHTML = `<div>TIME UP<br>Score: ${score}</div><button id="start">RETRY</button><div class="hint">タップでレーン切替</div>`;
+    overlay.style.display = 'flex';
+    document.getElementById('start').addEventListener('pointerdown', startGame);
+  };
+
+  const loop = (ts) => {
+    if (!playing) return;
+    if (!last) last = ts;
+    const dt = (ts - last) / 1000; last = ts;
+    remain = Math.max(0, remain - dt);
+    timeEl.textContent = remain.toFixed(1);
+
+    const t = 60 - remain;
+    const diff = t < 30 ? 1 : t < 45 ? 1.35 : 1.7;
+    const interval = 0.72 / diff;
+    spawnTimer += dt;
+    while (spawnTimer >= interval) { spawnTimer -= interval; spawn(); }
+
+    const rx = 30;
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const p = pulses[i];
+      p.x -= p.speed * dt;
+      p.el.style.transform = `translate(${p.x}px,0)`;
+      if (p.x <= rx + 10 && p.x >= rx - 14 && p.lane === lane) {
+        score = Math.max(0, score + (p.bad ? -12 : 10));
+        scoreEl.textContent = score;
+        p.el.remove(); pulses.splice(i,1); continue;
+      }
+      if (p.x < -30) {
+        if (!p.bad) { score = Math.max(0, score - 3); scoreEl.textContent = score; }
+        p.el.remove(); pulses.splice(i,1);
+      }
+    }
+
+    if (remain <= 0) return endGame();
+    requestAnimationFrame(loop);
+  };
+
+  function startGame(e){
+    e?.preventDefault();
+    pulses.forEach(p => p.el.remove()); pulses = [];
+    playing = true; score = 0; remain = 60; last = 0; spawnTimer = 0; lane = 0;
+    scoreEl.textContent = '0'; timeEl.textContent = '60.0'; setReceiver();
+    overlay.style.display = 'none';
+    requestAnimationFrame(loop);
+  }
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (!playing) return;
+    if (e.target.tagName === 'BUTTON') return;
+    lane = lane ? 0 : 1; setReceiver();
+  });
+  startBtn.addEventListener('pointerdown', startGame);
+})();
+</script>
+</body>
+</html>
