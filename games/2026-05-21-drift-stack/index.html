@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ドリフトスタック</title>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    *{box-sizing:border-box} html,body{margin:0;height:100%;overflow:hidden;background:#090b15;color:#eef2ff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;padding:12px 12px 14px}
+    h1{font-size:1.2rem;margin:0 0 8px;text-align:center}
+    .hud{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+    .pill{background:#151a30;border:1px solid #2a3156;border-radius:10px;padding:6px;text-align:center;font-size:.78rem}
+    .v{display:block;font-weight:700;font-size:1rem;margin-top:2px}
+    #field{position:relative;flex:1;border:1px solid #2d3560;border-radius:12px;background:linear-gradient(#0d1226,#070a14)}
+    .lane{position:absolute;top:0;bottom:0;width:50%}.l{left:0;border-right:1px dashed #34406e}.r{right:0}
+    #catcher{position:absolute;bottom:10px;width:44%;height:14px;border-radius:8px;background:#7ee8fa;transition:left .06s;left:3%}
+    .cube{position:absolute;width:12%;aspect-ratio:1;border-radius:4px}
+    .blue{background:#4f96ff}.red{background:#ff5a77}
+    .controls{display:flex;gap:8px;margin-top:10px}
+    button,a{flex:1;min-height:42px;border-radius:10px;border:1px solid #3c4678;background:#171f3c;color:#eef2ff;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center}
+    #msg{font-size:.85rem;text-align:center;margin-top:6px;color:#b9c6ff;min-height:1.2em}
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>ドリフトスタック</h1>
+  <div class="hud">
+    <div class="pill">SCORE<span id="score" class="v">0</span></div>
+    <div class="pill">TIME<span id="time" class="v">60.0</span></div>
+    <div class="pill">HI<span id="hi" class="v">0</span></div>
+    <div class="pill">COMBO<span id="combo" class="v">0</span></div>
+  </div>
+  <div id="field"><div class="lane l"></div><div class="lane r"></div><div id="catcher"></div></div>
+  <div id="msg">STARTで開始。画面タップで左右切替。</div>
+  <div class="controls"><button id="start">START</button><a href="../../">戻る</a></div>
+</div>
+<script>
+(()=>{
+  const KEY='wg_hi_drift_stack';
+  const field=document.getElementById('field'), catcher=document.getElementById('catcher');
+  const scoreEl=document.getElementById('score'),timeEl=document.getElementById('time'),hiEl=document.getElementById('hi'),comboEl=document.getElementById('combo');
+  const startBtn=document.getElementById('start'),msg=document.getElementById('msg');
+  let hi=Number(localStorage.getItem(KEY)||0); hiEl.textContent=hi;
+  let running=false, lane=0, score=0, combo=0, left=58, t0=0, prev=0, spawnAcc=0, raf=0; let cubes=[];
+  const spawn=()=>{const e=t0; const redP=e<30?0.2:e<45?0.3:0.38; const both=e>45&&Math.random()<0.2?2:1;
+    for(let i=0;i<both;i++){const ln=Math.random()<0.5?0:1; const red=Math.random()<redP; cubes.push({lane:ln,y:-12,speed:(e<30?22:e<45?27:31)*(0.85+Math.random()*0.4),red,hit:false});}}
+  const renderCube=c=>{const d=document.createElement('div'); d.className='cube '+(c.red?'red':'blue'); d.style.left=(c.lane?57:7)+'%'; d.style.top=c.y+'%'; c.el=d; field.appendChild(d)};
+  const reset=()=>{cubes.forEach(c=>c.el?.remove()); cubes=[]; score=0;combo=0; lane=0; t0=0;spawnAcc=0; catcher.style.left='3%'; scoreEl.textContent='0'; comboEl.textContent='0'; timeEl.textContent='60.0'; msg.textContent='STARTで開始。画面タップで左右切替。';};
+  const end=()=>{running=false; cancelAnimationFrame(raf); if(score>hi){hi=score;localStorage.setItem(KEY,String(hi));hiEl.textContent=hi;} msg.textContent='終了！ REPLAYでもう一回。'; startBtn.textContent='REPLAY';};
+  const tick=(ts)=>{if(!running)return; if(!prev)prev=ts; const dt=(ts-prev)/1000; prev=ts; t0+=dt; const leftSec=Math.max(0,60-t0); timeEl.textContent=leftSec.toFixed(1); if(leftSec<=0)return end();
+    spawnAcc+=dt; const interval=t0<30?0.72:t0<45?0.58:0.46; if(spawnAcc>=interval){spawn();spawnAcc=0;}
+    cubes.forEach(c=>{if(!c.el)renderCube(c); c.y+=c.speed*dt; c.el.style.top=c.y+'%';
+      if(!c.hit && c.y>84 && c.y<95 && c.lane===lane){ c.hit=true; if(c.red){score=Math.max(0,score-12); combo=0;} else {combo++; score+=10+Math.min(combo,8);} scoreEl.textContent=score; comboEl.textContent=combo; }
+    });
+    cubes=cubes.filter(c=>{if(c.y>102){if(!c.hit&&!c.red)combo=0; c.el?.remove(); return false;} return true;});
+    raf=requestAnimationFrame(tick);
+  };
+  const toggle=()=>{if(!running)return; lane=lane?0:1; catcher.style.left=lane?'53%':'3%';};
+  field.addEventListener('pointerdown',e=>{e.preventDefault(); toggle();},{passive:false});
+  document.body.addEventListener('pointerdown',e=>{if(e.target===startBtn||e.target.closest('a'))return; if(running){e.preventDefault();toggle();}},{passive:false});
+  startBtn.addEventListener('pointerdown',e=>{e.preventDefault(); reset(); running=true; prev=0; startBtn.textContent='PLAYING'; msg.textContent='青を取って赤を避けろ。'; raf=requestAnimationFrame(tick);});
+})();
+</script>
+</body>
+</html>
