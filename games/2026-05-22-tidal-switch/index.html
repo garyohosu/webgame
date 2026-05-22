@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>タイダルスイッチ</title>
+  <meta name="description" content="HIGH/LOWをタップで切り替え、青い漂流体だけを回収する60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #06131f;
+      --panel: rgba(10, 25, 42, 0.86);
+      --line: rgba(150, 223, 255, 0.18);
+      --text: #ecf8ff;
+      --cyan: #64e7ff;
+      --blue: #8ad4ff;
+      --red: #ff6d8d;
+      --gold: #ffe17b;
+      --green: #8affc1;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      background: radial-gradient(circle at top, #153a61 0%, #08121d 55%, #050910 100%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      height: 100%;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .shell::before,
+    .shell::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      border-radius: 50%;
+      filter: blur(40px);
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .shell::before {
+      width: 180px; height: 180px; top: 50px; right: -40px;
+      background: rgba(100, 231, 255, 0.28);
+    }
+    .shell::after {
+      width: 160px; height: 160px; bottom: 120px; left: -50px;
+      background: rgba(255, 109, 141, 0.22);
+    }
+    .topbar, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+    }
+    .topbar {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--cyan);
+      opacity: 0.8;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      line-height: 1.05;
+      letter-spacing: 0.03em;
+    }
+    .sub {
+      margin-top: 6px;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: rgba(236, 248, 255, 0.74);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      border-radius: 14px;
+      padding: 9px 8px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.07);
+      text-align: center;
+      min-width: 0;
+    }
+    .label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: rgba(236,248,255,0.56);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .value {
+      font-size: 1.05rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .value.mode-high { color: var(--cyan); }
+    .value.mode-low { color: var(--gold); }
+    .arena {
+      position: relative;
+      border-radius: 26px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(100, 180, 255, 0.1), rgba(4, 12, 20, 0.2)),
+        linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0));
+      border: 1px solid rgba(160,220,255,0.16);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 40px rgba(0,0,0,0.24);
+      min-height: 0;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(3,9,16,0.1), rgba(3,9,16,0.68));
+      z-index: 3;
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .panel {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(5, 14, 22, 0.8);
+      border: 1px solid rgba(150,223,255,0.16);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.28);
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 1.35rem;
+    }
+    .panel p {
+      margin: 0;
+      color: rgba(236,248,255,0.78);
+      line-height: 1.6;
+      font-size: 0.95rem;
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      z-index: 2;
+    }
+    .back {
+      color: rgba(236,248,255,0.78);
+      text-decoration: none;
+      font-size: 0.92rem;
+      padding: 12px 10px;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #07121b;
+      background: linear-gradient(135deg, var(--cyan), #b3f3ff);
+      box-shadow: 0 10px 24px rgba(100, 231, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, #ffe17b, #fff1b3);
+      box-shadow: 0 10px 24px rgba(255, 225, 123, 0.18);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%; bottom: 20px;
+      transform: translateX(-50%);
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(4, 12, 20, 0.56);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(236,248,255,0.86);
+      z-index: 2;
+      pointer-events: none;
+      backdrop-filter: blur(8px);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="topbar">
+      <div class="eyebrow">60 SEC TIDE SORTER</div>
+      <h1>タイダルスイッチ</h1>
+      <div class="sub">タップで波位を切替え、左の網で青だけを掬う。赤を受けると減点。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Mode / Combo</div><div class="value mode-high" id="mode">HIGH x1</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="タイダルスイッチのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <h2 id="overlayTitle">潮位を合わせろ</h2>
+          <p id="overlayText">画面のどこでもタップで HIGH / LOW を切り替える。青を受け、赤を避け、60秒で自己ベストを更新しろ。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中は画面タップで切替</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'tidal-switch-hi-v1';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const arena = document.getElementById('arena');
+      const overlay = document.getElementById('overlay');
+      const overlayTitle = document.getElementById('overlayTitle');
+      const overlayText = document.getElementById('overlayText');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const bestEl = document.getElementById('best');
+      const modeEl = document.getElementById('mode');
+      const startBtn = document.getElementById('startBtn');
+      const retryBtn = document.getElementById('retryBtn');
+
+      let width = 390;
+      let height = 620;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: 60,
+        mode: 'high',
+        combo: 0,
+        items: [],
+        ripples: [],
+        foam: [],
+        flash: 0,
+        lastTs: 0,
+        spawnTimer: 0,
+      };
+      bestEl.textContent = state.best;
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        width = Math.max(320, Math.floor(rect.width));
+        height = Math.max(440, Math.floor(rect.height));
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function currentBandY() {
+        return state.mode === 'high' ? height * 0.33 : height * 0.72;
+      }
+
+      function toggleMode(x, y) {
+        state.mode = state.mode === 'high' ? 'low' : 'high';
+        state.ripples.push({ x, y, r: 10, a: 0.7, c: state.mode === 'high' ? '#64e7ff' : '#ffe17b' });
+        updateHud();
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.mode = 'high';
+        state.combo = 0;
+        state.items = [];
+        state.ripples = [];
+        state.foam = [];
+        state.flash = 0;
+        state.lastTs = 0;
+        state.spawnTimer = 0;
+        overlay.classList.remove('hidden');
+        overlayTitle.textContent = '潮位を合わせろ';
+        overlayText.textContent = '画面のどこでもタップで HIGH / LOW を切り替える。青を受け、赤を避け、60秒で自己ベストを更新しろ。';
+        updateHud();
+      }
+
+      function startGame() {
+        resetGame();
+        state.running = true;
+        overlay.classList.add('hidden');
+      }
+
+      function difficulty() {
+        const elapsed = 60 - state.timeLeft;
+        if (elapsed < 30) return { speed: 160, interval: 0.78, redChance: 0.24, multiChance: 0.15 };
+        if (elapsed < 45) return { speed: 205, interval: 0.62, redChance: 0.32, multiChance: 0.28 };
+        return { speed: 245, interval: 0.5, redChance: 0.4, multiChance: 0.42 };
+      }
+
+      function spawnItem(forceOffset = 0) {
+        const diff = difficulty();
+        const isRed = Math.random() < diff.redChance;
+        const targetBand = Math.random() < 0.5 ? 'high' : 'low';
+        const bandY = targetBand === 'high' ? height * 0.33 : height * 0.72;
+        const amplitude = 18 + Math.random() * 20 + (targetBand === 'high' ? 0 : 6);
+        state.items.push({
+          x: width + 26 + forceOffset,
+          baseY: bandY + (Math.random() * 22 - 11),
+          y: bandY,
+          type: isRed ? 'red' : 'blue',
+          targetBand,
+          amp: amplitude,
+          phase: Math.random() * Math.PI * 2,
+          size: isRed ? 13 : 11,
+          speed: diff.speed + Math.random() * 30,
+          scored: false,
+          pulse: 0,
+        });
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = String(state.best);
+        modeEl.textContent = `${state.mode.toUpperCase()} x${Math.max(1, state.combo + 1)}`;
+        modeEl.className = `value ${state.mode === 'high' ? 'mode-high' : 'mode-low'}`;
+      }
+
+      function handleCatch(item) {
+        if (item.type === 'blue') {
+          state.combo = Math.min(8, state.combo + 1);
+          const gain = 10 + state.combo * 2;
+          state.score += gain;
+          state.ripples.push({ x: item.x, y: item.y, r: 8, a: 0.9, c: '#8affc1' });
+        } else {
+          state.combo = 0;
+          state.score = Math.max(0, state.score - 12);
+          state.flash = 0.35;
+          for (let i = 0; i < 7; i++) {
+            state.foam.push({ x: item.x, y: item.y, vx: (Math.random() - 0.5) * 140, vy: (Math.random() - 0.5) * 140, a: 1, color: '#ff6d8d' });
+          }
+        }
+        item.scored = true;
+      }
+
+      function missBlue(item) {
+        state.combo = 0;
+        state.ripples.push({ x: item.x, y: item.y, r: 6, a: 0.4, c: '#6b8aa0' });
+      }
+
+      function finishGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        overlay.classList.remove('hidden');
+        overlayTitle.textContent = state.score >= state.best ? '潮位更新' : '潮位記録';
+        overlayText.textContent = `最終スコア ${state.score} / ベスト ${state.best}。もう一度潜って更新しろ。`;
+      }
+
+      function update(dt) {
+        if (!state.running) return;
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        if (state.timeLeft <= 0) {
+          finishGame();
+          return;
+        }
+        const diff = difficulty();
+        state.spawnTimer += dt;
+        if (state.spawnTimer >= diff.interval) {
+          state.spawnTimer = 0;
+          spawnItem();
+          if (Math.random() < diff.multiChance) spawnItem(34 + Math.random() * 22);
+          if (Math.random() < diff.multiChance * 0.4) spawnItem(72 + Math.random() * 20);
+        }
+
+        const catchX = width * 0.19;
+        const catchHalf = 54;
+        const activeBand = currentBandY();
+
+        for (let i = state.items.length - 1; i >= 0; i--) {
+          const item = state.items[i];
+          item.x -= item.speed * dt;
+          item.phase += dt * 3.2;
+          item.y = item.baseY + Math.sin(item.phase) * item.amp;
+          item.pulse += dt * 4;
+
+          if (!item.scored && item.x <= catchX + 16 && item.x >= catchX - 16) {
+            if (Math.abs(item.y - activeBand) <= catchHalf) {
+              handleCatch(item);
+            }
+          }
+
+          if (item.x < -30) {
+            if (!item.scored && item.type === 'blue') missBlue(item);
+            state.items.splice(i, 1);
+          }
+        }
+
+        for (let i = state.ripples.length - 1; i >= 0; i--) {
+          const r = state.ripples[i];
+          r.r += 70 * dt;
+          r.a -= 1.2 * dt;
+          if (r.a <= 0) state.ripples.splice(i, 1);
+        }
+
+        for (let i = state.foam.length - 1; i >= 0; i--) {
+          const p = state.foam[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 45 * dt;
+          p.a -= 1.8 * dt;
+          if (p.a <= 0) state.foam.splice(i, 1);
+        }
+
+        state.flash = Math.max(0, state.flash - dt);
+        if (state.score > state.best) {
+          state.best = state.score;
+        }
+        updateHud();
+      }
+
+      function drawBackground() {
+        const grad = ctx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, '#143553');
+        grad.addColorStop(0.48, '#0c2135');
+        grad.addColorStop(1, '#07111b');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = 'rgba(180,230,255,0.08)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 6; i++) {
+          const y = (height / 6) * i;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < 22; i++) {
+          const x = (i / 21) * width;
+          const y = 24 + Math.sin(i * 0.7 + performance.now() * 0.0012) * 6;
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawCatcher() {
+        const x = width * 0.19;
+        const y = currentBandY();
+        const h = 108;
+        const w = 24;
+        const netColor = state.mode === 'high' ? '#64e7ff' : '#ffe17b';
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(-14, -h / 2 - 20, 10, h + 40);
+
+        ctx.fillStyle = netColor;
+        ctx.shadowColor = netColor;
+        ctx.shadowBlur = 16;
+        ctx.fillRect(-6, -h / 2, w, h);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        for (let i = -4; i <= 4; i++) {
+          ctx.beginPath();
+          ctx.moveTo(-6, i * 12);
+          ctx.lineTo(18, i * 12);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(x - 10, height * 0.12, 2, height * 0.76);
+      }
+
+      function drawItems() {
+        for (const item of state.items) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          if (item.type === 'blue') {
+            const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, item.size + 10);
+            glow.addColorStop(0, 'rgba(138,212,255,0.95)');
+            glow.addColorStop(1, 'rgba(138,212,255,0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(0, 0, item.size + 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#8ad4ff';
+            ctx.beginPath();
+            ctx.arc(0, 0, item.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#effcff';
+            ctx.beginPath();
+            ctx.arc(-3, -3, item.size * 0.35, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.rotate(item.pulse);
+            ctx.strokeStyle = '#ff6d8d';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const angle = (Math.PI * 2 / 6) * i;
+              ctx.moveTo(Math.cos(angle) * 4, Math.sin(angle) * 4);
+              ctx.lineTo(Math.cos(angle) * (item.size + 5), Math.sin(angle) * (item.size + 5));
+            }
+            ctx.stroke();
+            ctx.fillStyle = '#ffd0db';
+            ctx.beginPath();
+            ctx.arc(0, 0, item.size * 0.65, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawEffects() {
+        for (const r of state.ripples) {
+          ctx.strokeStyle = `${r.c}${Math.round(Math.max(0, Math.min(1, r.a)) * 255).toString(16).padStart(2, '0')}`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        for (const p of state.foam) {
+          ctx.fillStyle = `rgba(255,109,141,${Math.max(0, p.a)})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (state.flash > 0) {
+          ctx.fillStyle = `rgba(255,80,110,${state.flash * 0.22})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+      }
+
+      function drawLabels() {
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '700 12px system-ui';
+        ctx.fillText('HIGH', 18, height * 0.18);
+        ctx.fillText('LOW', 20, height * 0.58);
+        ctx.fillStyle = 'rgba(255,255,255,0.32)';
+        ctx.fillText('NET ZONE', width * 0.1, height * 0.92);
+      }
+
+      function render(ts = 0) {
+        if (!state.lastTs) state.lastTs = ts;
+        const dt = Math.min(0.033, (ts - state.lastTs) / 1000 || 0);
+        state.lastTs = ts;
+        update(dt);
+        drawBackground();
+        drawCatcher();
+        drawItems();
+        drawEffects();
+        drawLabels();
+        requestAnimationFrame(render);
+      }
+
+      function onPointerDown(ev) {
+        if (state.running) {
+          const rect = canvas.getBoundingClientRect();
+          toggleMode(ev.clientX - rect.left, ev.clientY - rect.top);
+        }
+      }
+
+      window.addEventListener('resize', resize);
+      arena.addEventListener('pointerdown', onPointerDown, { passive: true });
+      startBtn.addEventListener('pointerdown', (ev) => { ev.preventDefault(); startGame(); });
+      retryBtn.addEventListener('pointerdown', (ev) => { ev.preventDefault(); startGame(); });
+
+      resize();
+      resetGame();
+      requestAnimationFrame(render);
+    })();
+  </script>
+</body>
+</html>
