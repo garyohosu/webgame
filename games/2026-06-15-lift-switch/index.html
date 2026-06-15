@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>リフトスイッチ</title>
+  <meta name="description" content="タップでリフトの昇降方向を反転し、青い荷物だけを拾い続ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #061019;
+      --panel: rgba(7, 17, 28, 0.86);
+      --line: rgba(171, 225, 255, 0.14);
+      --text: #eff8ff;
+      --cyan: #77deff;
+      --mint: #73f7c2;
+      --red: #ff6887;
+      --gold: #ffd56f;
+      --violet: #9c8cff;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #163250 0%, #0b1420 58%, #05090d 100%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .shell::before,
+    .shell::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(48px);
+      opacity: 0.28;
+      pointer-events: none;
+    }
+    .shell::before {
+      width: 210px;
+      height: 210px;
+      left: -70px;
+      top: 70px;
+      background: rgba(119, 222, 255, 0.2);
+    }
+    .shell::after {
+      width: 170px;
+      height: 170px;
+      right: -44px;
+      bottom: 110px;
+      background: rgba(156, 140, 255, 0.16);
+    }
+    .topbar, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+    }
+    .topbar { padding: 14px 16px 12px; }
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      opacity: 0.82;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.03em;
+    }
+    .sub {
+      margin-top: 6px;
+      font-size: 0.91rem;
+      line-height: 1.45;
+      color: rgba(239, 248, 255, 0.74);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      border-radius: 14px;
+      padding: 9px 8px;
+      min-width: 0;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      text-align: center;
+    }
+    .label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      color: rgba(239, 248, 255, 0.56);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .value {
+      font-size: 1.04rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .value.up { color: var(--mint); }
+    .value.down { color: var(--gold); }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 26px;
+      border: 1px solid rgba(170, 225, 255, 0.16);
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0)), linear-gradient(180deg, rgba(19, 37, 60, 0.95), rgba(8, 13, 21, 0.98));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 18px 40px rgba(0,0,0,0.24);
+    }
+    canvas { width: 100%; height: 100%; display: block; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(5, 9, 14, 0.12), rgba(5, 9, 14, 0.72));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .panel {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(5, 12, 19, 0.82);
+      border: 1px solid rgba(150,223,255,0.16);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.28);
+    }
+    .panel h2 { margin: 0 0 10px; font-size: 1.34rem; }
+    .panel p { margin: 0; color: rgba(239,248,255,0.78); line-height: 1.6; font-size: 0.95rem; }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      color: rgba(239,248,255,0.78);
+      text-decoration: none;
+      font-size: 0.92rem;
+      padding: 12px 10px;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #07121b;
+      background: linear-gradient(135deg, var(--cyan), #c0f5ff);
+      box-shadow: 0 10px 24px rgba(115, 222, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--gold), #fff0af);
+      box-shadow: 0 10px 24px rgba(255, 213, 111, 0.18);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(4, 10, 16, 0.62);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(239,248,255,0.86);
+      backdrop-filter: blur(8px);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="topbar">
+      <div class="eyebrow">60 SEC ELEVATOR CATCH</div>
+      <h1>リフトスイッチ</h1>
+      <div class="sub">タップで右側リフトの昇降方向を反転。青い荷物を拾い、赤い荷物は避け続けろ。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Lift / Combo</div><div class="value up" id="liftState">UP x1</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="リフトスイッチのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="panel">
+          <h2 id="overlayTitle">昇降を切り返せ</h2>
+          <p id="overlayText">プレイ中は画面のどこでもタップでリフトの上下方向が反転する。青を拾ってコンボを伸ばし、赤は受けるな。60秒で何本捌けるか。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中は画面タップで UP / DOWN 反転</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = 'lift-switch-hi-v1';
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const arena = document.getElementById('arena');
+      const overlay = document.getElementById('overlay');
+      const overlayTitle = document.getElementById('overlayTitle');
+      const overlayText = document.getElementById('overlayText');
+      const scoreEl = document.getElementById('score');
+      const timeEl = document.getElementById('time');
+      const bestEl = document.getElementById('best');
+      const liftStateEl = document.getElementById('liftState');
+      const startBtn = document.getElementById('startBtn');
+      const retryBtn = document.getElementById('retryBtn');
+
+      let width = 390;
+      let height = 620;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: 60,
+        combo: 0,
+        direction: -1,
+        elevatorY: 310,
+        elevatorSpeed: 184,
+        spawnTimer: 0,
+        items: [],
+        flashes: [],
+        lastTime: 0,
+      };
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        width = Math.max(320, Math.floor(rect.width));
+        height = Math.max(440, Math.floor(rect.height));
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function difficulty() {
+        if (state.timeLeft > 45) {
+          return { speed: 156, spawn: 0.86, redChance: 0.2, jitter: 48, pulse: 1 };
+        }
+        if (state.timeLeft > 15) {
+          return { speed: 186, spawn: 0.68, redChance: 0.3, jitter: 68, pulse: 2 };
+        }
+        return { speed: 220, spawn: 0.52, redChance: 0.38, jitter: 88, pulse: 2 };
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.combo = 0;
+        state.direction = -1;
+        state.elevatorY = height * 0.5;
+        state.elevatorSpeed = 184;
+        state.spawnTimer = 0.4;
+        state.items.length = 0;
+        state.flashes.length = 0;
+        state.lastTime = 0;
+        overlay.classList.remove('hidden');
+        overlayTitle.textContent = '昇降を切り返せ';
+        overlayText.textContent = 'プレイ中は画面のどこでもタップでリフトの上下方向が反転する。青を拾ってコンボを伸ばし、赤は受けるな。60秒で何本捌けるか。';
+        updateHud();
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.combo = 0;
+        state.direction = -1;
+        state.elevatorY = height * 0.5;
+        state.spawnTimer = 0.3;
+        state.items.length = 0;
+        state.flashes.length = 0;
+        state.lastTime = performance.now();
+        overlay.classList.add('hidden');
+        updateHud();
+        requestAnimationFrame(loop);
+      }
+
+      function finishGame() {
+        state.running = false;
+        state.best = Math.max(state.best, state.score);
+        localStorage.setItem(STORAGE_KEY, String(state.best));
+        overlay.classList.remove('hidden');
+        overlayTitle.textContent = state.score >= state.best ? 'ハイスコア更新' : '60秒終了';
+        overlayText.textContent = `SCORE ${state.score} / BEST ${state.best}。タップで方向反転、青で加点、赤で減点。もう一度いくなら再挑戦。`;
+        updateHud();
+        draw();
+      }
+
+      function spawnItem() {
+        const diff = difficulty();
+        const isRed = Math.random() < diff.redChance;
+        const laneBase = Math.random() * (height - 180) + 90;
+        const jitter = (Math.random() - 0.5) * diff.jitter;
+        state.items.push({
+          x: -26,
+          y: Math.max(52, Math.min(height - 52, laneBase + jitter)),
+          radius: isRed ? 14 : 13,
+          speed: diff.speed + Math.random() * 36,
+          isRed,
+          claimed: false,
+          bob: Math.random() * Math.PI * 2,
+          bobSpeed: 1.4 + Math.random() * 1.2,
+        });
+        if (diff.pulse > 1 && Math.random() < 0.35) {
+          state.items.push({
+            x: -76,
+            y: Math.max(52, Math.min(height - 52, laneBase + jitter + (Math.random() > 0.5 ? 44 : -44))),
+            radius: isRed && Math.random() < 0.5 ? 14 : 13,
+            speed: diff.speed + 18 + Math.random() * 42,
+            isRed: Math.random() < diff.redChance,
+            claimed: false,
+            bob: Math.random() * Math.PI * 2,
+            bobSpeed: 1.4 + Math.random() * 1.2,
+          });
+        }
+      }
+
+      function addFlash(x, y, color, text) {
+        state.flashes.push({ x, y, color, text, life: 0.8 });
+      }
+
+      function clampElevator() {
+        const pad = 54;
+        if (state.elevatorY < pad) {
+          state.elevatorY = pad;
+          state.direction = 1;
+        } else if (state.elevatorY > height - pad) {
+          state.elevatorY = height - pad;
+          state.direction = -1;
+        }
+      }
+
+      function update(dt) {
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        const diff = difficulty();
+        state.elevatorSpeed = diff.speed + 28;
+        state.elevatorY += state.direction * state.elevatorSpeed * dt;
+        clampElevator();
+
+        state.spawnTimer -= dt;
+        while (state.spawnTimer <= 0) {
+          spawnItem();
+          state.spawnTimer += diff.spawn;
+        }
+
+        const elevator = {
+          x: width - 58,
+          y: state.elevatorY,
+          w: 22,
+          h: 108,
+        };
+
+        for (let i = state.items.length - 1; i >= 0; i--) {
+          const item = state.items[i];
+          item.x += item.speed * dt;
+          item.y += Math.sin(item.bob + performance.now() * 0.0016 * item.bobSpeed) * 0.22;
+
+          const overlapX = Math.abs(item.x - elevator.x) < item.radius + elevator.w * 0.58;
+          const overlapY = Math.abs(item.y - elevator.y) < item.radius + elevator.h * 0.48;
+          if (!item.claimed && overlapX && overlapY) {
+            item.claimed = true;
+            if (item.isRed) {
+              state.score = Math.max(0, state.score - 5);
+              state.combo = 0;
+              addFlash(item.x, item.y, '#ff6887', '-5');
+            } else {
+              state.combo += 1;
+              const gain = Math.min(8, 1 + Math.floor(state.combo / 3));
+              state.score += gain;
+              addFlash(item.x, item.y, '#73f7c2', `+${gain}`);
+            }
+            state.items.splice(i, 1);
+            continue;
+          }
+
+          if (item.x > width + 30) {
+            if (!item.isRed && !item.claimed) {
+              state.combo = 0;
+            }
+            state.items.splice(i, 1);
+          }
+        }
+
+        for (let i = state.flashes.length - 1; i >= 0; i--) {
+          const flash = state.flashes[i];
+          flash.life -= dt;
+          flash.y -= 20 * dt;
+          if (flash.life <= 0) state.flashes.splice(i, 1);
+        }
+
+        if (state.timeLeft <= 0) {
+          finishGame();
+        }
+
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = String(state.best);
+        const dirText = state.direction < 0 ? 'UP' : 'DOWN';
+        liftStateEl.textContent = `${dirText} x${Math.max(1, state.combo)}`;
+        liftStateEl.className = `value ${state.direction < 0 ? 'up' : 'down'}`;
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, 'rgba(18, 40, 62, 0.95)');
+        gradient.addColorStop(1, 'rgba(7, 11, 18, 1)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 7; i++) {
+          const y = (height / 7) * i;
+          ctx.beginPath();
+          ctx.moveTo(24, y);
+          ctx.lineTo(width - 24, y);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = 'rgba(119, 222, 255, 0.12)';
+        ctx.fillRect(18, 24, 28, height - 48);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        for (let i = 0; i < 8; i++) {
+          ctx.fillRect(22, 40 + i * ((height - 80) / 7), 20, 10);
+        }
+      }
+
+      function drawElevator() {
+        const x = width - 58;
+        const y = state.elevatorY;
+        const w = 24;
+        const h = 108;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(width - 72, 24, 8, height - 48);
+
+        const body = ctx.createLinearGradient(x - 12, y - h / 2, x + 12, y + h / 2);
+        body.addColorStop(0, '#d4f6ff');
+        body.addColorStop(1, '#6dbdff');
+        ctx.fillStyle = body;
+        roundRect(x - w / 2, y - h / 2, w, h, 12);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(10, 18, 28, 0.62)';
+        roundRect(x - 8, y - h / 2 + 10, 16, h - 20, 8);
+        ctx.fill();
+
+        ctx.fillStyle = state.direction < 0 ? 'rgba(115, 247, 194, 0.92)' : 'rgba(255, 213, 111, 0.92)';
+        ctx.beginPath();
+        if (state.direction < 0) {
+          ctx.moveTo(x, y - 42);
+          ctx.lineTo(x - 11, y - 26);
+          ctx.lineTo(x + 11, y - 26);
+        } else {
+          ctx.moveTo(x, y + 42);
+          ctx.lineTo(x - 11, y + 26);
+          ctx.lineTo(x + 11, y + 26);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawItems() {
+        for (const item of state.items) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, item.radius + 10);
+          glow.addColorStop(0, item.isRed ? 'rgba(255,104,135,0.92)' : 'rgba(115,247,194,0.96)');
+          glow.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(0, 0, item.radius + 9, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = item.isRed ? '#ff6887' : '#73f7c2';
+          roundRect(-item.radius, -item.radius * 0.82, item.radius * 2, item.radius * 1.64, 6);
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillRect(-item.radius + 4, -4, item.radius * 2 - 8, 8);
+          ctx.restore();
+        }
+      }
+
+      function drawFlashes() {
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 18px system-ui, sans-serif';
+        for (const flash of state.flashes) {
+          ctx.globalAlpha = Math.max(0, flash.life);
+          ctx.fillStyle = flash.color;
+          ctx.fillText(flash.text, flash.x, flash.y);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawLabels() {
+        ctx.textAlign = 'left';
+        ctx.font = '700 12px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.65)';
+        ctx.fillText('INBOUND', 18, 18);
+        ctx.textAlign = 'right';
+        ctx.fillText('LIFT', width - 18, 18);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, width, height);
+        drawBackground();
+        drawElevator();
+        drawItems();
+        drawFlashes();
+        drawLabels();
+      }
+
+      function loop(ts) {
+        if (!state.running) return;
+        const dt = Math.min(0.033, (ts - state.lastTime) / 1000 || 0.016);
+        state.lastTime = ts;
+        update(dt);
+        draw();
+        if (state.running) requestAnimationFrame(loop);
+      }
+
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function handleTap(event) {
+        const tag = event.target && event.target.tagName;
+        if (tag === 'BUTTON' || tag === 'A') return;
+        if (!state.running) return;
+        state.direction *= -1;
+        updateHud();
+      }
+
+      arena.addEventListener('pointerdown', handleTap);
+      startBtn.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        if (!state.running) startGame();
+      });
+      retryBtn.addEventListener('pointerdown', (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      window.addEventListener('resize', () => {
+        resize();
+        if (!state.running) draw();
+      });
+
+      resize();
+      resetGame();
+      draw();
+    })();
+  </script>
+</body>
+</html>
