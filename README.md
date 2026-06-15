@@ -5,9 +5,14 @@ GitHub Pages で公開中 → **https://garyohosu.github.io/webgame/**
 
 ---
 
-## 🤖 Claude Code（AI）への指示
+## 🤖 Codex / Claude Code（AI）への指示
 
-> このセクションは Claude Code が読む想定です。毎日の作業はここから始めてください。
+> このセクションは Codex または Claude Code が読む想定です。毎日の作業はここから始めてください。
+
+### Codex で作る場合
+
+Codex でゲームを作るときは、Codex の **Game Studio** プラグインを使うこと。
+まず Game Studio でゲームの方向性・実装方針・QA観点を整理し、そのうえで下記の毎日の作業手順に従って実装する。
 
 ### 毎日の作業手順
 
