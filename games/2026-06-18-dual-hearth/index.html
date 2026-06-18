@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>デュアルハース</title>
+  <meta name="description" content="タップで炉床を FROST / FLARE に切り替え、落下物を正しい温度で受け止める60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #16111f;
+      --bg-bottom: #06090e;
+      --panel: rgba(9, 14, 20, 0.82);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #f4f7fb;
+      --frost: #8ce6ff;
+      --flare: #ffb062;
+      --mist: #bed6ff;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 12%, rgba(140, 230, 255, 0.17), transparent 28%),
+        radial-gradient(circle at 82% 88%, rgba(255, 176, 98, 0.2), transparent 26%),
+        linear-gradient(180deg, var(--bg-top), #0e1420 38%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+      position: relative;
+    }
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--mist);
+      opacity: 0.88;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.03em;
+    }
+    .sub {
+      margin-top: 6px;
+      font-size: 0.92rem;
+      line-height: 1.48;
+      color: rgba(244, 247, 251, 0.76);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      text-align: center;
+      padding: 9px 8px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(244, 247, 251, 0.54);
+    }
+    .value {
+      font-size: 1rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .value.mode-frost { color: var(--frost); }
+    .value.mode-flare { color: var(--flare); }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 26px;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent 14%),
+        linear-gradient(180deg, rgba(8, 13, 21, 0.96), rgba(3, 6, 10, 0.98));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(6, 9, 14, 0.12), rgba(6, 9, 14, 0.74));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(5, 9, 14, 0.84);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.6;
+      font-size: 0.95rem;
+      color: rgba(244, 247, 251, 0.78);
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(244, 247, 251, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #09121a;
+      background: linear-gradient(135deg, var(--frost), #d8f5ff);
+      box-shadow: 0 10px 24px rgba(140, 230, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--flare), #ffe0af);
+      box-shadow: 0 10px 24px rgba(255, 176, 98, 0.18);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(5, 9, 14, 0.58);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: rgba(244, 247, 251, 0.84);
+      backdrop-filter: blur(8px);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC TEMPERATURE SWITCH</div>
+      <h1>デュアルハース</h1>
+      <div class="sub">タップで炉床を冷却か加熱へ反転。青い欠片は FROST、橙の火種は FLARE で受け止めろ。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Mode / Combo</div><div class="value mode-frost" id="mode">FROST x0</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="デュアルハースのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">床温度を合わせろ</h2>
+          <p id="overlayText">プレイ中は画面タップで炉床を FROST / FLARE に切り替える。青は冷やして、橙は燃やして得点。色違いで受けると減点だ。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中は画面タップで FROST / FLARE 切替</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "dual-hearth-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const modeEl = document.getElementById("mode");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      let width = 390;
+      let height = 620;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let rafId = 0;
+      let lastTime = 0;
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        mode: "frost",
+        combo: 0,
+        timeLeft: PLAY_TIME,
+        elapsed: 0,
+        items: [],
+        particles: [],
+        spawnTimer: 0,
+        flash: 0
+      };
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        width = Math.max(280, Math.round(rect.width));
+        height = Math.max(320, Math.round(rect.height));
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function resetRun() {
+        state.score = 0;
+        state.mode = "frost";
+        state.combo = 0;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.items = [];
+        state.particles = [];
+        state.spawnTimer = 0.45;
+        state.flash = 0;
+        syncHud();
+      }
+
+      function startGame() {
+        resetRun();
+        state.running = true;
+        overlay.classList.add("hidden");
+        overlayTitle.textContent = "床温度を合わせろ";
+        overlayText.textContent = "青は FROST、橙は FLARE。終盤は落下が重なってくる。";
+      }
+
+      function endGame() {
+        state.running = false;
+        state.best = Math.max(state.best, state.score);
+        localStorage.setItem(STORAGE_KEY, String(state.best));
+        bestEl.textContent = state.best;
+        overlayTitle.textContent = state.score >= state.best ? "NEW BEST" : "FINISH";
+        overlayText.textContent = "Score " + state.score + " / Best " + state.best + "。もう一度スタートして炉床を切り替えろ。";
+        overlay.classList.remove("hidden");
+      }
+
+      function toggleMode() {
+        if (!state.running) {
+          return;
+        }
+        state.mode = state.mode === "frost" ? "flare" : "frost";
+        state.flash = 0.12;
+        syncHud();
+      }
+
+      function syncHud() {
+        scoreEl.textContent = String(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = String(state.best);
+        modeEl.textContent = (state.mode === "frost" ? "FROST" : "FLARE") + " x" + state.combo;
+        modeEl.className = "value " + (state.mode === "frost" ? "mode-frost" : "mode-flare");
+      }
+
+      function currentDifficulty() {
+        if (state.elapsed < 30) {
+          return { interval: 0.88, speed: 210, cluster: 0.16 };
+        }
+        if (state.elapsed < 45) {
+          return { interval: 0.66, speed: 260, cluster: 0.26 };
+        }
+        return { interval: 0.5, speed: 320, cluster: 0.4 };
+      }
+
+      function spawnItem(forceColor, laneShift) {
+        const lanes = [0.22, 0.5, 0.78];
+        const laneIndex = laneShift ?? Math.floor(Math.random() * lanes.length);
+        const kind = forceColor || (Math.random() < 0.52 ? "frost" : "flare");
+        state.items.push({
+          x: lanes[laneIndex] * width,
+          y: -28,
+          vy: currentDifficulty().speed + Math.random() * 40,
+          radius: 16 + Math.random() * 4,
+          wobble: Math.random() * Math.PI * 2,
+          kind
+        });
+      }
+
+      function spawnPattern() {
+        const diff = currentDifficulty();
+        if (Math.random() < diff.cluster) {
+          const firstKind = Math.random() < 0.5 ? "frost" : "flare";
+          const secondKind = firstKind === "frost" ? "flare" : "frost";
+          const firstLane = Math.floor(Math.random() * 3);
+          const secondLane = (firstLane + 1 + Math.floor(Math.random() * 2)) % 3;
+          spawnItem(firstKind, firstLane);
+          state.items.push({
+            x: [0.22, 0.5, 0.78][secondLane] * width,
+            y: -110,
+            vy: diff.speed + 30 + Math.random() * 50,
+            radius: 15 + Math.random() * 4,
+            wobble: Math.random() * Math.PI * 2,
+            kind: secondKind
+          });
+          return;
+        }
+        spawnItem();
+      }
+
+      function addBurst(x, y, color, good) {
+        for (let i = 0; i < 8; i += 1) {
+          const angle = (Math.PI * 2 * i) / 8 + Math.random() * 0.35;
+          const speed = 45 + Math.random() * 70;
+          state.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed - 15,
+            life: 0.45 + Math.random() * 0.2,
+            maxLife: 0.6,
+            color,
+            good
+          });
+        }
+      }
+
+      function resolveItem(item) {
+        const matched = item.kind === state.mode;
+        if (matched) {
+          state.combo += 1;
+          const gained = 1 + Math.min(4, Math.floor(state.combo / 3));
+          state.score += gained;
+          addBurst(item.x, item.y, item.kind === "frost" ? "#8ce6ff" : "#ffb062", true);
+        } else {
+          state.combo = 0;
+          state.score = Math.max(0, state.score - 2);
+          addBurst(item.x, item.y, item.kind === "frost" ? "#bed6ff" : "#ff8a72", false);
+        }
+        syncHud();
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        state.elapsed = PLAY_TIME - state.timeLeft;
+        state.flash = Math.max(0, state.flash - dt);
+
+        const diff = currentDifficulty();
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          spawnPattern();
+          state.spawnTimer = diff.interval * (0.75 + Math.random() * 0.45);
+        }
+
+        const hitY = height - 92;
+        state.items = state.items.filter((item) => {
+          item.y += item.vy * dt;
+          item.x += Math.sin(item.wobble + item.y * 0.014) * 18 * dt;
+          if (item.y >= hitY) {
+            item.y = hitY;
+            resolveItem(item);
+            return false;
+          }
+          return true;
+        });
+
+        state.particles = state.particles.filter((particle) => {
+          particle.life -= dt;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.vy += 90 * dt;
+          return particle.life > 0;
+        });
+
+        if (state.timeLeft <= 0) {
+          timeEl.textContent = "0.0";
+          endGame();
+        } else {
+          syncHud();
+        }
+      }
+
+      function drawBackground() {
+        ctx.clearRect(0, 0, width, height);
+        const grad = ctx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, "#131b28");
+        grad.addColorStop(0.6, "#0c121b");
+        grad.addColorStop(1, "#06080d");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 6; i += 1) {
+          const x = (width / 5) * i + ((state.elapsed * 12) % 38);
+          ctx.strokeStyle = "rgba(255,255,255,0.05)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x - 18, height);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "rgba(255,255,255,0.06)";
+        ctx.fillRect(20, height - 124, width - 40, 4);
+      }
+
+      function drawHearth() {
+        const plateY = height - 88;
+        const plateW = width - 54;
+        const plateX = (width - plateW) / 2;
+        const plateH = 34;
+
+        const plateGrad = ctx.createLinearGradient(plateX, plateY, plateX + plateW, plateY + plateH);
+        if (state.mode === "frost") {
+          plateGrad.addColorStop(0, "#8ce6ff");
+          plateGrad.addColorStop(1, "#d9f6ff");
+        } else {
+          plateGrad.addColorStop(0, "#ffb062");
+          plateGrad.addColorStop(1, "#ffe1ab");
+        }
+
+        ctx.save();
+        ctx.shadowBlur = 20 + state.flash * 70;
+        ctx.shadowColor = state.mode === "frost" ? "rgba(140,230,255,0.75)" : "rgba(255,176,98,0.75)";
+        ctx.fillStyle = plateGrad;
+        ctx.fillRect(plateX, plateY, plateW, plateH);
+        ctx.restore();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.15)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(plateX, plateY, plateW, plateH);
+
+        ctx.fillStyle = "rgba(255,255,255,0.82)";
+        ctx.font = "700 15px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(state.mode === "frost" ? "FROST HEARTH" : "FLARE HEARTH", width / 2, plateY + 22);
+      }
+
+      function drawItems() {
+        for (const item of state.items) {
+          const glow = item.kind === "frost" ? "rgba(140,230,255,0.65)" : "rgba(255,176,98,0.62)";
+          ctx.save();
+          ctx.shadowBlur = 18;
+          ctx.shadowColor = glow;
+          ctx.beginPath();
+          ctx.fillStyle = item.kind === "frost" ? "#8ce6ff" : "#ffb062";
+          ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          ctx.beginPath();
+          ctx.fillStyle = item.kind === "frost" ? "rgba(255,255,255,0.65)" : "rgba(255,244,219,0.7)";
+          ctx.arc(item.x - item.radius * 0.25, item.y - item.radius * 0.28, item.radius * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawParticles() {
+        for (const particle of state.particles) {
+          const alpha = Math.max(0, particle.life / particle.maxLife);
+          ctx.fillStyle = particle.color + Math.round(alpha * 255).toString(16).padStart(2, "0");
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.good ? 4 : 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function draw() {
+        drawBackground();
+        drawItems();
+        drawParticles();
+        drawHearth();
+
+        ctx.fillStyle = "rgba(255,255,255,0.24)";
+        ctx.font = "600 12px Trebuchet MS, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText("BLUE -> FROST", 20, 28);
+        ctx.textAlign = "right";
+        ctx.fillText("AMBER -> FLARE", width - 20, 28);
+      }
+
+      function loop(ts) {
+        if (!lastTime) {
+          lastTime = ts;
+        }
+        const dt = Math.min(0.033, (ts - lastTime) / 1000);
+        lastTime = ts;
+        update(dt);
+        draw();
+        rafId = requestAnimationFrame(loop);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        toggleMode();
+      });
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        startGame();
+      });
+
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        startGame();
+      });
+
+      window.addEventListener("resize", resize);
+
+      resize();
+      syncHud();
+      draw();
+      rafId = requestAnimationFrame(loop);
+
+      window.addEventListener("pagehide", () => {
+        cancelAnimationFrame(rafId);
+      });
+    })();
+  </script>
+</body>
+</html>
