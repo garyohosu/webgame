@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ソーンブルーム</title>
+  <meta name="description" content="タップで収穫パルスを放ち、青い花芽だけを刈り取って赤い棘を避ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #130d1a;
+      --bg-bottom: #05070b;
+      --panel: rgba(14, 10, 20, 0.8);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #f7f2ff;
+      --bloom: #8ff3cf;
+      --thorn: #ff7a9f;
+      --gold: #ffd987;
+      --mist: #d8d1ef;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(143, 243, 207, 0.18), transparent 28%),
+        radial-gradient(circle at 80% 84%, rgba(255, 122, 159, 0.18), transparent 24%),
+        linear-gradient(180deg, #1e1329 0%, var(--bg-top) 30%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.24);
+      position: relative;
+      z-index: 2;
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--mist);
+      opacity: 0.88;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.5;
+      color: rgba(247, 242, 255, 0.78);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 6px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(247, 242, 255, 0.56);
+    }
+    .value {
+      font-size: 1rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #combo.ready {
+      color: var(--bloom);
+    }
+    #combo.waiting {
+      color: var(--gold);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 55%, rgba(143, 243, 207, 0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent 14%),
+        linear-gradient(180deg, rgba(16, 10, 22, 0.96), rgba(5, 7, 11, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 42px rgba(0, 0, 0, 0.26);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(6, 7, 10, 0.08), rgba(6, 7, 10, 0.74));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(10, 8, 15, 0.86);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.28);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(247, 242, 255, 0.78);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(9, 8, 14, 0.58);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(247, 242, 255, 0.84);
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(247, 242, 255, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #0f1115;
+      background: linear-gradient(135deg, var(--bloom), #d9fff2);
+      box-shadow: 0 10px 24px rgba(143, 243, 207, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--gold), #ffe9b8);
+      box-shadow: 0 10px 24px rgba(255, 217, 135, 0.18);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC GARDEN PULSE</div>
+      <h1>ソーンブルーム</h1>
+      <div class="sub">タップで収穫リングを放ち、青い花芽だけを刈り取れ。赤い棘を巻き込むと一気に崩れる。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value ready" id="combo">Ready</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="ソーンブルームのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">花芽だけを狩れ</h2>
+          <p id="overlayText">プレイ中は画面タップで中心から収穫リングを発射。青い花芽に触れれば加点、赤い棘を巻き込むと減点。欲張るほど危ない。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中は画面タップで収穫リング発射</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "thorn-bloom-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const comboEl = document.getElementById("combo");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      let width = 390;
+      let height = 620;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let rafId = 0;
+      let lastTime = 0;
+      let spawnTimer = 0;
+      let pulseCooldown = 0;
+      let running = false;
+      let score = 0;
+      let timeLeft = PLAY_TIME;
+      let best = loadBest();
+      let combo = 0;
+      let pulseId = 0;
+      let seeds = [];
+      let pulses = [];
+      let particles = [];
+
+      function loadBest() {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const value = Number.parseInt(raw || "0", 10);
+        return Number.isFinite(value) ? value : 0;
+      }
+
+      function saveBest() {
+        if (score > best) {
+          best = score;
+          window.localStorage.setItem(STORAGE_KEY, String(best));
+        }
+      }
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        width = Math.max(320, Math.floor(rect.width));
+        height = Math.max(360, Math.floor(rect.height));
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function difficulty() {
+        const elapsed = PLAY_TIME - timeLeft;
+        if (elapsed >= 45) {
+          return { interval: 0.34, speed: 86, thornChance: 0.42, burstChance: 0.54 };
+        }
+        if (elapsed >= 30) {
+          return { interval: 0.47, speed: 72, thornChance: 0.34, burstChance: 0.34 };
+        }
+        return { interval: 0.64, speed: 58, thornChance: 0.24, burstChance: 0.18 };
+      }
+
+      function spawnSeed() {
+        const diff = difficulty();
+        const count = Math.random() < diff.burstChance ? 2 : 1;
+        const outer = Math.min(width, height) * 0.42;
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const kind = Math.random() < diff.thornChance ? "thorn" : "bloom";
+          seeds.push({
+            kind,
+            angle,
+            radius: outer + Math.random() * 16,
+            size: kind === "bloom" ? 11 + Math.random() * 4 : 10 + Math.random() * 4,
+            speed: diff.speed + Math.random() * 18,
+            sway: (Math.random() * 0.9 + 0.45) * (Math.random() < 0.5 ? -1 : 1),
+            spin: Math.random() * Math.PI * 2,
+            spinRate: (Math.random() * 3 + 1.2) * (Math.random() < 0.5 ? -1 : 1),
+            pulseHitId: -1
+          });
+        }
+      }
+
+      function emitPulse() {
+        pulses.push({
+          id: pulseId += 1,
+          radius: 8,
+          speed: Math.min(width, height) * 0.76,
+          width: 16,
+          alpha: 1
+        });
+        pulseCooldown = 0.22;
+      }
+
+      function burst(x, y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 30 + Math.random() * 90;
+          particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.4 + Math.random() * 0.35,
+            age: 0,
+            color
+          });
+        }
+      }
+
+      function addScore(base) {
+        const bonus = Math.floor(combo / 4);
+        score += base + bonus;
+      }
+
+      function startGame() {
+        running = true;
+        score = 0;
+        combo = 0;
+        timeLeft = PLAY_TIME;
+        pulseCooldown = 0;
+        spawnTimer = 0;
+        pulseId = 0;
+        seeds = [];
+        pulses = [];
+        particles = [];
+        overlay.classList.add("hidden");
+        lastTime = 0;
+        updateHud();
+      }
+
+      function endGame() {
+        running = false;
+        const isNewBest = score > best;
+        saveBest();
+        updateHud();
+        overlayTitle.textContent = isNewBest ? "新記録で収穫完了" : "収穫終了";
+        overlayText.textContent = "青い花芽を狙ってリングを重ね続けろ。赤い棘を巻き込むと減点。ベスト " + best + " / 今回 " + score + "。";
+        overlay.classList.remove("hidden");
+      }
+
+      function handleArenaPointer(event) {
+        event.preventDefault();
+        if (!running || pulseCooldown > 0) {
+          return;
+        }
+        emitPulse();
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = timeLeft.toFixed(1);
+        bestEl.textContent = String(best);
+        if (!running) {
+          comboEl.textContent = "Ready";
+          comboEl.className = "value ready";
+          return;
+        }
+        if (pulseCooldown > 0.02) {
+          comboEl.textContent = "Wait";
+          comboEl.className = "value waiting";
+          return;
+        }
+        comboEl.textContent = combo > 0 ? "x" + combo : "Ready";
+        comboEl.className = "value ready";
+      }
+
+      function update(dt) {
+        if (!running) {
+          return;
+        }
+
+        timeLeft = Math.max(0, timeLeft - dt);
+        pulseCooldown = Math.max(0, pulseCooldown - dt);
+        spawnTimer += dt;
+        const diff = difficulty();
+        while (spawnTimer >= diff.interval) {
+          spawnTimer -= diff.interval;
+          spawnSeed();
+        }
+
+        const centerX = width * 0.5;
+        const centerY = height * 0.55;
+        const coreRadius = Math.min(width, height) * 0.09;
+        const pulseLimit = Math.min(width, height) * 0.52;
+
+        pulses = pulses.filter((pulse) => {
+          pulse.radius += pulse.speed * dt;
+          pulse.alpha = Math.max(0, 1 - pulse.radius / pulseLimit);
+          return pulse.radius < pulseLimit;
+        });
+
+        const nextSeeds = [];
+        for (const seed of seeds) {
+          seed.radius -= seed.speed * dt;
+          seed.angle += seed.sway * dt;
+          seed.spin += seed.spinRate * dt;
+
+          let removed = false;
+          for (const pulse of pulses) {
+            if (seed.pulseHitId === pulse.id) {
+              continue;
+            }
+            if (Math.abs(seed.radius - pulse.radius) <= pulse.width) {
+              seed.pulseHitId = pulse.id;
+              const x = centerX + Math.cos(seed.angle) * seed.radius;
+              const y = centerY + Math.sin(seed.angle) * seed.radius;
+              if (seed.kind === "bloom") {
+                combo += 1;
+                addScore(1);
+                burst(x, y, "143,243,207", 12);
+              } else {
+                combo = 0;
+                score = Math.max(0, score - 3);
+                burst(x, y, "255,122,159", 14);
+              }
+              removed = true;
+              break;
+            }
+          }
+          if (removed) {
+            continue;
+          }
+
+          if (seed.radius <= coreRadius) {
+            if (seed.kind === "bloom") {
+              combo = 0;
+              score = Math.max(0, score - 1);
+              burst(centerX, centerY, "216,209,239", 8);
+            }
+            continue;
+          }
+          nextSeeds.push(seed);
+        }
+        seeds = nextSeeds;
+
+        particles = particles.filter((particle) => {
+          particle.age += dt;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.vx *= 0.98;
+          particle.vy *= 0.98;
+          return particle.age < particle.life;
+        });
+
+        if (timeLeft <= 0) {
+          endGame();
+        }
+
+        updateHud();
+      }
+
+      function drawSeed(seed, centerX, centerY) {
+        const x = centerX + Math.cos(seed.angle) * seed.radius;
+        const y = centerY + Math.sin(seed.angle) * seed.radius;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(seed.spin);
+        if (seed.kind === "bloom") {
+          ctx.fillStyle = "rgba(143,243,207,0.95)";
+          for (let i = 0; i < 4; i += 1) {
+            ctx.rotate(Math.PI / 2);
+            ctx.beginPath();
+            ctx.ellipse(0, seed.size * 0.55, seed.size * 0.48, seed.size * 0.9, 0, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.fillStyle = "rgba(255,217,135,0.92)";
+          ctx.beginPath();
+          ctx.arc(0, 0, seed.size * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.strokeStyle = "rgba(255,122,159,0.96)";
+          ctx.lineWidth = 2.2;
+          for (let i = 0; i < 5; i += 1) {
+            ctx.rotate((Math.PI * 2) / 5);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -seed.size * 1.35);
+            ctx.stroke();
+          }
+          ctx.fillStyle = "rgba(255,122,159,0.82)";
+          ctx.beginPath();
+          ctx.arc(0, 0, seed.size * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, width, height);
+
+        const centerX = width * 0.5;
+        const centerY = height * 0.55;
+        const gardenRadius = Math.min(width, height) * 0.42;
+        const coreRadius = Math.min(width, height) * 0.09;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+
+        for (let i = 4; i >= 1; i -= 1) {
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(255,255,255," + (0.008 * i) + ")";
+          ctx.arc(0, 0, gardenRadius * (i / 4), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 4; i += 1) {
+          ctx.beginPath();
+          ctx.arc(0, 0, (gardenRadius / 4) * i, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < 10; i += 1) {
+          const angle = (Math.PI * 2 * i) / 10;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * coreRadius, Math.sin(angle) * coreRadius);
+          ctx.lineTo(Math.cos(angle) * gardenRadius, Math.sin(angle) * gardenRadius);
+          ctx.strokeStyle = "rgba(255,255,255,0.035)";
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        for (const pulse of pulses) {
+          ctx.beginPath();
+          ctx.strokeStyle = "rgba(143,243,207," + (0.2 + pulse.alpha * 0.6).toFixed(3) + ")";
+          ctx.lineWidth = 4;
+          ctx.arc(centerX, centerY, pulse.radius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.strokeStyle = "rgba(255,217,135," + (0.12 + pulse.alpha * 0.38).toFixed(3) + ")";
+          ctx.lineWidth = 10;
+          ctx.arc(centerX, centerY, pulse.radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (const seed of seeds) {
+          drawSeed(seed, centerX, centerY);
+        }
+
+        for (const particle of particles) {
+          const alpha = 1 - particle.age / particle.life;
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(" + particle.color + "," + alpha.toFixed(3) + ")";
+          ctx.arc(particle.x, particle.y, 2 + alpha * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(143,243,207,0.12)";
+        ctx.arc(centerX, centerY, coreRadius * 1.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(255,217,135,0.82)";
+        ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(255,255,255,0.14)";
+        ctx.lineWidth = 2;
+        ctx.arc(centerX, centerY, coreRadius * 1.25, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function frame(ts) {
+        if (!lastTime) {
+          lastTime = ts;
+        }
+        const dt = Math.min(0.033, (ts - lastTime) / 1000);
+        lastTime = ts;
+        update(dt);
+        draw();
+        rafId = window.requestAnimationFrame(frame);
+      }
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      arena.addEventListener("pointerdown", handleArenaPointer, { passive: false });
+      window.addEventListener("resize", resize);
+
+      resize();
+      updateHud();
+      draw();
+      rafId = window.requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
