@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>スパイラルリグ</title>
+  <meta name="description" content="タップで回転フックの索具を切り替え、青い貨物だけを回収して赤いジャマーを避ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #07111d;
+      --bg-bottom: #010408;
+      --panel: rgba(8, 18, 32, 0.82);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #eef7ff;
+      --cyan: #77e6ff;
+      --amber: #ffd97a;
+      --coral: #ff7b87;
+      --mist: #c8d9f5;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 12%, rgba(119, 230, 255, 0.2), transparent 26%),
+        radial-gradient(circle at 84% 82%, rgba(255, 123, 135, 0.18), transparent 28%),
+        linear-gradient(180deg, #10223a 0%, var(--bg-top) 34%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+      position: relative;
+      z-index: 2;
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--mist);
+      opacity: 0.9;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.52;
+      color: rgba(238, 247, 255, 0.78);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 6px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(238, 247, 255, 0.56);
+    }
+    .value {
+      font-size: 1rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #lane.inner {
+      color: var(--cyan);
+    }
+    #lane.outer {
+      color: var(--amber);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(119, 230, 255, 0.08), transparent 24%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent 12%),
+        linear-gradient(180deg, rgba(5, 16, 28, 0.98), rgba(1, 4, 8, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(4, 8, 14, 0.1), rgba(4, 8, 14, 0.76));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(8, 13, 21, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(238, 247, 255, 0.78);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      font-size: 12px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(8, 14, 23, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(238, 247, 255, 0.84);
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(238, 247, 255, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #08121d;
+      background: linear-gradient(135deg, var(--cyan), #dffbff);
+      box-shadow: 0 10px 24px rgba(119, 230, 255, 0.2);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #fff0c8);
+      box-shadow: 0 10px 24px rgba(255, 217, 122, 0.18);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC ORBIT HOOK</div>
+      <h1>スパイラルリグ</h1>
+      <div class="sub">タップでフック半径を切り替えろ。青い貨物だけを拾い、赤いジャマーに触れる前に手を引く。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Lane</div><div class="value inner" id="lane">INNER</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="スパイラルリグのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青い貨物だけを引っ掛けろ</h2>
+          <p id="overlayText">プレイ中は画面タップでフックを INNER / OUTER に切り替える。回転は自動。青なら加点、赤なら減点。終盤ほど周回が速くなる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップでフック半径切り替え</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "spiral-rig-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const laneEl = document.getElementById("lane");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: PLAY_TIME,
+        lane: "inner",
+        hookAngle: -Math.PI / 2,
+        spawnTimer: 0,
+        nodes: [],
+        sparks: [],
+        lastTs: 0,
+        chain: 0
+      };
+
+      const center = { x: canvas.width / 2, y: canvas.height * 0.54 };
+      const INNER_RADIUS = 112;
+      const OUTER_RADIUS = 172;
+      const MATCH_WINDOW = 0.17;
+
+      function resizeCanvas() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.round(rect.width * ratio);
+        canvas.height = Math.round(rect.height * ratio);
+        canvas.style.width = rect.width + "px";
+        canvas.style.height = rect.height + "px";
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        center.x = rect.width / 2;
+        center.y = rect.height * 0.54;
+      }
+
+      function setHud() {
+        scoreEl.textContent = Math.round(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = Math.round(state.best);
+        laneEl.textContent = state.lane === "inner" ? "INNER" : "OUTER";
+        laneEl.className = "value " + state.lane;
+      }
+
+      function stageProfile() {
+        const elapsed = PLAY_TIME - state.timeLeft;
+        if (elapsed < 30) {
+          return { hookSpeed: 1.45, nodeSpeed: 0.78, spawn: 0.9, redRate: 0.2, maxNodes: 8 };
+        }
+        if (elapsed < 45) {
+          return { hookSpeed: 1.82, nodeSpeed: 1.02, spawn: 0.7, redRate: 0.28, maxNodes: 10 };
+        }
+        return { hookSpeed: 2.18, nodeSpeed: 1.24, spawn: 0.54, redRate: 0.36, maxNodes: 12 };
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.timeLeft = PLAY_TIME;
+        state.lane = "inner";
+        state.hookAngle = -Math.PI / 2;
+        state.spawnTimer = 0;
+        state.nodes = [];
+        state.sparks = [];
+        state.lastTs = 0;
+        state.chain = 0;
+        overlay.classList.remove("hidden");
+        overlayTitle.textContent = "青い貨物だけを引っ掛けろ";
+        overlayText.textContent = "プレイ中は画面タップでフックを INNER / OUTER に切り替える。回転は自動。青なら加点、赤なら減点。終盤ほど周回が速くなる。";
+        setHud();
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = PLAY_TIME;
+        state.lane = "inner";
+        state.hookAngle = -Math.PI / 2;
+        state.spawnTimer = 0;
+        state.nodes = [];
+        state.sparks = [];
+        state.lastTs = 0;
+        state.chain = 0;
+        overlay.classList.add("hidden");
+        setHud();
+      }
+
+      function angleDistance(a, b) {
+        let diff = Math.abs(a - b) % (Math.PI * 2);
+        if (diff > Math.PI) {
+          diff = Math.PI * 2 - diff;
+        }
+        return diff;
+      }
+
+      function addSpark(x, y, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 30 + Math.random() * 90;
+          state.sparks.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.42 + Math.random() * 0.24,
+            age: 0,
+            color
+          });
+        }
+      }
+
+      function spawnNode() {
+        const profile = stageProfile();
+        if (state.nodes.length >= profile.maxNodes) {
+          return;
+        }
+        const lane = Math.random() < 0.5 ? "inner" : "outer";
+        const positive = Math.random() > 0.5 ? 1 : -1;
+        const bad = Math.random() < profile.redRate;
+        state.nodes.push({
+          lane,
+          type: bad ? "bad" : "good",
+          angle: Math.random() * Math.PI * 2,
+          drift: positive * (profile.nodeSpeed + Math.random() * 0.28),
+          ttl: 5.6 + Math.random() * 2.4,
+          age: 0,
+          pulse: Math.random() * Math.PI * 2
+        });
+      }
+
+      function onPlayTap() {
+        if (!state.running) {
+          return;
+        }
+        state.lane = state.lane === "inner" ? "outer" : "inner";
+        setHud();
+      }
+
+      function finishGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = Math.round(state.score);
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        overlay.classList.remove("hidden");
+        overlayTitle.textContent = state.best === Math.round(state.score) && state.score > 0 ? "ハイスコア更新" : "タイムアップ";
+        overlayText.textContent = "Score " + Math.round(state.score) + " / Best " + Math.round(state.best) + "。もう一度回して、内外切り替えの精度を上げろ。";
+        setHud();
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        const profile = stageProfile();
+        state.hookAngle += profile.hookSpeed * dt;
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          spawnNode();
+          if (Math.random() < 0.28) {
+            spawnNode();
+          }
+          state.spawnTimer = profile.spawn;
+        }
+
+        for (const node of state.nodes) {
+          node.age += dt;
+          node.angle += node.drift * dt;
+          node.pulse += dt * 5;
+        }
+
+        for (let i = state.nodes.length - 1; i >= 0; i -= 1) {
+          const node = state.nodes[i];
+          const radius = node.lane === "inner" ? INNER_RADIUS : OUTER_RADIUS;
+          const x = center.x + Math.cos(node.angle) * radius;
+          const y = center.y + Math.sin(node.angle) * radius;
+          if (node.age >= node.ttl) {
+            if (node.type === "good") {
+              state.chain = 0;
+            }
+            state.nodes.splice(i, 1);
+            continue;
+          }
+          if (node.lane !== state.lane) {
+            continue;
+          }
+          if (angleDistance(node.angle, state.hookAngle) > MATCH_WINDOW) {
+            continue;
+          }
+          if (node.type === "good") {
+            state.chain += 1;
+            state.score += 10 + Math.min(state.chain, 6) * 2;
+            addSpark(x, y, "119,230,255", 9);
+          } else {
+            state.chain = 0;
+            state.score = Math.max(0, state.score - 16);
+            addSpark(x, y, "255,123,135", 12);
+          }
+          state.nodes.splice(i, 1);
+        }
+
+        for (let i = state.sparks.length - 1; i >= 0; i -= 1) {
+          const spark = state.sparks[i];
+          spark.age += dt;
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          if (spark.age >= spark.life) {
+            state.sparks.splice(i, 1);
+          }
+        }
+
+        if (state.timeLeft <= 0) {
+          finishGame();
+        }
+        setHud();
+      }
+
+      function drawTrack(radius, color) {
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      function drawHook() {
+        const radius = state.lane === "inner" ? INNER_RADIUS : OUTER_RADIUS;
+        const tipX = center.x + Math.cos(state.hookAngle) * radius;
+        const tipY = center.y + Math.sin(state.hookAngle) * radius;
+        const midRadius = radius * 0.52;
+        const midX = center.x + Math.cos(state.hookAngle) * midRadius;
+        const midY = center.y + Math.sin(state.hookAngle) * midRadius;
+
+        ctx.strokeStyle = state.lane === "inner" ? "rgba(119,230,255,0.95)" : "rgba(255,217,122,0.95)";
+        ctx.lineWidth = 6;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 18, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(238,247,255,0.95)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = "#10223a";
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(tipX, tipY, 11, 0, Math.PI * 2);
+        ctx.fillStyle = state.lane === "inner" ? "#77e6ff" : "#ffd97a";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.65)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      function render() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+
+        const bgGrad = ctx.createRadialGradient(center.x, center.y, 22, center.x, center.y, width * 0.48);
+        bgGrad.addColorStop(0, "rgba(119,230,255,0.12)");
+        bgGrad.addColorStop(1, "rgba(1,4,8,0)");
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, width, height);
+
+        drawTrack(INNER_RADIUS, "rgba(119,230,255,0.18)");
+        drawTrack(OUTER_RADIUS, "rgba(255,217,122,0.18)");
+
+        for (const node of state.nodes) {
+          const radius = node.lane === "inner" ? INNER_RADIUS : OUTER_RADIUS;
+          const x = center.x + Math.cos(node.angle) * radius;
+          const y = center.y + Math.sin(node.angle) * radius;
+          const scale = 1 + Math.sin(node.pulse) * 0.08;
+          const color = node.type === "good" ? "#77e6ff" : "#ff7b87";
+
+          ctx.beginPath();
+          ctx.arc(x, y, 11 * scale, 0, Math.PI * 2);
+          ctx.fillStyle = node.type === "good" ? "rgba(119,230,255,0.18)" : "rgba(255,123,135,0.2)";
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(x, y, 6.5 * scale, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        }
+
+        for (const spark of state.sparks) {
+          const alpha = 1 - spark.age / spark.life;
+          ctx.fillStyle = "rgba(" + spark.color + "," + alpha + ")";
+          ctx.beginPath();
+          ctx.arc(spark.x, spark.y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        drawHook();
+
+        ctx.fillStyle = "rgba(238,247,255,0.2)";
+        ctx.font = "12px Trebuchet MS";
+        ctx.textAlign = "center";
+        ctx.fillText("TAP TO SWITCH", center.x, height - 24);
+      }
+
+      function loop(ts) {
+        if (!state.lastTs) {
+          state.lastTs = ts;
+        }
+        const dt = Math.min((ts - state.lastTs) / 1000, 0.033);
+        state.lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        onPlayTap();
+      });
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      window.addEventListener("resize", resizeCanvas);
+
+      resizeCanvas();
+      setHud();
+      render();
+      resetGame();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
