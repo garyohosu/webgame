@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ファンシャント</title>
+  <meta name="description" content="タップで送風ファンの向きを左右に切り替え、青いシードだけを側面ポケットへ吹き込む60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #1e2f2b;
+      --bg-bottom: #06100e;
+      --panel: rgba(7, 20, 18, 0.82);
+      --line: rgba(255, 255, 255, 0.09);
+      --text: #effbf8;
+      --mint: #87f7d1;
+      --amber: #ffd36b;
+      --coral: #ff7a6f;
+      --fog: #d2ede4;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 10%, rgba(135, 247, 209, 0.14), transparent 28%),
+        radial-gradient(circle at 82% 84%, rgba(255, 122, 111, 0.15), transparent 24%),
+        linear-gradient(180deg, #314741 0%, var(--bg-top) 24%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--fog);
+      opacity: 0.9;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.54;
+      color: rgba(239, 251, 248, 0.78);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 6px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(239, 251, 248, 0.56);
+    }
+    .value {
+      font-size: 1rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #wind.left {
+      color: var(--mint);
+    }
+    #wind.right {
+      color: var(--amber);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 24%, rgba(135, 247, 209, 0.06), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 14%),
+        linear-gradient(180deg, rgba(8, 28, 25, 0.98), rgba(2, 10, 9, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(4, 9, 8, 0.08), rgba(4, 9, 8, 0.74));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(7, 18, 16, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(239, 251, 248, 0.8);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(6, 18, 16, 0.64);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(239, 251, 248, 0.84);
+      backdrop-filter: blur(8px);
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(239, 251, 248, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #09110f;
+      background: linear-gradient(135deg, var(--mint), #e2fff6);
+      box-shadow: 0 10px 24px rgba(135, 247, 209, 0.2);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #fff2c9);
+      box-shadow: 0 10px 24px rgba(255, 211, 107, 0.18);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC WIND SORT</div>
+      <h1>ファンシャント</h1>
+      <div class="sub">タップで風向きを反転。青いシードだけを左右ポケットへ吹き込み、赤いアッシュは吸わせるな。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Wind</div><div class="value left" id="wind">LEFT</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="ファンシャントのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青いシードだけを吹き分けろ</h2>
+          <p id="overlayText">プレイ中は画面タップで風向きを LEFT / RIGHT に切り替える。送風帯に入った青で加点、赤で減点。終盤ほど速く、揺れも強くなる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップで風向き切り替え</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "fan-shunt-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const windEl = document.getElementById("wind");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: PLAY_TIME,
+        wind: "left",
+        seeds: [],
+        motes: [],
+        spawnTimer: 0,
+        fanPulse: 0,
+        lastTs: 0,
+        combo: 0
+      };
+
+      const layout = {
+        width: canvas.width,
+        height: canvas.height,
+        leftPocketX: 86,
+        rightPocketX: 304,
+        pocketY: 504,
+        fanX: 195,
+        fanY: 556,
+        gustTop: 328
+      };
+
+      function resizeCanvas() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.round(rect.width * ratio);
+        canvas.height = Math.round(rect.height * ratio);
+        canvas.style.width = rect.width + "px";
+        canvas.style.height = rect.height + "px";
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        layout.width = rect.width;
+        layout.height = rect.height;
+        layout.leftPocketX = rect.width * 0.22;
+        layout.rightPocketX = rect.width * 0.78;
+        layout.pocketY = rect.height * 0.81;
+        layout.fanX = rect.width * 0.5;
+        layout.fanY = rect.height * 0.9;
+        layout.gustTop = rect.height * 0.53;
+      }
+
+      function setHud() {
+        scoreEl.textContent = Math.round(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = Math.round(state.best);
+        windEl.textContent = state.wind === "left" ? "LEFT" : "RIGHT";
+        windEl.className = "value " + state.wind;
+      }
+
+      function stageProfile() {
+        const elapsed = PLAY_TIME - state.timeLeft;
+        if (elapsed < 30) {
+          return { fall: 164, sway: 30, spawn: 0.86, redRate: 0.18, maxSeeds: 10 };
+        }
+        if (elapsed < 45) {
+          return { fall: 198, sway: 42, spawn: 0.68, redRate: 0.27, maxSeeds: 12 };
+        }
+        return { fall: 236, sway: 58, spawn: 0.52, redRate: 0.35, maxSeeds: 14 };
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.timeLeft = PLAY_TIME;
+        state.wind = "left";
+        state.seeds = [];
+        state.motes = [];
+        state.spawnTimer = 0;
+        state.fanPulse = 0;
+        state.lastTs = 0;
+        state.combo = 0;
+        overlay.classList.remove("hidden");
+        overlayTitle.textContent = "青いシードだけを吹き分けろ";
+        overlayText.textContent = "プレイ中は画面タップで風向きを LEFT / RIGHT に切り替える。送風帯に入った青で加点、赤で減点。終盤ほど速く、揺れも強くなる。";
+        setHud();
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = PLAY_TIME;
+        state.wind = "left";
+        state.seeds = [];
+        state.motes = [];
+        state.spawnTimer = 0;
+        state.fanPulse = 1;
+        state.lastTs = 0;
+        state.combo = 0;
+        overlay.classList.add("hidden");
+        setHud();
+      }
+
+      function addMotes(x, y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 40 + Math.random() * 80;
+          state.motes.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.38 + Math.random() * 0.28,
+            age: 0,
+            color
+          });
+        }
+      }
+
+      function spawnSeed() {
+        const profile = stageProfile();
+        if (state.seeds.length >= profile.maxSeeds) {
+          return;
+        }
+        const side = Math.random() < 0.5 ? "left" : "right";
+        const bad = Math.random() < profile.redRate;
+        const baseX = side === "left" ? layout.width * 0.34 : layout.width * 0.66;
+        state.seeds.push({
+          side,
+          type: bad ? "bad" : "good",
+          x: baseX + (Math.random() - 0.5) * 40,
+          y: -18,
+          vx: 0,
+          vy: profile.fall * (0.92 + Math.random() * 0.22),
+          sway: 0.8 + Math.random() * 1.8,
+          swayAmp: profile.sway * (0.55 + Math.random() * 0.8),
+          phase: Math.random() * Math.PI * 2,
+          blown: false,
+          dead: false
+        });
+      }
+
+      function currentGust(seed) {
+        if (seed.y < layout.gustTop || seed.y > layout.fanY - 14) {
+          return false;
+        }
+        if (state.wind === "left") {
+          return seed.x <= layout.fanX + 8;
+        }
+        return seed.x >= layout.fanX - 8;
+      }
+
+      function toggleWind() {
+        if (!state.running) {
+          return;
+        }
+        state.wind = state.wind === "left" ? "right" : "left";
+        state.fanPulse = 1;
+        setHud();
+      }
+
+      function finishGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = Math.round(state.score);
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        overlay.classList.remove("hidden");
+        overlayTitle.textContent = state.score > 0 && state.best === Math.round(state.score) ? "ハイスコア更新" : "タイムアップ";
+        overlayText.textContent = "Score " + Math.round(state.score) + " / Best " + Math.round(state.best) + "。風向きの先読みを磨いて、もう一度ポケットを満たせ。";
+        setHud();
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        state.spawnTimer -= dt;
+        state.fanPulse = Math.max(0, state.fanPulse - dt * 1.8);
+        if (state.spawnTimer <= 0) {
+          spawnSeed();
+          if (Math.random() < 0.22) {
+            spawnSeed();
+          }
+          state.spawnTimer = stageProfile().spawn;
+        }
+
+        for (const seed of state.seeds) {
+          const profile = stageProfile();
+          if (!seed.blown) {
+            seed.phase += dt * seed.sway;
+            seed.x += Math.sin(seed.phase) * seed.swayAmp * dt;
+            seed.y += seed.vy * dt;
+            if (currentGust(seed)) {
+              seed.blown = true;
+              seed.vx = state.wind === "left" ? -210 : 210;
+              seed.vy = -24;
+            }
+          } else {
+            const targetX = seed.side === "left" ? layout.leftPocketX : layout.rightPocketX;
+            const horizontal = targetX - seed.x;
+            seed.vx += Math.sign(horizontal) * 180 * dt;
+            seed.vx *= 0.985;
+            seed.vy += 380 * dt;
+            seed.x += seed.vx * dt;
+            seed.y += seed.vy * dt;
+          }
+          if (seed.x < -36 || seed.x > layout.width + 36) {
+            seed.dead = true;
+          }
+        }
+
+        for (let i = state.seeds.length - 1; i >= 0; i -= 1) {
+          const seed = state.seeds[i];
+          const targetX = seed.side === "left" ? layout.leftPocketX : layout.rightPocketX;
+          const dx = seed.x - targetX;
+          const dy = seed.y - layout.pocketY;
+          if (seed.blown && dx * dx + dy * dy < 20 * 20) {
+            if (seed.type === "good") {
+              state.combo += 1;
+              state.score += 10 + Math.min(state.combo, 6) * 2;
+              addMotes(seed.x, seed.y, "135,247,209", 10);
+            } else {
+              state.combo = 0;
+              state.score = Math.max(0, state.score - 18);
+              addMotes(seed.x, seed.y, "255,122,111", 12);
+            }
+            state.seeds.splice(i, 1);
+            continue;
+          }
+          if (!seed.blown && seed.y >= layout.fanY - 18) {
+            if (seed.type === "good") {
+              state.combo = 0;
+            }
+            seed.dead = true;
+          }
+          if (seed.y > layout.height + 24 || seed.dead) {
+            state.seeds.splice(i, 1);
+          }
+        }
+
+        for (let i = state.motes.length - 1; i >= 0; i -= 1) {
+          const mote = state.motes[i];
+          mote.age += dt;
+          mote.x += mote.vx * dt;
+          mote.y += mote.vy * dt;
+          if (mote.age >= mote.life) {
+            state.motes.splice(i, 1);
+          }
+        }
+
+        if (state.timeLeft <= 0) {
+          finishGame();
+        }
+        setHud();
+      }
+
+      function drawPocket(x, active) {
+        const glow = active ? 0.95 : 0.45;
+        ctx.fillStyle = "rgba(9, 28, 24, 0.9)";
+        ctx.beginPath();
+        ctx.roundRect(x - 42, layout.pocketY - 16, 84, 26, 14);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = active ? "rgba(255, 211, 107, 0.8)" : "rgba(135, 247, 209, 0.55)";
+        ctx.stroke();
+        ctx.fillStyle = active ? "rgba(255, 211, 107," + glow + ")" : "rgba(135, 247, 209," + glow + ")";
+        ctx.fillRect(x - 26, layout.pocketY - 5, 52, 8);
+      }
+
+      function drawFan() {
+        const left = state.wind === "left";
+        const pulse = state.fanPulse;
+        const fanColor = left ? "135,247,209" : "255,211,107";
+        const tipX = left ? 56 : layout.width - 56;
+        const baseSpread = 30 + pulse * 18;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(layout.fanX, layout.fanY - 10);
+        ctx.lineTo(tipX, layout.gustTop + baseSpread);
+        ctx.lineTo(tipX, layout.gustTop - baseSpread);
+        ctx.closePath();
+        const gust = ctx.createLinearGradient(layout.fanX, layout.fanY, tipX, layout.gustTop);
+        gust.addColorStop(0, "rgba(" + fanColor + ",0.34)");
+        gust.addColorStop(1, "rgba(" + fanColor + ",0.02)");
+        ctx.fillStyle = gust;
+        ctx.fill();
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(layout.fanX, layout.fanY, 28, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(236, 250, 246, 0.96)";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(layout.fanX, layout.fanY, 10, 0, Math.PI * 2);
+        ctx.fillStyle = "#18322d";
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(" + fanColor + ",0.95)";
+        for (let i = 0; i < 3; i += 1) {
+          const angle = state.running ? performance.now() * 0.012 + i * ((Math.PI * 2) / 3) : i * ((Math.PI * 2) / 3);
+          ctx.beginPath();
+          ctx.moveTo(layout.fanX, layout.fanY);
+          ctx.lineTo(layout.fanX + Math.cos(angle) * 20, layout.fanY + Math.sin(angle) * 20);
+          ctx.stroke();
+        }
+      }
+
+      function render() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+
+        const drift = ctx.createLinearGradient(0, 0, 0, height);
+        drift.addColorStop(0, "rgba(255,255,255,0.04)");
+        drift.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = drift;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 4; i += 1) {
+          const y = height * (0.18 + i * 0.14);
+          ctx.strokeStyle = "rgba(255,255,255,0.045)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(24, y);
+          ctx.lineTo(width - 24, y);
+          ctx.stroke();
+        }
+
+        drawPocket(layout.leftPocketX, state.wind === "left");
+        drawPocket(layout.rightPocketX, state.wind === "right");
+        drawFan();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(layout.fanX, layout.gustTop);
+        ctx.lineTo(layout.fanX, layout.fanY - 36);
+        ctx.stroke();
+
+        for (const seed of state.seeds) {
+          ctx.beginPath();
+          ctx.arc(seed.x, seed.y, seed.type === "good" ? 11 : 10, 0, Math.PI * 2);
+          const pulse = 0.78 + Math.sin(seed.phase * 2) * 0.12;
+          ctx.fillStyle = seed.type === "good"
+            ? "rgba(135,247,209," + pulse.toFixed(3) + ")"
+            : "rgba(255,122,111," + pulse.toFixed(3) + ")";
+          ctx.fill();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = seed.type === "good" ? "rgba(236,255,249,0.85)" : "rgba(255,228,224,0.82)";
+          ctx.stroke();
+          if (seed.type === "good") {
+            ctx.beginPath();
+            ctx.moveTo(seed.x, seed.y - 10);
+            ctx.lineTo(seed.x + 5, seed.y - 18);
+            ctx.strokeStyle = "rgba(190,255,223,0.65)";
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(seed.x - 6, seed.y - 6);
+            ctx.lineTo(seed.x + 6, seed.y + 6);
+            ctx.moveTo(seed.x + 6, seed.y - 6);
+            ctx.lineTo(seed.x - 6, seed.y + 6);
+            ctx.strokeStyle = "rgba(255,245,240,0.66)";
+            ctx.stroke();
+          }
+        }
+
+        for (const mote of state.motes) {
+          const alpha = 1 - mote.age / mote.life;
+          ctx.fillStyle = "rgba(" + mote.color + "," + alpha.toFixed(3) + ")";
+          ctx.beginPath();
+          ctx.arc(mote.x, mote.y, 2 + alpha * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function tick(ts) {
+        if (!state.lastTs) {
+          state.lastTs = ts;
+        }
+        const dt = Math.min(0.033, (ts - state.lastTs) / 1000);
+        state.lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(tick);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        toggleWind();
+      });
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      window.addEventListener("resize", resizeCanvas);
+
+      resizeCanvas();
+      resetGame();
+      render();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
