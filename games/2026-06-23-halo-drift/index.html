@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ハロードリフト</title>
+  <meta name="description" content="タップで収穫リングを内外に切り替え、青いオーブだけを拾う60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #1c1036;
+      --bg-bottom: #060813;
+      --panel: rgba(15, 13, 31, 0.82);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f4f1ff;
+      --cyan: #77f4ff;
+      --amber: #ffd973;
+      --rose: #ff748f;
+      --mist: rgba(244, 241, 255, 0.72);
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(119, 244, 255, 0.12), transparent 28%),
+        radial-gradient(circle at 82% 78%, rgba(255, 116, 143, 0.14), transparent 24%),
+        linear-gradient(180deg, #2a1d4a 0%, var(--bg-top) 26%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--mist);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(244, 241, 255, 0.8);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 6px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(244, 241, 255, 0.56);
+    }
+    .value {
+      font-size: 0.98rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #mode.inner {
+      color: var(--cyan);
+    }
+    #mode.outer {
+      color: var(--amber);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(119, 244, 255, 0.08), transparent 26%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 15%),
+        linear-gradient(180deg, rgba(11, 10, 24, 0.96), rgba(4, 6, 12, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(6, 7, 12, 0.12), rgba(6, 7, 12, 0.76));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(15, 14, 28, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(244, 241, 255, 0.8);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(14, 14, 26, 0.64);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(244, 241, 255, 0.84);
+      backdrop-filter: blur(8px);
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(244, 241, 255, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #0b1020;
+      background: linear-gradient(135deg, var(--cyan), #effcff);
+      box-shadow: 0 10px 24px rgba(119, 244, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #fff1c2);
+      box-shadow: 0 10px 24px rgba(255, 217, 115, 0.18);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC RING SWITCH</div>
+      <h1>ハロードリフト</h1>
+      <div class="sub">タップで収穫リングを INNER / OUTER に反転。青いオーブだけを拾い、赤いノイズはすり抜けさせろ。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Ring</div><div class="value inner" id="mode">INNER</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="ハロードリフトのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青だけを収穫しろ</h2>
+          <p id="overlayText">プレイ中は画面タップでリングを INNER / OUTER に切り替える。青いオーブを拾えば加点、赤いノイズを拾うと減点。終盤ほど流れが速くなる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップで INNER / OUTER 切り替え</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "halo-drift-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const modeEl = document.getElementById("mode");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const W = canvas.width;
+      const H = canvas.height;
+      const center = { x: W * 0.5, y: H * 0.55 };
+      const ringRadii = { inner: 78, outer: 128 };
+      const coreRadius = 24;
+
+      let best = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      let running = false;
+      let beatBest = false;
+      let score = 0;
+      let combo = 0;
+      let timeLeft = PLAY_TIME;
+      let mode = "inner";
+      let elapsed = 0;
+      let spawnTimer = 0;
+      let lastTs = 0;
+      let animationId = 0;
+      let orbs = [];
+      let bursts = [];
+      let stars = [];
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function rand(min, max) {
+        return Math.random() * (max - min) + min;
+      }
+
+      function getDifficulty() {
+        if (elapsed >= 45) {
+          return { speed: 144, spawn: 0.44, redChance: 0.43, swirl: 1.2 };
+        }
+        if (elapsed >= 30) {
+          return { speed: 124, spawn: 0.58, redChance: 0.31, swirl: 0.82 };
+        }
+        return { speed: 106, spawn: 0.75, redChance: 0.2, swirl: 0.48 };
+      }
+
+      function resetStars() {
+        stars = Array.from({ length: 36 }, () => ({
+          x: rand(0, W),
+          y: rand(0, H),
+          r: rand(0.8, 2.4),
+          drift: rand(8, 20),
+          alpha: rand(0.18, 0.8)
+        }));
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        timeEl.textContent = timeLeft.toFixed(1);
+        bestEl.textContent = String(best);
+        modeEl.textContent = mode.toUpperCase();
+        modeEl.className = "value " + mode;
+      }
+
+      function resetGame() {
+        running = false;
+        score = 0;
+        combo = 0;
+        timeLeft = PLAY_TIME;
+        beatBest = false;
+        mode = "inner";
+        elapsed = 0;
+        spawnTimer = 0;
+        lastTs = 0;
+        orbs = [];
+        bursts = [];
+        overlay.classList.remove("hidden");
+        overlayTitle.textContent = "青だけを収穫しろ";
+        overlayText.textContent = "プレイ中は画面タップでリングを INNER / OUTER に切り替える。青いオーブを拾えば加点、赤いノイズを拾うと減点。終盤ほど流れが速くなる。";
+        updateHud();
+        draw();
+      }
+
+      function startGame() {
+        score = 0;
+        combo = 0;
+        timeLeft = PLAY_TIME;
+        elapsed = 0;
+        spawnTimer = 0;
+        lastTs = 0;
+        mode = "inner";
+        beatBest = false;
+        orbs = [];
+        bursts = [];
+        running = true;
+        overlay.classList.add("hidden");
+        updateHud();
+        cancelAnimationFrame(animationId);
+        animationId = requestAnimationFrame(loop);
+      }
+
+      function toggleMode() {
+        mode = mode === "inner" ? "outer" : "inner";
+        updateHud();
+      }
+
+      function spawnOrb() {
+        const diff = getDifficulty();
+        const angle = rand(0, Math.PI * 2);
+        const startRadius = rand(220, 290);
+        const x = center.x + Math.cos(angle) * startRadius;
+        const y = center.y + Math.sin(angle) * startRadius;
+        const dx = center.x - x;
+        const dy = center.y - y;
+        const length = Math.hypot(dx, dy) || 1;
+        const inward = diff.speed * rand(0.94, 1.14);
+        const swirlStrength = rand(-diff.swirl, diff.swirl);
+        const tangentX = -dy / length;
+        const tangentY = dx / length;
+        const vx = dx / length * inward + tangentX * swirlStrength * 22;
+        const vy = dy / length * inward + tangentY * swirlStrength * 22;
+        const red = Math.random() < diff.redChance;
+        orbs.push({
+          x,
+          y,
+          vx,
+          vy,
+          r: red ? rand(7, 10) : rand(8, 11),
+          type: red ? "red" : "blue",
+          pulse: rand(0, Math.PI * 2),
+          caught: false
+        });
+      }
+
+      function addBurst(x, y, color, text) {
+        bursts.push({
+          x,
+          y,
+          color,
+          text,
+          life: 0.7
+        });
+      }
+
+      function captureOrb(orb) {
+        orb.caught = true;
+        if (orb.type === "blue") {
+          combo += 1;
+          score += 1 + Math.min(3, Math.floor(combo / 3));
+          addBurst(orb.x, orb.y, "#77f4ff", "+" + (1 + Math.min(3, Math.floor(combo / 3))));
+        } else {
+          combo = 0;
+          score = Math.max(0, score - 3);
+          addBurst(orb.x, orb.y, "#ff748f", "-3");
+        }
+        if (score > best) {
+          best = score;
+          beatBest = true;
+          localStorage.setItem(STORAGE_KEY, String(best));
+        }
+        updateHud();
+      }
+
+      function missBlue(orb) {
+        combo = 0;
+        addBurst(orb.x, orb.y, "#ffd973", "MISS");
+        updateHud();
+      }
+
+      function update(dt) {
+        elapsed += dt;
+        timeLeft = clamp(PLAY_TIME - elapsed, 0, PLAY_TIME);
+        const diff = getDifficulty();
+        spawnTimer -= dt;
+        while (spawnTimer <= 0) {
+          spawnOrb();
+          spawnTimer += diff.spawn * rand(0.72, 1.18);
+        }
+
+        for (const star of stars) {
+          star.y += star.drift * dt;
+          if (star.y > H + 3) {
+            star.y = -3;
+            star.x = rand(0, W);
+          }
+        }
+
+        const activeRadius = ringRadii[mode];
+        const nextOrbs = [];
+        for (const orb of orbs) {
+          orb.x += orb.vx * dt;
+          orb.y += orb.vy * dt;
+          orb.pulse += dt * 5;
+          const dx = orb.x - center.x;
+          const dy = orb.y - center.y;
+          const dist = Math.hypot(dx, dy);
+          if (!orb.caught && Math.abs(dist - activeRadius) <= orb.r + 2) {
+            captureOrb(orb);
+            continue;
+          }
+          if (dist <= coreRadius + orb.r) {
+            if (orb.type === "blue") {
+              missBlue(orb);
+            }
+            continue;
+          }
+          if (dist < 360) {
+            nextOrbs.push(orb);
+          }
+        }
+        orbs = nextOrbs;
+
+        bursts = bursts.filter((burst) => {
+          burst.y -= 34 * dt;
+          burst.life -= dt;
+          return burst.life > 0;
+        });
+
+        updateHud();
+        if (timeLeft <= 0) {
+          finishGame();
+        }
+      }
+
+      function drawBackground() {
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, "#120f26");
+        bg.addColorStop(1, "#060813");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+
+        for (const star of stars) {
+          ctx.globalAlpha = star.alpha;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function drawCore() {
+        const glow = ctx.createRadialGradient(center.x, center.y, 0, center.x, center.y, 120);
+        glow.addColorStop(0, "rgba(119, 244, 255, 0.22)");
+        glow.addColorStop(1, "rgba(119, 244, 255, 0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 120, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#121a35";
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, coreRadius + 4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, coreRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function drawRings() {
+        for (const key of ["outer", "inner"]) {
+          const radius = ringRadii[key];
+          const active = key === mode;
+          ctx.strokeStyle = active
+            ? key === "inner" ? "rgba(119, 244, 255, 0.95)" : "rgba(255, 217, 115, 0.95)"
+            : "rgba(255,255,255,0.13)";
+          ctx.lineWidth = active ? 8 : 3;
+          ctx.beginPath();
+          ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          if (active) {
+            ctx.strokeStyle = key === "inner" ? "rgba(119, 244, 255, 0.26)" : "rgba(255, 217, 115, 0.24)";
+            ctx.lineWidth = 18;
+            ctx.beginPath();
+            ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        }
+      }
+
+      function drawOrbs() {
+        for (const orb of orbs) {
+          const alpha = orb.type === "blue" ? 0.9 : 0.82;
+          const color = orb.type === "blue" ? "#77f4ff" : "#ff748f";
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, orb.r + Math.sin(orb.pulse) * 0.8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.2;
+          ctx.beginPath();
+          ctx.arc(orb.x, orb.y, orb.r + 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawBursts() {
+        ctx.font = "bold 16px Trebuchet MS";
+        ctx.textAlign = "center";
+        for (const burst of bursts) {
+          ctx.globalAlpha = clamp(burst.life * 1.4, 0, 1);
+          ctx.fillStyle = burst.color;
+          ctx.fillText(burst.text, burst.x, burst.y);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function draw() {
+        drawBackground();
+        drawCore();
+        drawRings();
+        drawOrbs();
+        drawBursts();
+
+        ctx.fillStyle = "rgba(244, 241, 255, 0.68)";
+        ctx.font = "12px Trebuchet MS";
+        ctx.textAlign = "left";
+        ctx.fillText("BLUE = COLLECT", 20, 28);
+        ctx.fillStyle = "rgba(255, 116, 143, 0.82)";
+        ctx.fillText("RED = AVOID", 20, 46);
+        ctx.fillStyle = "rgba(244, 241, 255, 0.68)";
+        ctx.textAlign = "right";
+        ctx.fillText("COMBO " + combo, W - 20, 28);
+      }
+
+      function finishGame() {
+        running = false;
+        overlay.classList.remove("hidden");
+        overlayTitle.textContent = beatBest ? "ベスト更新" : "タイムアップ";
+        overlayText.textContent = "スコア " + score + " / ベスト " + best + "。もう一度タップ判断を研いで、青オーブの流れを刈り取れ。";
+        cancelAnimationFrame(animationId);
+        draw();
+      }
+
+      function loop(timestamp) {
+        if (!running) {
+          return;
+        }
+        if (!lastTs) {
+          lastTs = timestamp;
+        }
+        const dt = Math.min(0.033, (timestamp - lastTs) / 1000);
+        lastTs = timestamp;
+        update(dt);
+        draw();
+        if (running) {
+          animationId = requestAnimationFrame(loop);
+        }
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (!running) {
+          return;
+        }
+        event.preventDefault();
+        toggleMode();
+      });
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      resetStars();
+      updateHud();
+      resetGame();
+    })();
+  </script>
+</body>
+</html>
