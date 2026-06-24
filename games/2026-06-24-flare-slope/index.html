@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>フレアスロープ</title>
+  <meta name="description" content="タップで炉床スロープを左右反転し、青いフレアと赤いスラグを仕分ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #21122d;
+      --bg-bottom: #070b15;
+      --panel: rgba(15, 16, 27, 0.82);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f6f3ea;
+      --cyan: #85f3ff;
+      --amber: #ffc969;
+      --rose: #ff6f7c;
+      --mint: #8affc5;
+      --mist: rgba(246, 243, 234, 0.72);
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 14%, rgba(255, 201, 105, 0.14), transparent 28%),
+        radial-gradient(circle at 78% 82%, rgba(133, 243, 255, 0.12), transparent 24%),
+        linear-gradient(180deg, #36204b 0%, var(--bg-top) 30%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--mist);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(246, 243, 234, 0.8);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 4px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(246, 243, 234, 0.56);
+    }
+    .value {
+      font-size: 0.93rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #tilt.left {
+      color: var(--cyan);
+    }
+    #tilt.right {
+      color: var(--amber);
+    }
+    #combo.hot {
+      color: var(--mint);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 28%, rgba(255, 201, 105, 0.16), transparent 30%),
+        radial-gradient(circle at 50% 82%, rgba(133, 243, 255, 0.09), transparent 24%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 15%),
+        linear-gradient(180deg, rgba(12, 10, 24, 0.96), rgba(5, 7, 12, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(6, 7, 12, 0.14), rgba(6, 7, 12, 0.76));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(15, 14, 28, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(246, 243, 234, 0.8);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(14, 14, 26, 0.64);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(246, 243, 234, 0.84);
+      backdrop-filter: blur(8px);
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(246, 243, 234, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #101624;
+      background: linear-gradient(135deg, var(--cyan), #effcff);
+      box-shadow: 0 10px 24px rgba(133, 243, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #fff0ca);
+      box-shadow: 0 10px 24px rgba(255, 201, 105, 0.18);
+    }
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+      .value {
+        font-size: 0.82rem;
+      }
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      button, .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC SLOPE SORT</div>
+      <h1>フレアスロープ</h1>
+      <div class="sub">タップで炉床の傾きを LEFT / RIGHT に反転。青いフレアは左カップ、赤いスラグは右ベントへ流して60秒をしのげ。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Tilt</div><div class="value left" id="tilt">LEFT</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="combo">x0</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="フレアスロープのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青は左、赤は右</h2>
+          <p id="overlayText">プレイ中は画面タップでスロープを左右反転。青いフレアを左カップへ入れると高得点、赤いスラグを左へ落とすと失点。終盤ほど落下と滑走が速くなる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップで LEFT / RIGHT 切り替え</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "flare-slope-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const tiltEl = document.getElementById("tilt");
+      const comboEl = document.getElementById("combo");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 0,
+        timeLeft: PLAY_TIME,
+        elapsed: 0,
+        spawnTimer: 0,
+        particles: [],
+        sparks: [],
+        lastTs: 0,
+        tilt: -1,
+        tiltTarget: -1,
+        flashLeft: 0,
+        flashRight: 0
+      };
+
+      const pointer = () => {
+        if (!state.running) {
+          return;
+        }
+        state.tiltTarget *= -1;
+      };
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.round(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = Math.round(state.best);
+        tiltEl.textContent = state.tiltTarget < 0 ? "LEFT" : "RIGHT";
+        tiltEl.className = "value " + (state.tiltTarget < 0 ? "left" : "right");
+        comboEl.textContent = "x" + state.combo;
+        comboEl.className = "value" + (state.combo >= 3 ? " hot" : "");
+      }
+
+      function resetRun() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.spawnTimer = 0;
+        state.particles = [];
+        state.sparks = [];
+        state.lastTs = 0;
+        state.tilt = -1;
+        state.tiltTarget = -1;
+        state.flashLeft = 0;
+        state.flashRight = 0;
+        updateHud();
+      }
+
+      function startRun() {
+        resetRun();
+        state.running = true;
+        hideOverlay();
+      }
+
+      function addSpark(x, y, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 40 + Math.random() * 80;
+          state.sparks.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.55 + Math.random() * 0.25,
+            maxLife: 0.8,
+            color
+          });
+        }
+      }
+
+      function spawnParticle() {
+        const danger = state.elapsed < 30 ? 0.28 : state.elapsed < 45 ? 0.38 : 0.47;
+        const bad = Math.random() < danger;
+        const x = canvas.clientWidth * (0.43 + Math.random() * 0.14);
+        state.particles.push({
+          x,
+          y: -16,
+          r: 9 + Math.random() * 4,
+          vx: (Math.random() - 0.5) * 16,
+          vy: 28 + Math.random() * 16,
+          kind: bad ? "bad" : "good",
+          settled: false,
+          glow: Math.random() * Math.PI * 2
+        });
+      }
+
+      function rampY(x, width, height) {
+        const centerY = height * 0.68;
+        const slope = state.tilt * 0.24;
+        return centerY + (x - width * 0.5) * slope;
+      }
+
+      function settleParticle(p, width, height) {
+        const yOnRamp = rampY(p.x, width, height) - p.r;
+        if (!p.settled && p.y >= yOnRamp) {
+          p.settled = true;
+          p.y = yOnRamp;
+          p.vx *= 0.15;
+          p.vy = 0;
+        }
+      }
+
+      function resolveExit(p, width, height) {
+        if (p.x < 24) {
+          if (p.kind === "good") {
+            state.combo += 1;
+            state.score += 10 + Math.min(state.combo, 8) * 2;
+            state.flashLeft = 0.28;
+            addSpark(28, height * 0.82, "138,255,197", 10);
+          } else {
+            state.combo = 0;
+            state.score = Math.max(0, state.score - 12);
+            state.flashLeft = 0.28;
+            addSpark(30, height * 0.82, "255,111,124", 12);
+          }
+          return true;
+        }
+        if (p.x > width - 24) {
+          if (p.kind === "bad") {
+            state.flashRight = 0.22;
+            addSpark(width - 30, height * 0.82, "255,201,105", 8);
+          } else {
+            state.combo = 0;
+            state.score = Math.max(0, state.score - 6);
+            state.flashRight = 0.28;
+            addSpark(width - 32, height * 0.82, "133,243,255", 10);
+          }
+          return true;
+        }
+        return false;
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        state.elapsed = PLAY_TIME - state.timeLeft;
+
+        if (state.timeLeft <= 0) {
+          state.running = false;
+          if (state.score > state.best) {
+            state.best = Math.round(state.score);
+            localStorage.setItem(STORAGE_KEY, String(state.best));
+          }
+          updateHud();
+          showOverlay(
+            state.score >= state.best ? "ハイスコア更新" : "60秒終了",
+            "スコア " + Math.round(state.score) + " / BEST " + Math.round(state.best) + "。もう一度タップの流れを読んで仕分け直せ。"
+          );
+          return;
+        }
+
+        const tiltBlend = clamp(dt * 7.5, 0, 1);
+        state.tilt += (state.tiltTarget - state.tilt) * tiltBlend;
+        state.flashLeft = Math.max(0, state.flashLeft - dt);
+        state.flashRight = Math.max(0, state.flashRight - dt);
+
+        const spawnGap = state.elapsed < 30 ? 0.72 : state.elapsed < 45 ? 0.58 : 0.46;
+        state.spawnTimer += dt;
+        while (state.spawnTimer >= spawnGap) {
+          state.spawnTimer -= spawnGap;
+          spawnParticle();
+        }
+
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const slideSpeed = state.elapsed < 30 ? 72 : state.elapsed < 45 ? 96 : 122;
+        const gravity = 290;
+
+        state.particles = state.particles.filter((p) => {
+          if (!p.settled) {
+            p.vy += gravity * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            settleParticle(p, width, height);
+          } else {
+            const slope = state.tilt * 0.24;
+            p.vx += (state.tilt * slideSpeed - p.vx) * clamp(dt * 5, 0, 1);
+            p.x += p.vx * dt;
+            p.y = rampY(p.x, width, height) - p.r;
+            p.glow += dt * 6;
+          }
+
+          if (resolveExit(p, width, height)) {
+            return false;
+          }
+
+          if (p.y > height + 40) {
+            return false;
+          }
+          return true;
+        });
+
+        state.sparks = state.sparks.filter((spark) => {
+          spark.life -= dt;
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.vx *= 0.985;
+          spark.vy = spark.vy * 0.985 + 40 * dt;
+          return spark.life > 0;
+        });
+
+        updateHud();
+      }
+
+      function drawBackground(width, height) {
+        const grad = ctx.createLinearGradient(0, 0, 0, height);
+        grad.addColorStop(0, "rgba(255,255,255,0.03)");
+        grad.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 10; i += 1) {
+          const x = ((i * 41) % width) + 18;
+          const y = 40 + ((i * 59) % Math.max(80, height - 120));
+          ctx.fillStyle = "rgba(255,255,255,0.06)";
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawArena(width, height) {
+        const centerY = height * 0.68;
+        const leftCupY = height * 0.82;
+        const rightVentY = height * 0.82;
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 5; i += 1) {
+          const y = (height * i) / 5;
+          ctx.beginPath();
+          ctx.moveTo(18, y);
+          ctx.lineTo(width - 18, y);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "rgba(133,243,255,0.14)";
+        ctx.fillRect(12, leftCupY - 36, 28, 54);
+        ctx.fillStyle = "rgba(255,201,105,0.14)";
+        ctx.fillRect(width - 40, rightVentY - 36, 28, 54);
+
+        ctx.fillStyle = "rgba(246,243,234,0.85)";
+        ctx.font = "12px Trebuchet MS";
+        ctx.textAlign = "left";
+        ctx.fillText("BLUE", 14, leftCupY - 44);
+        ctx.textAlign = "right";
+        ctx.fillText("RED", width - 14, rightVentY - 44);
+
+        const rampLeftY = centerY + (0 - width * 0.5) * state.tilt * 0.24;
+        const rampRightY = centerY + (width - width * 0.5) * state.tilt * 0.24;
+        ctx.lineWidth = 14;
+        ctx.lineCap = "round";
+        const rampGrad = ctx.createLinearGradient(0, rampLeftY, width, rampRightY);
+        rampGrad.addColorStop(0, "rgba(133,243,255,0.88)");
+        rampGrad.addColorStop(0.5, "rgba(255,201,105,0.95)");
+        rampGrad.addColorStop(1, "rgba(255,111,124,0.88)");
+        ctx.strokeStyle = rampGrad;
+        ctx.beginPath();
+        ctx.moveTo(24, rampLeftY);
+        ctx.lineTo(width - 24, rampRightY);
+        ctx.stroke();
+
+        ctx.lineWidth = 26;
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.beginPath();
+        ctx.moveTo(24, rampLeftY + 6);
+        ctx.lineTo(width - 24, rampRightY + 6);
+        ctx.stroke();
+
+        if (state.flashLeft > 0) {
+          ctx.fillStyle = "rgba(138,255,197," + (state.flashLeft * 1.8) + ")";
+          ctx.fillRect(10, leftCupY - 40, 34, 62);
+        }
+        if (state.flashRight > 0) {
+          ctx.fillStyle = "rgba(255,201,105," + (state.flashRight * 1.8) + ")";
+          ctx.fillRect(width - 44, rightVentY - 40, 34, 62);
+        }
+        ctx.restore();
+      }
+
+      function drawParticles(width, height) {
+        state.particles.forEach((p) => {
+          const isGood = p.kind === "good";
+          const pulse = 0.75 + Math.sin(p.glow) * 0.15;
+          const color = isGood ? "133,243,255" : "255,111,124";
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(" + color + "," + (0.2 + pulse * 0.16) + ")";
+          ctx.arc(p.x, p.y, p.r * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.fillStyle = "rgba(" + color + ",0.95)";
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.fillStyle = isGood ? "rgba(238,255,255,0.95)" : "rgba(255,236,240,0.92)";
+          ctx.arc(p.x - p.r * 0.22, p.y - p.r * 0.22, p.r * 0.34, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        state.sparks.forEach((spark) => {
+          const alpha = clamp(spark.life / spark.maxLife, 0, 1);
+          ctx.fillStyle = "rgba(" + spark.color + "," + alpha + ")";
+          ctx.fillRect(spark.x, spark.y, 3, 3);
+        });
+      }
+
+      function render() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+        drawBackground(width, height);
+        drawArena(width, height);
+        drawParticles(width, height);
+      }
+
+      function loop(ts) {
+        if (!state.lastTs) {
+          state.lastTs = ts;
+        }
+        const dt = Math.min(0.033, (ts - state.lastTs) / 1000);
+        state.lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button, a")) {
+          return;
+        }
+        pointer();
+      });
+      startBtn.addEventListener("pointerdown", startRun);
+      retryBtn.addEventListener("pointerdown", startRun);
+      window.addEventListener("resize", resize);
+
+      resize();
+      updateHud();
+      showOverlay("青は左、赤は右", "スタート後は画面をタップしてスロープを反転。青いフレアを左カップへ、赤いスラグは右ベントへ流す。");
+      render();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
