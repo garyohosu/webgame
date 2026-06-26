@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>サンムーンプリズム</title>
+  <meta name="description" content="タップで中央プリズムを左右反転し、シアンを月鉢へ、アンバーを陽炉へ弾き分ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #09172d;
+      --bg-bottom: #02060e;
+      --panel: rgba(8, 15, 28, 0.84);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f6f5f2;
+      --cyan: #89ecff;
+      --amber: #ffc96d;
+      --violet: #8ea2ff;
+      --mist: rgba(246, 245, 242, 0.78);
+      --mint: #9ff3c5;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(137, 236, 255, 0.18), transparent 24%),
+        radial-gradient(circle at 80% 22%, rgba(255, 201, 109, 0.16), transparent 24%),
+        radial-gradient(circle at 50% 82%, rgba(142, 162, 255, 0.14), transparent 26%),
+        linear-gradient(180deg, #15315d 0%, var(--bg-top) 38%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--mist);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(246, 245, 242, 0.82);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 4px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(246, 245, 242, 0.56);
+    }
+    .value {
+      font-size: 0.92rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #prism.left {
+      color: var(--cyan);
+    }
+    #prism.right {
+      color: var(--amber);
+    }
+    #streak.hot {
+      color: var(--mint);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 28%, rgba(255, 255, 255, 0.05), transparent 20%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 16%),
+        linear-gradient(180deg, rgba(8, 14, 25, 0.96), rgba(4, 8, 14, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(4, 7, 14, 0.18), rgba(4, 7, 14, 0.82));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(11, 18, 30, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(246, 245, 242, 0.8);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 14, 24, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(246, 245, 242, 0.84);
+      backdrop-filter: blur(8px);
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(246, 245, 242, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #07111f;
+      background: linear-gradient(135deg, var(--cyan), #f8feff);
+      box-shadow: 0 10px 24px rgba(137, 236, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #fff0d0);
+      box-shadow: 0 10px 24px rgba(255, 201, 109, 0.2);
+    }
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+      .value {
+        font-size: 0.81rem;
+      }
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      button, .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC PRISM ROUTER</div>
+      <h1>サンムーンプリズム</h1>
+      <div class="sub">タップで中央プリズムを LEFT / RIGHT に反転。シアンの月オーブは左の月鉢へ、アンバーの陽オーブは右の陽炉へ弾き分けろ。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Prism</div><div class="value left" id="prism">LEFT</div></div>
+      <div class="stat"><div class="label">Streak</div><div class="value" id="streak">x0</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="サンムーンプリズムのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">左は月、右は太陽</h2>
+          <p id="overlayText">スタート後は画面タップでプリズム傾きを反転。中央でオーブを曲げ、シアンは左の月鉢、アンバーは右の陽炉へ送る。後半ほど落下密度と速度が上がる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップで LEFT / RIGHT 切り替え</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "sun-moon-prism-best-v1";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const prismEl = document.getElementById("prism");
+      const streakEl = document.getElementById("streak");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        streak: 0,
+        timeLeft: PLAY_TIME,
+        elapsed: 0,
+        spawnTimer: 0,
+        drops: [],
+        sparks: [],
+        lastTs: 0,
+        prismSide: -1,
+        prismAngle: -1,
+        flashLeft: 0,
+        flashRight: 0
+      };
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.round(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = Math.round(state.best);
+        prismEl.textContent = state.prismSide < 0 ? "LEFT" : "RIGHT";
+        prismEl.className = "value " + (state.prismSide < 0 ? "left" : "right");
+        streakEl.textContent = "x" + state.streak;
+        streakEl.className = "value" + (state.streak >= 3 ? " hot" : "");
+      }
+
+      function resetRun() {
+        state.running = false;
+        state.score = 0;
+        state.streak = 0;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.spawnTimer = 0;
+        state.drops = [];
+        state.sparks = [];
+        state.lastTs = 0;
+        state.prismSide = -1;
+        state.prismAngle = -1;
+        state.flashLeft = 0;
+        state.flashRight = 0;
+        updateHud();
+      }
+
+      function startRun() {
+        resetRun();
+        state.running = true;
+        hideOverlay();
+      }
+
+      function togglePrism() {
+        if (!state.running) {
+          return;
+        }
+        state.prismSide *= -1;
+      }
+
+      function addSpark(x, y, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 34 + Math.random() * 92;
+          state.sparks.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.42 + Math.random() * 0.32,
+            maxLife: 0.74,
+            color
+          });
+        }
+      }
+
+      function spawnDrop() {
+        const width = canvas.clientWidth;
+        const phase = state.elapsed < 30 ? 0 : state.elapsed < 45 ? 1 : 2;
+        const type = Math.random() < 0.5 ? "moon" : "sun";
+        state.drops.push({
+          x: width * (0.2 + Math.random() * 0.6),
+          y: -18,
+          r: 9 + Math.random() * 4,
+          vx: (Math.random() - 0.5) * (phase === 0 ? 14 : phase === 1 ? 22 : 32),
+          vy: phase === 0 ? 138 : phase === 1 ? 168 : 198,
+          sway: Math.random() * Math.PI * 2,
+          type,
+          deflected: false,
+          glow: Math.random() * Math.PI * 2
+        });
+      }
+
+      function resolveCatch(drop, side) {
+        const correct = (drop.type === "moon" && side === "left") || (drop.type === "sun" && side === "right");
+        if (correct) {
+          state.streak += 1;
+          state.score += 10 + Math.min(state.streak, 8) * 2;
+          if (side === "left") {
+            state.flashLeft = 0.28;
+            addSpark(drop.x, drop.y, "137,236,255", 10);
+          } else {
+            state.flashRight = 0.28;
+            addSpark(drop.x, drop.y, "255,201,109", 10);
+          }
+        } else {
+          state.streak = 0;
+          state.score = Math.max(0, state.score - 9);
+          if (side === "left") {
+            state.flashLeft = 0.28;
+          } else {
+            state.flashRight = 0.28;
+          }
+          addSpark(drop.x, drop.y, "255,114,126", 12);
+        }
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        state.elapsed = PLAY_TIME - state.timeLeft;
+
+        if (state.timeLeft <= 0) {
+          state.running = false;
+          const rounded = Math.round(state.score);
+          if (rounded > state.best) {
+            state.best = rounded;
+            localStorage.setItem(STORAGE_KEY, String(state.best));
+          }
+          updateHud();
+          showOverlay(
+            rounded >= state.best ? "ハイスコア更新" : "60秒終了",
+            "スコア " + rounded + " / BEST " + Math.round(state.best) + "。月と太陽の振り分け精度を研ぎ直して再挑戦。"
+          );
+          return;
+        }
+
+        state.prismAngle += (state.prismSide - state.prismAngle) * clamp(dt * 10, 0, 1);
+        state.flashLeft = Math.max(0, state.flashLeft - dt);
+        state.flashRight = Math.max(0, state.flashRight - dt);
+
+        const spawnGap = state.elapsed < 30 ? 0.74 : state.elapsed < 45 ? 0.58 : 0.44;
+        state.spawnTimer += dt;
+        while (state.spawnTimer >= spawnGap) {
+          state.spawnTimer -= spawnGap;
+          spawnDrop();
+        }
+
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const prismX = width * 0.5;
+        const prismY = height * 0.47;
+        const leftCup = { x: width * 0.24, y: height - 66, r: 44 };
+        const rightCup = { x: width * 0.76, y: height - 66, r: 44 };
+
+        state.drops = state.drops.filter((drop) => {
+          drop.glow += dt * 6;
+          drop.sway += dt * (drop.deflected ? 4.8 : 3.2);
+
+          if (!drop.deflected) {
+            drop.x += drop.vx * dt + Math.sin(drop.sway) * 10 * dt;
+            drop.y += drop.vy * dt;
+            if (drop.y >= prismY - 14 && drop.y <= prismY + 18 && Math.abs(drop.x - prismX) < 28) {
+              drop.deflected = true;
+              const phase = state.elapsed < 30 ? 0 : state.elapsed < 45 ? 1 : 2;
+              const sideSpeed = phase === 0 ? 146 : phase === 1 ? 188 : 228;
+              drop.vx = state.prismSide < 0 ? -sideSpeed : sideSpeed;
+              drop.vy = phase === 0 ? 86 : phase === 1 ? 106 : 124;
+              drop.y = prismY + 6;
+            }
+          } else {
+            drop.x += drop.vx * dt;
+            drop.y += drop.vy * dt;
+            drop.vx *= 0.996;
+            drop.vy += 28 * dt;
+          }
+
+          const leftDist = Math.hypot(drop.x - leftCup.x, drop.y - leftCup.y);
+          const rightDist = Math.hypot(drop.x - rightCup.x, drop.y - rightCup.y);
+          if (leftDist < leftCup.r && drop.y > prismY + 74) {
+            resolveCatch(drop, "left");
+            return false;
+          }
+          if (rightDist < rightCup.r && drop.y > prismY + 74) {
+            resolveCatch(drop, "right");
+            return false;
+          }
+          if (drop.y > height + 24) {
+            state.streak = 0;
+            state.score = Math.max(0, state.score - 5);
+            addSpark(drop.x, height - 18, "255,114,126", 8);
+            return false;
+          }
+          if (drop.x < -40 || drop.x > width + 40) {
+            return false;
+          }
+          return true;
+        });
+
+        state.sparks = state.sparks.filter((spark) => {
+          spark.life -= dt;
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.vx *= 0.984;
+          spark.vy = spark.vy * 0.984 + 34 * dt;
+          return spark.life > 0;
+        });
+
+        updateHud();
+      }
+
+      function drawBackdrop(width, height) {
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, "rgba(255,255,255,0.03)");
+        grad.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 14; i += 1) {
+          const x = ((i * 29) % width) + 10;
+          const y = 22 + ((i * 53) % Math.max(90, height - 120));
+          ctx.fillStyle = i % 2 === 0 ? "rgba(137,236,255,0.12)" : "rgba(255,201,109,0.1)";
+          ctx.fillRect(x, y, 2, 2);
+        }
+      }
+
+      function drawOrb(x, y, radius, colorA, colorB) {
+        const glow = ctx.createRadialGradient(x - radius * 0.3, y - radius * 0.35, radius * 0.15, x, y, radius * 1.4);
+        glow.addColorStop(0, colorA);
+        glow.addColorStop(1, colorB);
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      function drawArena(width, height) {
+        const prismX = width * 0.5;
+        const prismY = height * 0.47;
+        const leftCup = { x: width * 0.24, y: height - 66, r: 44 };
+        const rightCup = { x: width * 0.76, y: height - 66, r: 44 };
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 10]);
+        ctx.beginPath();
+        ctx.moveTo(prismX, 26);
+        ctx.lineTo(prismX, height - 110);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        ctx.fillStyle = "rgba(137,236,255," + state.flashLeft * 0.7 + ")";
+        ctx.beginPath();
+        ctx.arc(leftCup.x, leftCup.y, leftCup.r + 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,201,109," + state.flashRight * 0.7 + ")";
+        ctx.beginPath();
+        ctx.arc(rightCup.x, rightCup.y, rightCup.r + 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        function drawCup(cup, mainColor, label, icon) {
+          ctx.save();
+          ctx.fillStyle = "rgba(7,12,20,0.88)";
+          ctx.beginPath();
+          ctx.arc(cup.x, cup.y, cup.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = mainColor;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          ctx.fillStyle = "rgba(255,255,255,0.92)";
+          ctx.font = "700 22px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.fillText(icon, cup.x, cup.y + 8);
+
+          ctx.font = "700 11px Trebuchet MS";
+          ctx.fillStyle = mainColor;
+          ctx.fillText(label, cup.x, cup.y + cup.r + 18);
+          ctx.restore();
+        }
+
+        drawCup(leftCup, "#89ecff", "MOON", "☾");
+        drawCup(rightCup, "#ffc96d", "SUN", "☼");
+
+        ctx.save();
+        ctx.translate(prismX, prismY);
+        ctx.rotate(state.prismAngle * 0.58);
+        const prismGrad = ctx.createLinearGradient(-34, 0, 34, 0);
+        prismGrad.addColorStop(0, "rgba(137,236,255,0.95)");
+        prismGrad.addColorStop(0.5, "rgba(255,255,255,0.95)");
+        prismGrad.addColorStop(1, "rgba(255,201,109,0.95)");
+        ctx.strokeStyle = prismGrad;
+        ctx.lineWidth = 10;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(-34, -6);
+        ctx.lineTo(34, 6);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,0.24)";
+        ctx.lineWidth = 18;
+        ctx.beginPath();
+        ctx.moveTo(-12, -26);
+        ctx.lineTo(12, 26);
+        ctx.stroke();
+        ctx.restore();
+
+        for (const drop of state.drops) {
+          if (drop.type === "moon") {
+            drawOrb(drop.x, drop.y, drop.r, "rgba(255,255,255,0.96)", "rgba(137,236,255,0.14)");
+          } else {
+            drawOrb(drop.x, drop.y, drop.r, "rgba(255,246,220,0.96)", "rgba(255,201,109,0.16)");
+          }
+        }
+
+        for (const spark of state.sparks) {
+          const alpha = clamp(spark.life / spark.maxLife, 0, 1);
+          ctx.fillStyle = "rgba(" + spark.color + "," + alpha + ")";
+          ctx.beginPath();
+          ctx.arc(spark.x, spark.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function render() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+        drawBackdrop(width, height);
+        drawArena(width, height);
+      }
+
+      function frame(ts) {
+        if (!state.lastTs) {
+          state.lastTs = ts;
+        }
+        const dt = Math.min(0.033, (ts - state.lastTs) / 1000);
+        state.lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        togglePrism();
+      });
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRun();
+      });
+
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRun();
+      });
+
+      window.addEventListener("resize", resize);
+
+      resetRun();
+      resize();
+      render();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
