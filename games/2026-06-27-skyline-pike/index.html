@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>スカイラインパイク</title>
+  <meta name="description" content="自動往復するランチャーに合わせてタップ射出し、青いドローンだけを撃ち抜く60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #081326;
+      --bg-bottom: #02050c;
+      --panel: rgba(7, 15, 28, 0.84);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f3f8ff;
+      --cyan: #79e3ff;
+      --amber: #ffb86c;
+      --rose: #ff6886;
+      --mint: #9cffce;
+      --violet: #95a2ff;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 16%, rgba(121, 227, 255, 0.18), transparent 24%),
+        radial-gradient(circle at 80% 12%, rgba(149, 162, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 50% 88%, rgba(255, 104, 134, 0.14), transparent 26%),
+        linear-gradient(180deg, #14305c 0%, var(--bg-top) 38%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+    body {
+      display: flex;
+      justify-content: center;
+    }
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+    }
+    .panel {
+      padding: 14px 16px 12px;
+    }
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(243, 248, 255, 0.74);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(243, 248, 255, 0.82);
+    }
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .stat {
+      min-width: 0;
+      padding: 9px 4px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(243, 248, 255, 0.56);
+    }
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #charge.ready {
+      color: var(--mint);
+    }
+    #combo.hot {
+      color: var(--amber);
+    }
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 14%, rgba(255, 255, 255, 0.05), transparent 18%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 16%),
+        linear-gradient(180deg, rgba(7, 14, 25, 0.96), rgba(4, 8, 14, 0.99));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(4, 7, 14, 0.18), rgba(4, 7, 14, 0.82));
+      transition: opacity 0.2s ease;
+    }
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(11, 18, 30, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(243, 248, 255, 0.8);
+    }
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 14, 24, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(243, 248, 255, 0.84);
+      backdrop-filter: blur(8px);
+    }
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .back {
+      padding: 12px 10px;
+      color: rgba(243, 248, 255, 0.8);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #07111f;
+      background: linear-gradient(135deg, var(--cyan), #f7feff);
+      box-shadow: 0 10px 24px rgba(121, 227, 255, 0.22);
+    }
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #ffe6bd);
+      box-shadow: 0 10px 24px rgba(255, 184, 108, 0.22);
+    }
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+      .value {
+        font-size: 0.8rem;
+      }
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      button, .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">60 SEC SKY SHOT</div>
+      <h1>スカイラインパイク</h1>
+      <div class="sub">ランチャーは自動往復。タップで真上へパイクを撃ち、青いドローンだけを抜け。赤いマインは撃たずに流せ。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Charge</div><div class="value ready" id="charge">READY</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="combo">x0</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="スカイラインパイクのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">狙いは自動、撃つのはあなた</h2>
+          <p id="overlayText">スタート後は画面タップでその瞬間の位置からパイクを真上へ射出。青いドローンを撃てば加点、赤いマインは誤射で減点。後半ほど横移動と密度が上がる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップでパイク射出</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "skyline-pike-best-v1";
+      const PLAY_TIME = 60;
+      const SHOT_COOLDOWN = 0.26;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const chargeEl = document.getElementById("charge");
+      const comboEl = document.getElementById("combo");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 0,
+        timeLeft: PLAY_TIME,
+        elapsed: 0,
+        spawnTimer: 0,
+        targets: [],
+        sparks: [],
+        shots: [],
+        lastTs: 0,
+        launcherPhase: 0,
+        cooldown: 0,
+        skyFlash: 0
+      };
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(rect.width * ratio);
+        canvas.height = Math.floor(rect.height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function updateHud() {
+        scoreEl.textContent = Math.round(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        bestEl.textContent = Math.round(state.best);
+        chargeEl.textContent = state.cooldown <= 0 ? "READY" : state.cooldown.toFixed(2);
+        chargeEl.className = "value" + (state.cooldown <= 0 ? " ready" : "");
+        comboEl.textContent = "x" + state.combo;
+        comboEl.className = "value" + (state.combo >= 4 ? " hot" : "");
+      }
+
+      function resetRun() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.spawnTimer = 0;
+        state.targets = [];
+        state.sparks = [];
+        state.shots = [];
+        state.lastTs = 0;
+        state.launcherPhase = 0.22;
+        state.cooldown = 0;
+        state.skyFlash = 0;
+        updateHud();
+      }
+
+      function startRun() {
+        resetRun();
+        state.running = true;
+        hideOverlay();
+      }
+
+      function getLauncherX(width) {
+        return width * 0.5 + Math.sin(state.launcherPhase) * width * 0.33;
+      }
+
+      function addSpark(x, y, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 30 + Math.random() * 96;
+          state.sparks.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.38 + Math.random() * 0.28,
+            maxLife: 0.68,
+            color
+          });
+        }
+      }
+
+      function spawnTarget() {
+        const width = canvas.clientWidth;
+        const phase = state.elapsed < 30 ? 0 : state.elapsed < 45 ? 1 : 2;
+        const typeRoll = Math.random();
+        const type = typeRoll < (phase === 2 ? 0.34 : phase === 1 ? 0.26 : 0.2) ? "mine" : "drone";
+        const laneBase = [0.22, 0.34, 0.48, 0.62];
+        const lane = laneBase[Math.floor(Math.random() * laneBase.length)];
+        const fromLeft = Math.random() < 0.5;
+        const speed = phase === 0 ? 64 + Math.random() * 24 : phase === 1 ? 84 + Math.random() * 34 : 106 + Math.random() * 42;
+        state.targets.push({
+          type,
+          x: fromLeft ? -28 : width + 28,
+          y: canvas.clientHeight * lane + (Math.random() - 0.5) * 14,
+          vx: fromLeft ? speed : -speed,
+          bob: Math.random() * Math.PI * 2,
+          bobSpeed: 1.6 + Math.random() * 1.8,
+          r: type === "drone" ? 14 + Math.random() * 5 : 12 + Math.random() * 4,
+          hit: false,
+          glow: Math.random() * Math.PI * 2
+        });
+      }
+
+      function fireShot() {
+        if (!state.running || state.cooldown > 0) {
+          return;
+        }
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const x = getLauncherX(width);
+        state.cooldown = SHOT_COOLDOWN;
+        state.shots.push({
+          x,
+          life: 0.15,
+          maxLife: 0.15,
+          fromY: height - 72
+        });
+
+        let bestTarget = null;
+        for (const target of state.targets) {
+          if (target.hit) {
+            continue;
+          }
+          if (Math.abs(target.x - x) <= target.r + 9) {
+            if (!bestTarget || target.y > bestTarget.y) {
+              bestTarget = target;
+            }
+          }
+        }
+
+        if (!bestTarget) {
+          addSpark(x, height - 100, "121,227,255", 4);
+          return;
+        }
+
+        bestTarget.hit = true;
+        if (bestTarget.type === "drone") {
+          state.combo += 1;
+          state.score += 12 + Math.min(state.combo, 7) * 2;
+          state.skyFlash = 0.16;
+          addSpark(bestTarget.x, bestTarget.y, "121,227,255", 14);
+        } else {
+          state.combo = 0;
+          state.score = Math.max(0, state.score - 12);
+          addSpark(bestTarget.x, bestTarget.y, "255,104,134", 18);
+        }
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        state.elapsed = PLAY_TIME - state.timeLeft;
+        state.cooldown = Math.max(0, state.cooldown - dt);
+        state.skyFlash = Math.max(0, state.skyFlash - dt);
+
+        if (state.timeLeft <= 0) {
+          state.running = false;
+          const rounded = Math.round(state.score);
+          const isNewBest = rounded > state.best;
+          if (isNewBest) {
+            state.best = rounded;
+            localStorage.setItem(STORAGE_KEY, String(state.best));
+          }
+          updateHud();
+          showOverlay(
+            isNewBest ? "ハイスコア更新" : "60秒終了",
+            "スコア " + rounded + " / BEST " + Math.round(state.best) + "。自動照準の波を読み直して、もう一度青だけを撃ち抜け。"
+          );
+          return;
+        }
+
+        const phase = state.elapsed < 30 ? 0 : state.elapsed < 45 ? 1 : 2;
+        state.launcherPhase += dt * (phase === 0 ? 1.8 : phase === 1 ? 2.25 : 2.8);
+
+        const spawnGap = phase === 0 ? 0.82 : phase === 1 ? 0.6 : 0.46;
+        state.spawnTimer += dt;
+        while (state.spawnTimer >= spawnGap) {
+          state.spawnTimer -= spawnGap;
+          spawnTarget();
+        }
+
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        state.targets = state.targets.filter((target) => {
+          target.glow += dt * 6;
+          target.bob += dt * target.bobSpeed;
+          target.x += target.vx * dt;
+          target.y += Math.sin(target.bob) * 10 * dt;
+
+          if (target.hit) {
+            return false;
+          }
+          if (target.x < -50 || target.x > width + 50) {
+            if (target.type === "drone") {
+              state.combo = 0;
+              state.score = Math.max(0, state.score - 4);
+              addSpark(clamp(target.x, 18, width - 18), target.y, "255,184,108", 7);
+            }
+            return false;
+          }
+          return true;
+        });
+
+        state.shots = state.shots.filter((shot) => {
+          shot.life -= dt;
+          return shot.life > 0;
+        });
+
+        state.sparks = state.sparks.filter((spark) => {
+          spark.life -= dt;
+          spark.x += spark.vx * dt;
+          spark.y += spark.vy * dt;
+          spark.vx *= 0.984;
+          spark.vy = spark.vy * 0.984 + 36 * dt;
+          return spark.life > 0;
+        });
+
+        updateHud();
+      }
+
+      function drawBackdrop(width, height) {
+        const grad = ctx.createLinearGradient(0, 0, width, height);
+        grad.addColorStop(0, "rgba(255,255,255,0.03)");
+        grad.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(120, 150, 255, 0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i += 1) {
+          const y = height * (0.18 + i * 0.14);
+          ctx.beginPath();
+          ctx.moveTo(18, y);
+          ctx.lineTo(width - 18, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        if (state.skyFlash > 0) {
+          ctx.fillStyle = "rgba(156,255,206," + (state.skyFlash * 0.35) + ")";
+          ctx.fillRect(0, 0, width, height);
+        }
+      }
+
+      function drawCity(width, height) {
+        ctx.save();
+        const baseY = height - 54;
+        ctx.fillStyle = "rgba(5, 9, 18, 0.94)";
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        ctx.lineTo(0, baseY);
+        for (let x = 0; x <= width + 30; x += 30) {
+          const top = baseY - (24 + ((x / 30) % 4) * 16);
+          ctx.lineTo(x, top);
+          ctx.lineTo(x + 16, top);
+          ctx.lineTo(x + 16, baseY);
+        }
+        ctx.lineTo(width, baseY);
+        ctx.lineTo(width, height);
+        ctx.closePath();
+        ctx.fill();
+
+        for (let x = 12; x < width - 12; x += 24) {
+          for (let y = baseY - 16; y > baseY - 82; y -= 16) {
+            const seed = ((x * 17 + y * 31) % 100) / 100;
+            if (seed < 0.28) {
+              ctx.fillStyle = "rgba(255, 205, 125, 0.6)";
+              ctx.fillRect(x, y, 6, 8);
+            }
+          }
+        }
+        ctx.restore();
+      }
+
+      function drawTargets(width, height) {
+        for (const target of state.targets) {
+          ctx.save();
+          ctx.translate(target.x, target.y);
+          const pulse = 0.5 + Math.sin(target.glow) * 0.5;
+          if (target.type === "drone") {
+            const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, target.r * 1.8);
+            glow.addColorStop(0, "rgba(121,227,255,0.42)");
+            glow.addColorStop(1, "rgba(121,227,255,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(0, 0, target.r * 1.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "rgba(121,227,255,0.9)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, target.r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = "rgba(229,252,255,0.95)";
+            ctx.beginPath();
+            ctx.arc(0, 0, target.r * 0.42, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(149,162,255,0.7)";
+            ctx.beginPath();
+            ctx.moveTo(-target.r - 7, -2);
+            ctx.lineTo(-target.r + 3, -2);
+            ctx.moveTo(target.r - 3, -2);
+            ctx.lineTo(target.r + 7, -2);
+            ctx.stroke();
+          } else {
+            const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, target.r * 1.8);
+            glow.addColorStop(0, "rgba(255,104,134,0.34)");
+            glow.addColorStop(1, "rgba(255,104,134,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(0, 0, target.r * 1.7, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "rgba(255,104,134,0.92)";
+            ctx.lineWidth = 2.2;
+            for (let i = 0; i < 8; i += 1) {
+              const angle = (Math.PI * 2 * i) / 8 + pulse * 0.08;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(angle) * (target.r - 3), Math.sin(angle) * (target.r - 3));
+              ctx.lineTo(Math.cos(angle) * (target.r + 7), Math.sin(angle) * (target.r + 7));
+              ctx.stroke();
+            }
+            ctx.fillStyle = "rgba(44, 10, 22, 0.95)";
+            ctx.beginPath();
+            ctx.arc(0, 0, target.r * 0.76, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawLauncher(width, height) {
+        const x = getLauncherX(width);
+        const y = height - 62;
+        ctx.save();
+
+        const beam = ctx.createLinearGradient(x, y - 30, x, y + 10);
+        beam.addColorStop(0, "rgba(121,227,255,0.05)");
+        beam.addColorStop(1, "rgba(121,227,255,0.28)");
+        ctx.fillStyle = beam;
+        ctx.fillRect(x - 5, y - 28, 10, 24);
+
+        ctx.fillStyle = "rgba(8, 14, 26, 0.96)";
+        ctx.strokeStyle = "rgba(121,227,255,0.9)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(x - 20, y - 12, 40, 22, 10);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(121,227,255,0.95)";
+        ctx.beginPath();
+        ctx.moveTo(x, y - 34);
+        ctx.lineTo(x - 8, y - 10);
+        ctx.lineTo(x + 8, y - 10);
+        ctx.closePath();
+        ctx.fill();
+
+        const ready = state.cooldown <= 0;
+        ctx.fillStyle = ready ? "rgba(156,255,206,0.92)" : "rgba(255,184,108,0.92)";
+        ctx.beginPath();
+        ctx.arc(x, y + 2, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawShots(width, height) {
+        for (const shot of state.shots) {
+          const alpha = shot.life / shot.maxLife;
+          ctx.save();
+          ctx.strokeStyle = "rgba(121,227,255," + (0.4 + alpha * 0.5) + ")";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(shot.x, shot.fromY);
+          ctx.lineTo(shot.x, 38);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(242,251,255," + (0.24 + alpha * 0.5) + ")";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(shot.x, shot.fromY);
+          ctx.lineTo(shot.x, 32);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      function drawSparks() {
+        for (const spark of state.sparks) {
+          const alpha = clamp(spark.life / spark.maxLife, 0, 1);
+          ctx.fillStyle = "rgba(" + spark.color + "," + alpha + ")";
+          ctx.beginPath();
+          ctx.arc(spark.x, spark.y, 1.8 + alpha * 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function render() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+
+        drawBackdrop(width, height);
+        drawTargets(width, height);
+        drawShots(width, height);
+        drawCity(width, height);
+        drawLauncher(width, height);
+        drawSparks();
+      }
+
+      function loop(ts) {
+        if (!state.lastTs) {
+          state.lastTs = ts;
+        }
+        const dt = Math.min(0.032, (ts - state.lastTs) / 1000);
+        state.lastTs = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        event.preventDefault();
+        fireShot();
+      });
+
+      startBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRun();
+      });
+
+      retryBtn.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRun();
+      });
+
+      window.addEventListener("resize", resize);
+
+      resetRun();
+      resize();
+      render();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
