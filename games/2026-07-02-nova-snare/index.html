@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ノヴァスネア</title>
+  <meta name="description" content="タップで中心からノヴァリングを放ち、青い粒子だけを巻き取る60秒スコアアタック。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-a: #07111f;
+      --bg-b: #12081d;
+      --panel: rgba(10, 16, 28, 0.82);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f4f7ff;
+      --cyan: #73e4ff;
+      --amber: #ffd36a;
+      --rose: #ff6d93;
+      --mint: #96ffcb;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(115, 228, 255, 0.18), transparent 24%),
+        radial-gradient(circle at 80% 0%, rgba(255, 109, 147, 0.18), transparent 26%),
+        radial-gradient(circle at 50% 100%, rgba(255, 211, 106, 0.12), transparent 32%),
+        linear-gradient(180deg, #1a1430 0%, var(--bg-a) 38%, #04070d 100%);
+      color: var(--text);
+      font-family: "Avenir Next", "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(244, 247, 255, 0.72);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.56;
+      color: rgba(244, 247, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(244, 247, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #charge.ready {
+      color: var(--mint);
+    }
+
+    #combo.hot {
+      color: var(--amber);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 28px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.04), transparent 22%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 16%),
+        linear-gradient(180deg, rgba(9, 13, 24, 0.98), rgba(4, 8, 15, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.28);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(4, 7, 14, 0.2), rgba(4, 7, 14, 0.82));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 22px;
+      background: rgba(11, 18, 30, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(244, 247, 255, 0.8);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 14, 24, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(244, 247, 255, 0.84);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .back {
+      padding: 12px 10px;
+      color: rgba(244, 247, 255, 0.82);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #07111f;
+      background: linear-gradient(135deg, var(--cyan), #f8fcff);
+      box-shadow: 0 10px 24px rgba(115, 228, 255, 0.22);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, var(--amber), #fff0c2);
+      box-shadow: 0 10px 24px rgba(255, 211, 106, 0.22);
+    }
+
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      button, .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">NOVA SNARE</div>
+      <h1>ノヴァスネア</h1>
+      <div class="sub">タップで中心からリングを放ち、青いグリントだけを巻き取れ。赤いスパイクまで掠めると減点。撃つか待つか、その一拍だけのゲーム。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="time">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="combo">x0</div></div>
+      <div class="stat"><div class="label">Charge</div><div class="value ready" id="charge">READY</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="620" aria-label="ノヴァスネアのゲーム画面"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">中心から狩る</h2>
+          <p id="overlayText">スタート後はプレイエリアをタップするとノヴァリングが拡大。リングに触れた青は加点、赤は減点。青を逃してもコンボが切れる。60秒でどこまで稼げるか。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中にタップでノヴァリング発射</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startBtn">スタート</button>
+      <button class="secondary" id="retryBtn">再挑戦</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame_nova_snare_best";
+      const GAME_TIME = 60;
+      const MAX_PARTICLES = 80;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreEl = document.getElementById("score");
+      const timeEl = document.getElementById("time");
+      const bestEl = document.getElementById("best");
+      const comboEl = document.getElementById("combo");
+      const chargeEl = document.getElementById("charge");
+      const startBtn = document.getElementById("startBtn");
+      const retryBtn = document.getElementById("retryBtn");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 0,
+        timeLeft: GAME_TIME,
+        cooldown: 0,
+        spawnTimer: 0,
+        flash: 0,
+        missed: 0,
+        entities: [],
+        waves: [],
+        particles: [],
+        lastTime: 0
+      };
+
+      const launcher = {
+        x: 195,
+        y: 310,
+        pulse: 0
+      };
+
+      bestEl.textContent = String(state.best);
+
+      function fitCanvas() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width));
+        const height = Math.max(420, Math.floor(rect.height));
+        canvas.width = Math.floor(width * ratio);
+        canvas.height = Math.floor(height * ratio);
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        launcher.x = width / 2;
+        launcher.y = height / 2;
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = GAME_TIME;
+        state.cooldown = 0;
+        state.spawnTimer = 0;
+        state.flash = 0;
+        state.missed = 0;
+        state.entities = [];
+        state.waves = [];
+        state.particles = [];
+        launcher.pulse = 0;
+        updateHud();
+      }
+
+      function beginGame() {
+        resetGame();
+        state.running = true;
+        overlay.classList.add("hidden");
+        state.lastTime = performance.now();
+      }
+
+      function endGame() {
+        state.running = false;
+        const isNewBest = state.score > state.best;
+        if (isNewBest) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+          bestEl.textContent = String(state.best);
+        }
+        overlayTitle.textContent = isNewBest ? "新記録達成" : "60秒終了";
+        overlayText.textContent = "Score " + state.score + " / Best " + state.best + " / Miss " + state.missed + "。青をまとめて刈って、赤を見送るテンポを掴め。";
+        overlay.classList.remove("hidden");
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(state.score);
+        timeEl.textContent = state.timeLeft.toFixed(1);
+        comboEl.textContent = "x" + state.combo;
+        comboEl.classList.toggle("hot", state.combo >= 4);
+        if (state.cooldown <= 0) {
+          chargeEl.textContent = "READY";
+          chargeEl.classList.add("ready");
+        } else {
+          chargeEl.textContent = state.cooldown.toFixed(2) + "s";
+          chargeEl.classList.remove("ready");
+        }
+      }
+
+      function currentPhase() {
+        const elapsed = GAME_TIME - state.timeLeft;
+        if (elapsed < 30) {
+          return { spawn: 0.82, speed: 42, redRate: 0.24 };
+        }
+        if (elapsed < 45) {
+          return { spawn: 0.62, speed: 56, redRate: 0.31 };
+        }
+        return { spawn: 0.48, speed: 68, redRate: 0.39 };
+      }
+
+      function spawnEntity() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        const phase = currentPhase();
+        const edge = Math.floor(Math.random() * 4);
+        let x = 0;
+        let y = 0;
+        if (edge === 0) {
+          x = Math.random() * width;
+          y = -24;
+        } else if (edge === 1) {
+          x = width + 24;
+          y = Math.random() * height;
+        } else if (edge === 2) {
+          x = Math.random() * width;
+          y = height + 24;
+        } else {
+          x = -24;
+          y = Math.random() * height;
+        }
+        const dx = launcher.x - x;
+        const dy = launcher.y - y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const tangent = (Math.random() - 0.5) * 0.7;
+        const speed = phase.speed + Math.random() * 24;
+        const isRed = Math.random() < phase.redRate;
+        state.entities.push({
+          x,
+          y,
+          vx: nx * speed + -ny * speed * tangent,
+          vy: ny * speed + nx * speed * tangent,
+          radius: isRed ? 9 + Math.random() * 3 : 8 + Math.random() * 4,
+          red: isRed,
+          angle: Math.random() * Math.PI * 2,
+          spin: (Math.random() - 0.5) * 4,
+          hit: false
+        });
+      }
+
+      function emitWave() {
+        if (!state.running || state.cooldown > 0) {
+          return;
+        }
+        state.cooldown = 0.48;
+        launcher.pulse = 1;
+        state.waves.push({
+          radius: 12,
+          speed: 420,
+          width: 26
+        });
+      }
+
+      function removeEntity(entity, good) {
+        entity.hit = true;
+        for (let i = 0; i < 6; i += 1) {
+          if (state.particles.length >= MAX_PARTICLES) {
+            break;
+          }
+          const angle = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
+          const speed = 40 + Math.random() * 70;
+          state.particles.push({
+            x: entity.x,
+            y: entity.y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.45 + Math.random() * 0.2,
+            size: 2 + Math.random() * 3,
+            color: good ? "115, 228, 255" : "255, 109, 147"
+          });
+        }
+      }
+
+      function scoreHit(entity) {
+        if (entity.red) {
+          state.score = Math.max(0, state.score - 12);
+          state.combo = 0;
+          state.flash = -1;
+          removeEntity(entity, false);
+          return;
+        }
+        state.combo += 1;
+        state.score += 10 + Math.min(12, state.combo * 2);
+        state.flash = 1;
+        removeEntity(entity, true);
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+
+        state.timeLeft = Math.max(0, state.timeLeft - dt);
+        if (state.timeLeft <= 0) {
+          updateHud();
+          endGame();
+          return;
+        }
+
+        const phase = currentPhase();
+        state.cooldown = Math.max(0, state.cooldown - dt);
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          spawnEntity();
+          state.spawnTimer = phase.spawn * (0.72 + Math.random() * 0.56);
+        }
+
+        launcher.pulse = Math.max(0, launcher.pulse - dt * 2.6);
+        state.flash *= 0.92;
+
+        for (const wave of state.waves) {
+          wave.radius += wave.speed * dt;
+        }
+
+        for (const entity of state.entities) {
+          entity.x += entity.vx * dt;
+          entity.y += entity.vy * dt;
+          entity.angle += entity.spin * dt;
+        }
+
+        for (const wave of state.waves) {
+          for (const entity of state.entities) {
+            if (entity.hit) {
+              continue;
+            }
+            const dist = Math.hypot(entity.x - launcher.x, entity.y - launcher.y);
+            const delta = Math.abs(dist - wave.radius);
+            if (delta <= wave.width * 0.5) {
+              scoreHit(entity);
+            }
+          }
+        }
+
+        state.entities = state.entities.filter((entity) => {
+          if (entity.hit) {
+            return false;
+          }
+          const dist = Math.hypot(entity.x - launcher.x, entity.y - launcher.y);
+          if (dist < 18) {
+            if (!entity.red) {
+              state.combo = 0;
+              state.missed += 1;
+              state.flash = -0.5;
+            }
+            return false;
+          }
+          return entity.x > -50 && entity.x < canvas.clientWidth + 50 && entity.y > -50 && entity.y < canvas.clientHeight + 50;
+        });
+
+        state.waves = state.waves.filter((wave) => wave.radius < Math.max(canvas.clientWidth, canvas.clientHeight) + 80);
+
+        state.particles = state.particles.filter((particle) => {
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.life -= dt;
+          particle.vx *= 0.98;
+          particle.vy *= 0.98;
+          return particle.life > 0;
+        });
+
+        updateHud();
+      }
+
+      function drawGrid(width, height) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth = 1;
+        const gap = 34;
+        for (let x = gap * 0.5; x < width; x += gap) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = gap * 0.5; y < height; y += gap) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function render() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+
+        drawGrid(width, height);
+
+        const flashAlpha = Math.min(0.22, Math.abs(state.flash) * 0.16);
+        if (flashAlpha > 0.01) {
+          ctx.fillStyle = state.flash > 0 ? "rgba(115,228,255," + flashAlpha + ")" : "rgba(255,109,147," + flashAlpha + ")";
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        const coreGlow = 24 + launcher.pulse * 34;
+        const glow = ctx.createRadialGradient(launcher.x, launcher.y, 4, launcher.x, launcher.y, coreGlow * 2.2);
+        glow.addColorStop(0, "rgba(255,255,255,0.9)");
+        glow.addColorStop(0.24, "rgba(115,228,255,0.65)");
+        glow.addColorStop(1, "rgba(115,228,255,0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(launcher.x, launcher.y, coreGlow * 2.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(launcher.x, launcher.y);
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i += 1) {
+          ctx.beginPath();
+          ctx.arc(0, 0, 28 + i * 16, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        for (const wave of state.waves) {
+          const alpha = Math.max(0, 1 - wave.radius / (Math.max(width, height) + 80));
+          ctx.strokeStyle = "rgba(255,211,106," + (0.52 * alpha) + ")";
+          ctx.lineWidth = wave.width;
+          ctx.beginPath();
+          ctx.arc(launcher.x, launcher.y, wave.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = "rgba(255,255,255," + (0.6 * alpha) + ")";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(launcher.x, launcher.y, wave.radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (const entity of state.entities) {
+          ctx.save();
+          ctx.translate(entity.x, entity.y);
+          ctx.rotate(entity.angle);
+          if (entity.red) {
+            ctx.strokeStyle = "rgba(255,109,147,0.95)";
+            ctx.lineWidth = 2.2;
+            ctx.beginPath();
+            ctx.moveTo(-entity.radius, 0);
+            ctx.lineTo(entity.radius, 0);
+            ctx.moveTo(0, -entity.radius);
+            ctx.lineTo(0, entity.radius);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, 0, entity.radius * 0.58, 0, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            const fill = ctx.createRadialGradient(0, 0, 1, 0, 0, entity.radius * 1.4);
+            fill.addColorStop(0, "rgba(255,255,255,0.95)");
+            fill.addColorStop(0.3, "rgba(115,228,255,0.95)");
+            fill.addColorStop(1, "rgba(115,228,255,0.08)");
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.arc(0, 0, entity.radius * 1.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = "rgba(255,255,255,0.8)";
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(-entity.radius * 0.9, 0);
+            ctx.lineTo(entity.radius * 0.9, 0);
+            ctx.moveTo(0, -entity.radius * 0.9);
+            ctx.lineTo(0, entity.radius * 0.9);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        for (const particle of state.particles) {
+          ctx.fillStyle = "rgba(" + particle.color + "," + Math.max(0, particle.life) + ")";
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+        ctx.beginPath();
+        ctx.arc(launcher.x, launcher.y, 7 + launcher.pulse * 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(115,228,255,0.9)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(launcher.x, launcher.y, 13 + launcher.pulse * 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function frame(now) {
+        if (!state.lastTime) {
+          state.lastTime = now;
+        }
+        const dt = Math.min(0.033, (now - state.lastTime) / 1000);
+        state.lastTime = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (!state.running) {
+          return;
+        }
+        if (event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        emitWave();
+      });
+
+      startBtn.addEventListener("click", beginGame);
+      retryBtn.addEventListener("click", beginGame);
+      window.addEventListener("resize", fitCanvas);
+
+      fitCanvas();
+      resetGame();
+      render();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
