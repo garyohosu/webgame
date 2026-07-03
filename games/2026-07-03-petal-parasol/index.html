@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ペタルパラソル</title>
+  <meta name="description" content="タップでパラソルを開閉し、青い花粉だけを受け止める60秒スコアアタック。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-a: #0f1225;
+      --bg-b: #1f1030;
+      --panel: rgba(15, 18, 37, 0.82);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f8f6ff;
+      --sky: #7be0ff;
+      --gold: #ffd770;
+      --rose: #ff6f91;
+      --mint: #93ffc6;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(123, 224, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 82% 0%, rgba(255, 111, 145, 0.16), transparent 30%),
+        radial-gradient(circle at 50% 100%, rgba(255, 215, 112, 0.14), transparent 34%),
+        linear-gradient(180deg, #2a1940 0%, var(--bg-a) 42%, #080b14 100%);
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel, .hud, .controls {
+      position: relative;
+      z-index: 2;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(248, 246, 255, 0.7);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.05;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.56;
+      color: rgba(248, 246, 255, 0.8);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      text-align: center;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(248, 246, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #stateValue.open {
+      color: var(--mint);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.05), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        linear-gradient(180deg, rgba(13, 18, 31, 0.98), rgba(6, 9, 15, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(6, 9, 15, 0.16), rgba(6, 9, 15, 0.84));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(12, 16, 29, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      line-height: 1.62;
+      font-size: 0.95rem;
+      color: rgba(248, 246, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 12, 20, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(248, 246, 255, 0.84);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .back {
+      padding: 12px 10px;
+      color: rgba(248, 246, 255, 0.82);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #0f1225;
+      background: linear-gradient(135deg, var(--sky), #fbfdff);
+      box-shadow: 0 10px 24px rgba(123, 224, 255, 0.22);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, var(--gold), #fff0c6);
+      box-shadow: 0 10px 24px rgba(255, 215, 112, 0.22);
+    }
+
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      button, .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>ペタルパラソル</h1>
+      <div class="sub">タップで傘を開閉。青い花粉だけを受け止め、赤い棘は閉じて見送る60秒。</div>
+    </section>
+
+    <section class="hud" aria-label="game hud">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+      <div class="stat">
+        <div class="label">State</div>
+        <div class="value" id="stateValue">FOLD</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="gameCanvas" width="390" height="640" aria-label="game area"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青だけ拾え</h2>
+          <p id="overlayText">画面タップでパラソルを OPEN / FOLD。青いブルームを受ければ加点、赤いソーンを受けると減点。青を落とすとコンボが切れる。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY AREA TAP: OPEN / FOLD</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" class="secondary" type="button">リトライ</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame-petal-parasol-best";
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const stateValue = document.getElementById("stateValue");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+
+      const state = {
+        running: false,
+        score: 0,
+        timeLeft: 60,
+        combo: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        isOpen: false,
+        width: canvas.width,
+        height: canvas.height,
+        lastTime: 0,
+        spawnTimer: 0,
+        items: [],
+        bursts: [],
+        petals: []
+      };
+
+      bestValue.textContent = String(state.best);
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width));
+        const height = Math.max(420, Math.floor(rect.height));
+        canvas.width = Math.floor(width * ratio);
+        canvas.height = Math.floor(height * ratio);
+        canvas.style.width = width + "px";
+        canvas.style.height = height + "px";
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        state.width = width;
+        state.height = height;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function phaseConfig() {
+        if (state.timeLeft > 30) {
+          return { delay: 0.62, speed: 125, redChance: 0.24, sway: 26 };
+        }
+        if (state.timeLeft > 15) {
+          return { delay: 0.48, speed: 152, redChance: 0.34, sway: 38 };
+        }
+        return { delay: 0.34, speed: 186, redChance: 0.46, sway: 50 };
+      }
+
+      function umbrellaMetrics() {
+        const cx = state.width * 0.5;
+        const cy = state.height * 0.78;
+        const radius = Math.min(state.width * 0.28, 118);
+        const depth = radius * 0.34;
+        return { cx, cy, radius, depth };
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + (state.combo + 1);
+        comboValue.classList.toggle("hot", state.combo >= 3);
+        stateValue.textContent = state.isOpen ? "OPEN" : "FOLD";
+        stateValue.classList.toggle("open", state.isOpen);
+      }
+
+      function resetRun() {
+        state.running = false;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.combo = 0;
+        state.isOpen = false;
+        state.spawnTimer = 0;
+        state.items = [];
+        state.bursts = [];
+        state.petals = [];
+        updateHud();
+      }
+
+      function startRun() {
+        state.running = true;
+        state.score = 0;
+        state.timeLeft = 60;
+        state.combo = 0;
+        state.isOpen = false;
+        state.spawnTimer = 0;
+        state.items = [];
+        state.bursts = [];
+        state.petals = [];
+        overlay.classList.add("hidden");
+        updateHud();
+      }
+
+      function finishRun() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        overlayTitle.textContent = state.score > 0 ? "60秒終了" : "もう一回";
+        overlayText.textContent = "Score " + state.score + " / Best " + state.best + "。青を欲張って開き続けるより、赤を見送るほうが伸びる。";
+        overlay.classList.remove("hidden");
+        updateHud();
+      }
+
+      function toggleParasol() {
+        if (!state.running) {
+          return;
+        }
+        state.isOpen = !state.isOpen;
+        for (let i = 0; i < 5; i += 1) {
+          const m = umbrellaMetrics();
+          state.petals.push({
+            x: m.cx + (Math.random() - 0.5) * 28,
+            y: m.cy - 10,
+            vx: (Math.random() - 0.5) * 34,
+            vy: -30 - Math.random() * 45,
+            life: 0.38 + Math.random() * 0.18,
+            color: state.isOpen ? "rgba(147,255,198,0.75)" : "rgba(255,215,112,0.65)"
+          });
+        }
+        updateHud();
+      }
+
+      function spawnItem() {
+        const cfg = phaseConfig();
+        const isRed = Math.random() < cfg.redChance;
+        const fromLeft = Math.random() < 0.5;
+        const xBase = fromLeft ? state.width * 0.24 : state.width * 0.76;
+        state.items.push({
+          x: xBase + (Math.random() - 0.5) * 42,
+          y: -24,
+          r: 10 + Math.random() * 4,
+          type: isRed ? "red" : "blue",
+          speed: cfg.speed + Math.random() * 30,
+          sway: cfg.sway + Math.random() * 22,
+          phase: Math.random() * Math.PI * 2,
+          drift: (Math.random() * 0.7 + 0.7) * (fromLeft ? 1 : -1)
+        });
+      }
+
+      function addBurst(x, y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          const life = 0.5 + Math.random() * 0.2;
+          state.bursts.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 140,
+            vy: (Math.random() - 0.5) * 140 - 20,
+            life,
+            maxLife: life,
+            color
+          });
+        }
+      }
+
+      function catchItem(item) {
+        const points = item.type === "blue" ? 1 + Math.min(4, state.combo) : -2;
+        state.score = Math.max(0, state.score + points);
+        if (item.type === "blue") {
+          state.combo += 1;
+          addBurst(item.x, item.y, "rgba(123,224,255,0.9)", 10);
+        } else {
+          state.combo = 0;
+          addBurst(item.x, item.y, "rgba(255,111,145,0.85)", 12);
+        }
+      }
+
+      function missBlue(item) {
+        state.combo = 0;
+        addBurst(item.x, item.y, "rgba(255,215,112,0.55)", 6);
+      }
+
+      function update(dt) {
+        if (state.running) {
+          state.timeLeft = Math.max(0, state.timeLeft - dt);
+          const cfg = phaseConfig();
+          state.spawnTimer -= dt;
+          if (state.spawnTimer <= 0) {
+            spawnItem();
+            state.spawnTimer = cfg.delay;
+          }
+
+          const m = umbrellaMetrics();
+          state.items = state.items.filter((item) => {
+            item.y += item.speed * dt;
+            item.x += Math.sin(item.y * 0.02 + item.phase) * item.drift * dt * item.sway;
+            item.x = clamp(item.x, 16, state.width - 16);
+
+            if (state.isOpen) {
+              const dx = Math.abs(item.x - m.cx);
+              if (dx < m.radius) {
+                const lift = 1 - dx / m.radius;
+                const canopyY = m.cy - lift * m.depth;
+                if (item.y + item.r >= canopyY && item.y - item.r <= m.cy + 6) {
+                  catchItem(item);
+                  return false;
+                }
+              }
+            }
+
+            if (item.y - item.r > state.height + 8) {
+              if (item.type === "blue") {
+                missBlue(item);
+              }
+              return false;
+            }
+
+            return true;
+          });
+
+          state.bursts = state.bursts.filter((burst) => {
+            burst.life -= dt;
+            burst.x += burst.vx * dt;
+            burst.y += burst.vy * dt;
+            burst.vy += 120 * dt;
+            return burst.life > 0;
+          });
+
+          state.petals = state.petals.filter((petal) => {
+            petal.life -= dt;
+            petal.x += petal.vx * dt;
+            petal.y += petal.vy * dt;
+            petal.vy += 60 * dt;
+            return petal.life > 0;
+          });
+
+          if (state.timeLeft <= 0) {
+            finishRun();
+          }
+
+          if (state.score > state.best) {
+            state.best = state.score;
+          }
+
+          updateHud();
+        } else {
+          state.bursts = state.bursts.filter((burst) => {
+            burst.life -= dt;
+            burst.x += burst.vx * dt;
+            burst.y += burst.vy * dt;
+            burst.vy += 100 * dt;
+            return burst.life > 0;
+          });
+          state.petals = state.petals.filter((petal) => {
+            petal.life -= dt;
+            petal.x += petal.vx * dt;
+            petal.y += petal.vy * dt;
+            petal.vy += 50 * dt;
+            return petal.life > 0;
+          });
+        }
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
+        gradient.addColorStop(0, "#26163d");
+        gradient.addColorStop(0.45, "#0d1422");
+        gradient.addColorStop(1, "#06090f");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        for (let i = 0; i < 18; i += 1) {
+          const x = (i * 29.7) % state.width;
+          const y = (i * 61.3) % state.height;
+          ctx.fillStyle = "rgba(255,255,255,0.06)";
+          ctx.beginPath();
+          ctx.arc(x, y, (i % 3) + 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawUmbrella() {
+        const { cx, cy, radius, depth } = umbrellaMetrics();
+
+        ctx.save();
+        ctx.lineCap = "round";
+
+        ctx.strokeStyle = "rgba(255,255,255,0.35)";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy + 6);
+        ctx.lineTo(cx, state.height - 56);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, state.height - 56);
+        ctx.quadraticCurveTo(cx + 16, state.height - 36, cx + 24, state.height - 48);
+        ctx.stroke();
+
+        if (state.isOpen) {
+          const fill = ctx.createLinearGradient(cx - radius, cy - depth, cx + radius, cy + 10);
+          fill.addColorStop(0, "rgba(123,224,255,0.95)");
+          fill.addColorStop(0.5, "rgba(147,255,198,0.92)");
+          fill.addColorStop(1, "rgba(255,215,112,0.94)");
+          ctx.fillStyle = fill;
+          ctx.beginPath();
+          ctx.moveTo(cx - radius, cy);
+          ctx.quadraticCurveTo(cx, cy - depth - 20, cx + radius, cy);
+          for (let i = 0; i <= 4; i += 1) {
+            const t = i / 4;
+            const x = cx + radius - t * radius * 2;
+            const dip = i === 0 || i === 4 ? 0 : 12;
+            ctx.quadraticCurveTo(x - radius / 4, cy + 10 + dip, x - radius / 2, cy);
+          }
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = "rgba(255,255,255,0.34)";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(cx - radius, cy);
+          ctx.quadraticCurveTo(cx, cy - depth - 20, cx + radius, cy);
+          ctx.stroke();
+
+          for (let i = -2; i <= 2; i += 1) {
+            const spokeX = cx + i * (radius / 3.2);
+            ctx.strokeStyle = "rgba(255,255,255,0.24)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - 4);
+            ctx.lineTo(spokeX, cy - depth * 0.2);
+            ctx.stroke();
+          }
+        } else {
+          ctx.fillStyle = "rgba(255,215,112,0.92)";
+          ctx.beginPath();
+          ctx.moveTo(cx - 8, cy - 8);
+          ctx.lineTo(cx + 16, cy + 22);
+          ctx.lineTo(cx + 4, cy + 26);
+          ctx.lineTo(cx - 18, cy - 2);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      function drawItem(item) {
+        ctx.save();
+        ctx.translate(item.x, item.y);
+        if (item.type === "blue") {
+          ctx.fillStyle = "#7be0ff";
+          ctx.shadowColor = "rgba(123,224,255,0.7)";
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.moveTo(0, -item.r - 2);
+          ctx.quadraticCurveTo(item.r + 6, -item.r * 0.25, 0, item.r + 2);
+          ctx.quadraticCurveTo(-item.r - 6, -item.r * 0.25, 0, -item.r - 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.8)";
+          ctx.beginPath();
+          ctx.arc(-item.r * 0.2, -item.r * 0.4, item.r * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = "#ff6f91";
+          ctx.shadowColor = "rgba(255,111,145,0.7)";
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i += 1) {
+            const angle = -Math.PI / 2 + i * Math.PI / 3;
+            const outer = item.r + 3;
+            const inner = item.r * 0.48;
+            const px = Math.cos(angle) * outer;
+            const py = Math.sin(angle) * outer;
+            const midX = Math.cos(angle + Math.PI / 6) * inner;
+            const midY = Math.sin(angle + Math.PI / 6) * inner;
+            if (i === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+            ctx.lineTo(midX, midY);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.68)";
+          ctx.beginPath();
+          ctx.arc(0, 0, item.r * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function drawBursts() {
+        state.bursts.forEach((burst) => {
+          const alpha = clamp(burst.life / burst.maxLife, 0, 1);
+          const color = burst.color.replace(/[\d.]+\)$/u, alpha.toFixed(3) + ")");
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(burst.x, burst.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function drawPetals() {
+        state.petals.forEach((petal) => {
+          ctx.fillStyle = petal.color;
+          ctx.beginPath();
+          ctx.ellipse(petal.x, petal.y, 4, 2.4, petal.vx * 0.02, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function drawGuides() {
+        const m = umbrellaMetrics();
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        ctx.moveTo(m.cx, 24);
+        ctx.lineTo(m.cx, state.height - 72);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(255,255,255,0.18)";
+        ctx.font = "12px Trebuchet MS";
+        ctx.textAlign = "center";
+        ctx.fillText(state.isOpen ? "OPEN: BLUE CATCH / RED DANGER" : "FOLD: SAFE PASS / BLUE MISS", m.cx, 26);
+        ctx.restore();
+      }
+
+      function render() {
+        drawBackground();
+        drawGuides();
+        state.items.forEach(drawItem);
+        drawBursts();
+        drawPetals();
+        drawUmbrella();
+      }
+
+      function frame(ts) {
+        if (!state.lastTime) {
+          state.lastTime = ts;
+        }
+        const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
+        state.lastTime = ts;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        toggleParasol();
+      });
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRun();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRun();
+      });
+
+      window.addEventListener("resize", resize);
+
+      resize();
+      resetRun();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
