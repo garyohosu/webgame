@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>グロウモス</title>
+  <meta name="description" content="タップでランタンを瞬間点灯し、青いモスだけを引き寄せる60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #28163f;
+      --bg-bottom: #090c14;
+      --panel: rgba(16, 18, 28, 0.82);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f6f3ff;
+      --blue: #8ee9ff;
+      --gold: #ffe28a;
+      --rose: #ff7d8d;
+      --mint: #b9ffc8;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at 50% 8%, rgba(255, 226, 138, 0.14), transparent 20%),
+        radial-gradient(circle at 18% 24%, rgba(142, 233, 255, 0.12), transparent 24%),
+        radial-gradient(circle at 82% 18%, rgba(255, 125, 141, 0.1), transparent 24%),
+        linear-gradient(180deg, var(--bg-top) 0%, #111827 48%, var(--bg-bottom) 100%);
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(246, 243, 255, 0.72);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.76rem;
+      line-height: 1.06;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 7px;
+      font-size: 0.93rem;
+      line-height: 1.56;
+      color: rgba(246, 243, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(246, 243, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #stateValue.glow {
+      color: var(--mint);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 226, 138, 0.05), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        linear-gradient(180deg, rgba(19, 20, 31, 0.96), rgba(6, 9, 15, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(7, 9, 16, 0.18), rgba(7, 9, 16, 0.84));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(12, 15, 26, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(246, 243, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 11, 19, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(246, 243, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .back {
+      padding: 12px 10px;
+      color: rgba(246, 243, 255, 0.84);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #121520;
+      background: linear-gradient(135deg, var(--gold), #fff5d1);
+      box-shadow: 0 10px 24px rgba(255, 226, 138, 0.22);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, var(--blue), #f7fdff);
+      box-shadow: 0 10px 24px rgba(142, 233, 255, 0.22);
+    }
+
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      button,
+      .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">LANTERN SNAP</div>
+      <h1>グロウモス</h1>
+      <div class="sub">タップでランタンを一瞬だけ灯し、青いモスだけを引き寄せる。赤い灰蛾まで寄せたら即失点。</div>
+    </section>
+
+    <section class="hud" aria-label="ゲーム情報">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+      <div class="stat">
+        <div class="label">State</div>
+        <div class="value" id="stateValue">DIM</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="600" aria-label="Glow Moth game area"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">短い点灯で、青だけさらう。</h2>
+          <p id="overlayText">タップでランタンを瞬間発光。近くの青いモスは吸い寄せて加点、赤い灰蛾まで寄せると減点。60秒でどこまで欲張れるか。</p>
+        </div>
+      </div>
+      <div class="tap-note">Play area tap: flash the lantern</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" class="secondary" type="button">リトライ</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame_glow_moth_best";
+      const GAME_SECONDS = 60;
+      const FLASH_DURATION = 0.34;
+      const FLASH_COOLDOWN = 0.12;
+      const CATCH_RADIUS = 34;
+      const INFLUENCE_RADIUS = 168;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const stateValue = document.getElementById("stateValue");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+
+      const state = {
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 0,
+        timeLeft: GAME_SECONDS,
+        elapsed: 0,
+        flashTimer: 0,
+        cooldown: 0,
+        spawnTimer: 0,
+        pulse: 0,
+        moths: [],
+        particles: [],
+        caughtBlue: 0,
+        singedRed: 0,
+        missedBlue: 0,
+        lastTime: 0
+      };
+
+      const lantern = { x: canvas.width * 0.5, y: canvas.height * 0.82 };
+
+      function fitCanvas() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(320, Math.round(rect.width * ratio));
+        canvas.height = Math.max(440, Math.round(rect.height * ratio));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.scale(ratio, ratio);
+        ctx.imageSmoothingEnabled = true;
+        lantern.x = rect.width * 0.5;
+        lantern.y = rect.height * 0.82;
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = GAME_SECONDS;
+        state.elapsed = 0;
+        state.flashTimer = 0;
+        state.cooldown = 0;
+        state.spawnTimer = 0.2;
+        state.pulse = 0;
+        state.moths = [];
+        state.particles = [];
+        state.caughtBlue = 0;
+        state.singedRed = 0;
+        state.missedBlue = 0;
+        updateHud();
+      }
+
+      function startGame() {
+        resetGame();
+        state.running = true;
+        overlay.classList.add("hidden");
+        triggerFlash();
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        overlayTitle.textContent = state.best === state.score && state.score > 0 ? "新記録の灯り。" : "60秒終了。";
+        overlayText.textContent = "SCORE " + state.score + " / BEST " + state.best + " / BLUE " + state.caughtBlue + " / RED " + state.singedRed + " / MISS " + state.missedBlue;
+        overlay.classList.remove("hidden");
+      }
+
+      function triggerFlash() {
+        if (!state.running || state.cooldown > 0) {
+          return;
+        }
+        state.flashTimer = FLASH_DURATION;
+        state.cooldown = FLASH_COOLDOWN;
+        state.pulse = 1;
+        createBurst(lantern.x, lantern.y, "#ffe28a", 10, 0.8);
+        updateHud();
+      }
+
+      function getPhaseSettings(elapsed) {
+        if (elapsed < 30) {
+          return { interval: 0.82, speed: 66, redChance: 0.22, sway: 32 };
+        }
+        if (elapsed < 45) {
+          return { interval: 0.6, speed: 82, redChance: 0.34, sway: 48 };
+        }
+        return { interval: 0.46, speed: 100, redChance: 0.44, sway: 64 };
+      }
+
+      function spawnMoth() {
+        const settings = getPhaseSettings(state.elapsed);
+        const width = canvas.getBoundingClientRect().width;
+        const kind = Math.random() < settings.redChance ? "red" : "blue";
+        state.moths.push({
+          kind,
+          x: 40 + Math.random() * (width - 80),
+          y: -20,
+          baseX: 40 + Math.random() * (width - 80),
+          vx: (Math.random() * 2 - 1) * 18,
+          vy: settings.speed + Math.random() * 26,
+          sway: settings.sway + Math.random() * 24,
+          phase: Math.random() * Math.PI * 2,
+          size: kind === "blue" ? 11 + Math.random() * 6 : 10 + Math.random() * 6,
+          value: kind === "blue" ? 10 : -18
+        });
+        state.spawnTimer = settings.interval * (0.68 + Math.random() * 0.64);
+      }
+
+      function createBurst(x, y, color, count, speedScale) {
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = (36 + Math.random() * 66) * speedScale;
+          const life = 0.2 + Math.random() * 0.35;
+          state.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life,
+            maxLife: life,
+            color
+          });
+        }
+      }
+
+      function scoreBlue(moth) {
+        state.caughtBlue += 1;
+        state.combo += 1;
+        const bonus = Math.min(8, Math.max(0, state.combo - 1));
+        state.score += moth.value + bonus;
+        state.pulse = 1;
+        createBurst(moth.x, moth.y, "#8ee9ff", 12, 1);
+      }
+
+      function scoreRed(moth) {
+        state.singedRed += 1;
+        state.combo = 0;
+        state.score = Math.max(0, state.score + moth.value);
+        createBurst(moth.x, moth.y, "#ff7d8d", 16, 1.2);
+      }
+
+      function missBlue(moth) {
+        if (moth.kind === "blue") {
+          state.missedBlue += 1;
+          state.combo = 0;
+        }
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + String(Math.max(1, state.combo));
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        const glowing = state.flashTimer > 0;
+        stateValue.textContent = glowing ? "GLOW" : "DIM";
+        stateValue.classList.toggle("glow", glowing);
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          return;
+        }
+
+        state.elapsed += dt;
+        state.timeLeft = Math.max(0, GAME_SECONDS - state.elapsed);
+        state.flashTimer = Math.max(0, state.flashTimer - dt);
+        state.cooldown = Math.max(0, state.cooldown - dt);
+        state.pulse = Math.max(0, state.pulse - dt * 2.2);
+
+        state.spawnTimer -= dt;
+        while (state.spawnTimer <= 0) {
+          spawnMoth();
+        }
+
+        const width = canvas.getBoundingClientRect().width;
+        const height = canvas.getBoundingClientRect().height;
+
+        state.moths = state.moths.filter((moth) => {
+          const dx = lantern.x - moth.x;
+          const dy = lantern.y - moth.y;
+          const dist = Math.hypot(dx, dy);
+
+          moth.phase += dt * 1.5;
+          moth.x += (Math.sin(moth.phase) * moth.sway + moth.vx) * dt;
+          moth.y += moth.vy * dt;
+
+          if (state.flashTimer > 0 && dist < INFLUENCE_RADIUS) {
+            const pull = (1 - dist / INFLUENCE_RADIUS) * 290 * dt;
+            moth.x += (dx / Math.max(dist, 1)) * pull;
+            moth.y += (dy / Math.max(dist, 1)) * pull;
+          }
+
+          const nextDx = lantern.x - moth.x;
+          const nextDy = lantern.y - moth.y;
+          const nextDist = Math.hypot(nextDx, nextDy);
+
+          if (state.flashTimer > 0 && nextDist < CATCH_RADIUS) {
+            if (moth.kind === "blue") {
+              scoreBlue(moth);
+            } else {
+              scoreRed(moth);
+            }
+            return false;
+          }
+
+          if (moth.y > height + 28 || moth.x < -36 || moth.x > width + 36) {
+            missBlue(moth);
+            return false;
+          }
+
+          return true;
+        });
+
+        state.particles = state.particles.filter((particle) => {
+          particle.life -= dt;
+          if (particle.life <= 0) {
+            return false;
+          }
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.vx *= 0.98;
+          particle.vy *= 0.98;
+          return true;
+        });
+
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+
+        updateHud();
+
+        if (state.timeLeft <= 0) {
+          endGame();
+        }
+      }
+
+      function drawLantern(width, height) {
+        const glow = state.flashTimer > 0 ? state.flashTimer / FLASH_DURATION : 0;
+        const ringRadius = 36 + state.pulse * 18;
+
+        const sky = ctx.createLinearGradient(0, 0, 0, height);
+        sky.addColorStop(0, "rgba(42, 24, 65, 0.2)");
+        sky.addColorStop(1, "rgba(7, 10, 15, 0)");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 5; i += 1) {
+          const alpha = 0.06 + i * 0.03;
+          ctx.strokeStyle = "rgba(255,255,255," + alpha + ")";
+          ctx.beginPath();
+          ctx.arc(lantern.x, lantern.y, 54 + i * 34, Math.PI * 0.98, Math.PI * 0.02);
+          ctx.stroke();
+        }
+
+        if (glow > 0) {
+          const halo = ctx.createRadialGradient(lantern.x, lantern.y, 0, lantern.x, lantern.y, INFLUENCE_RADIUS);
+          halo.addColorStop(0, "rgba(255, 232, 145," + (0.26 + glow * 0.24) + ")");
+          halo.addColorStop(0.45, "rgba(255, 201, 92," + (0.18 + glow * 0.12) + ")");
+          halo.addColorStop(1, "rgba(255, 201, 92, 0)");
+          ctx.fillStyle = halo;
+          ctx.beginPath();
+          ctx.arc(lantern.x, lantern.y, INFLUENCE_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = "rgba(255, 226, 138, " + (0.18 + glow * 0.6) + ")";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(lantern.x, lantern.y, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.07)";
+        ctx.fillRect(lantern.x - 4, lantern.y - 74, 8, 70);
+
+        const lanternGlow = ctx.createRadialGradient(lantern.x, lantern.y - 14, 2, lantern.x, lantern.y - 14, 34);
+        lanternGlow.addColorStop(0, "rgba(255,246,210," + (0.5 + glow * 0.4) + ")");
+        lanternGlow.addColorStop(0.45, "rgba(255,208,106," + (0.42 + glow * 0.28) + ")");
+        lanternGlow.addColorStop(1, "rgba(255,208,106,0)");
+        ctx.fillStyle = lanternGlow;
+        ctx.beginPath();
+        ctx.arc(lantern.x, lantern.y - 14, 34, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 226, 138, 0.96)";
+        ctx.beginPath();
+        ctx.moveTo(lantern.x - 22, lantern.y - 30);
+        ctx.lineTo(lantern.x + 22, lantern.y - 30);
+        ctx.lineTo(lantern.x + 14, lantern.y + 8);
+        ctx.lineTo(lantern.x - 14, lantern.y + 8);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(25, 22, 18, 0.62)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      function drawMoth(moth) {
+        const color = moth.kind === "blue" ? "#8ee9ff" : "#ff7d8d";
+        const body = moth.kind === "blue" ? "#dffcff" : "#ffd7dc";
+
+        ctx.save();
+        ctx.translate(moth.x, moth.y);
+        ctx.rotate(Math.sin(moth.phase * 3) * 0.18);
+
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.16;
+        ctx.beginPath();
+        ctx.ellipse(-moth.size * 0.46, 0, moth.size * 0.84, moth.size * 0.54, -0.45, 0, Math.PI * 2);
+        ctx.ellipse(moth.size * 0.46, 0, moth.size * 0.84, moth.size * 0.54, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = 0.94;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(-moth.size * 0.46, 0, moth.size * 0.68, moth.size * 0.38, -0.45, 0, Math.PI * 2);
+        ctx.ellipse(moth.size * 0.46, 0, moth.size * 0.68, moth.size * 0.38, 0.45, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = body;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, moth.size * 0.18, moth.size * 0.62, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (moth.kind === "red") {
+          ctx.strokeStyle = "rgba(255, 206, 214, 0.72)";
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(-moth.size * 0.2, -moth.size * 0.48);
+          ctx.lineTo(-moth.size * 0.52, -moth.size * 0.84);
+          ctx.moveTo(moth.size * 0.2, -moth.size * 0.48);
+          ctx.lineTo(moth.size * 0.52, -moth.size * 0.84);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      function drawParticles() {
+        state.particles.forEach((particle) => {
+          const alpha = Math.max(0, particle.life / particle.maxLife);
+          ctx.fillStyle = particle.color.replace(")", "");
+          ctx.globalAlpha = alpha;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, 2 + alpha * 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        });
+      }
+
+      function draw() {
+        const rect = canvas.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+        ctx.clearRect(0, 0, width, height);
+
+        drawLantern(width, height);
+        state.moths.forEach(drawMoth);
+        drawParticles();
+
+        if (!state.running) {
+          ctx.fillStyle = "rgba(255,255,255,0.12)";
+          ctx.font = "12px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.fillText("Tap anywhere after start to flash", width * 0.5, height * 0.2);
+        }
+      }
+
+      function frame(ts) {
+        if (!state.lastTime) {
+          state.lastTime = ts;
+        }
+        const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
+        state.lastTime = ts;
+        update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      function onPlayPointer(event) {
+        if (event.target.closest("button") || event.target.closest("a")) {
+          return;
+        }
+        event.preventDefault();
+        if (!state.running) {
+          return;
+        }
+        triggerFlash();
+      }
+
+      bestValue.textContent = String(state.best);
+      updateHud();
+      fitCanvas();
+      resetGame();
+      draw();
+
+      window.addEventListener("resize", fitCanvas);
+      arena.addEventListener("pointerdown", onPlayPointer, { passive: false });
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
