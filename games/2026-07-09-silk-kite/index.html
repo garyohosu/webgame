@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>シルクカイト</title>
+  <meta name="description" content="往復するカイトからテザーを垂らし、青い灯種だけをすくう60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #13203d;
+      --bg-bottom: #060913;
+      --panel: rgba(10, 16, 29, 0.82);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f2f7ff;
+      --cyan: #89e7ff;
+      --mint: #99ffcf;
+      --gold: #ffe08b;
+      --rose: #ff7a92;
+      --violet: #98a6ff;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(137, 231, 255, 0.14), transparent 28%),
+        radial-gradient(circle at 15% 20%, rgba(152, 166, 255, 0.14), transparent 24%),
+        radial-gradient(circle at 85% 16%, rgba(255, 122, 146, 0.12), transparent 22%),
+        linear-gradient(180deg, var(--bg-top) 0%, #0d1530 45%, var(--bg-bottom) 100%);
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(242, 247, 255, 0.72);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.78rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.56;
+      color: rgba(242, 247, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(242, 247, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #stateValue.ready {
+      color: var(--mint);
+    }
+
+    #stateValue.fire {
+      color: var(--gold);
+    }
+
+    #stateValue.cool {
+      color: var(--rose);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 12%, rgba(137, 231, 255, 0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 16%),
+        linear-gradient(180deg, rgba(7, 12, 26, 0.96), rgba(4, 7, 13, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(6, 10, 18, 0.18), rgba(6, 10, 18, 0.84));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(10, 15, 26, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(242, 247, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 11, 19, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(242, 247, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .back {
+      padding: 12px 10px;
+      color: rgba(242, 247, 255, 0.84);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #101521;
+      background: linear-gradient(135deg, var(--gold), #fff4cf);
+      box-shadow: 0 10px 24px rgba(255, 224, 139, 0.22);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, var(--cyan), #f2fbff);
+      box-shadow: 0 10px 24px rgba(137, 231, 255, 0.22);
+    }
+
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      button,
+      .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Skyline Tether</div>
+      <h1>シルクカイト</h1>
+      <p class="sub">往復するカイトから一瞬だけ糸を垂らし、青い灯種だけをすくい上げる60秒ハント。</p>
+    </section>
+
+    <section class="hud" aria-label="スコアボード">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+      <div class="stat">
+        <div class="label">Tether</div>
+        <div class="value ready" id="stateValue">Ready</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="gameCanvas" width="390" height="760"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">空に糸を引く</h2>
+          <p id="overlayText">タップでその瞬間だけテザーを下ろします。青い灯種は回収、赤いカッターは減点。60秒で自己ベストを超えてください。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY AREA TAP: DROP TETHER</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">← 作品集へ戻る</a>
+      <button id="startButton" type="button">スタート</button>
+      <button class="secondary" id="retryButton" type="button">リトライ</button>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame-silk-kite-best";
+      const DURATION = 60;
+      const TETHER_DURATION = 0.28;
+      const TETHER_COOLDOWN = 0.42;
+
+      const arena = document.getElementById("arena");
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const stateValue = document.getElementById("stateValue");
+
+      const state = {
+        width: 390,
+        height: 760,
+        running: false,
+        rafId: 0,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 0,
+        timeLeft: DURATION,
+        elapsed: 0,
+        spawnTimer: 0,
+        lastTime: 0,
+        items: [],
+        particles: [],
+        tetherTimer: 0,
+        cooldownTimer: 0,
+        kiteX: 195,
+        kiteDir: 1,
+        collected: 0,
+        hits: 0,
+        misses: 0
+      };
+
+      function syncCanvas() {
+        const rect = arena.getBoundingClientRect();
+        state.width = Math.max(320, Math.round(rect.width));
+        state.height = Math.max(420, Math.round(rect.height));
+        canvas.width = state.width;
+        canvas.height = state.height;
+      }
+
+      function resetRound() {
+        if (state.rafId) {
+          cancelAnimationFrame(state.rafId);
+          state.rafId = 0;
+        }
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = DURATION;
+        state.elapsed = 0;
+        state.spawnTimer = 0;
+        state.items = [];
+        state.particles = [];
+        state.tetherTimer = 0;
+        state.cooldownTimer = 0;
+        state.kiteX = state.width * 0.5;
+        state.kiteDir = 1;
+        state.collected = 0;
+        state.hits = 0;
+        state.misses = 0;
+        state.lastTime = 0;
+        updateHud();
+      }
+
+      function startRound() {
+        resetRound();
+        state.running = true;
+        overlay.classList.add("hidden");
+        state.rafId = requestAnimationFrame(loop);
+      }
+
+      function difficulty() {
+        if (state.elapsed >= 45) {
+          return { spawn: 0.38, speed: 150, drift: 40, kite: 170, blueRate: 0.54 };
+        }
+        if (state.elapsed >= 30) {
+          return { spawn: 0.52, speed: 126, drift: 30, kite: 148, blueRate: 0.63 };
+        }
+        return { spawn: 0.7, speed: 104, drift: 22, kite: 126, blueRate: 0.74 };
+      }
+
+      function spawnItem() {
+        const diff = difficulty();
+        const blue = Math.random() < diff.blueRate;
+        const x = state.width * (0.14 + Math.random() * 0.72);
+        state.items.push({
+          x,
+          y: state.height + 26,
+          radius: blue ? 10 + Math.random() * 4 : 11 + Math.random() * 4,
+          vy: diff.speed + Math.random() * 34,
+          drift: (Math.random() * 2 - 1) * diff.drift,
+          phase: Math.random() * Math.PI * 2,
+          type: blue ? "blue" : "red",
+          spin: (Math.random() * 2 - 1) * 2.2
+        });
+      }
+
+      function activateTether() {
+        if (!state.running || state.cooldownTimer > 0 || state.tetherTimer > 0) {
+          return;
+        }
+        state.tetherTimer = TETHER_DURATION;
+        state.cooldownTimer = TETHER_DURATION + TETHER_COOLDOWN;
+      }
+
+      function update(dt) {
+        state.elapsed += dt;
+        state.timeLeft = Math.max(0, DURATION - state.elapsed);
+
+        const diff = difficulty();
+        const margin = 30;
+        state.kiteX += state.kiteDir * diff.kite * dt;
+        if (state.kiteX > state.width - margin) {
+          state.kiteX = state.width - margin;
+          state.kiteDir = -1;
+        } else if (state.kiteX < margin) {
+          state.kiteX = margin;
+          state.kiteDir = 1;
+        }
+
+        if (state.tetherTimer > 0) {
+          state.tetherTimer = Math.max(0, state.tetherTimer - dt);
+        }
+        if (state.cooldownTimer > 0) {
+          state.cooldownTimer = Math.max(0, state.cooldownTimer - dt);
+        }
+
+        state.spawnTimer += dt;
+        while (state.spawnTimer >= diff.spawn) {
+          state.spawnTimer -= diff.spawn;
+          spawnItem();
+        }
+
+        const tetherActive = state.tetherTimer > 0;
+        const tetherWidth = tetherActive ? 16 : 0;
+        const kiteY = 74;
+        const tetherBottom = state.height - 34;
+
+        for (let i = state.items.length - 1; i >= 0; i -= 1) {
+          const item = state.items[i];
+          item.y -= item.vy * dt;
+          item.x += Math.sin(state.elapsed * item.spin + item.phase) * item.drift * dt;
+          item.x = Math.max(16, Math.min(state.width - 16, item.x));
+
+          if (tetherActive && item.y > kiteY + 18 && item.y < tetherBottom && Math.abs(item.x - state.kiteX) < tetherWidth + item.radius) {
+            state.items.splice(i, 1);
+            if (item.type === "blue") {
+              state.combo = Math.min(8, state.combo + 1);
+              state.score += 8 + state.combo * 3;
+              state.collected += 1;
+              burst(item.x, item.y, "blue");
+            } else {
+              state.combo = 0;
+              state.score = Math.max(0, state.score - 14);
+              state.hits += 1;
+              burst(item.x, item.y, "red");
+            }
+            continue;
+          }
+
+          if (item.y < -28) {
+            state.items.splice(i, 1);
+            if (item.type === "blue") {
+              state.combo = 0;
+              state.misses += 1;
+            }
+          }
+        }
+
+        for (let i = state.particles.length - 1; i >= 0; i -= 1) {
+          const p = state.particles[i];
+          p.life -= dt;
+          if (p.life <= 0) {
+            state.particles.splice(i, 1);
+            continue;
+          }
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 18 * dt;
+        }
+
+        if (state.timeLeft <= 0) {
+          finishRound();
+        }
+      }
+
+      function burst(x, y, type) {
+        const color = type === "blue" ? "137, 231, 255" : "255, 122, 146";
+        for (let i = 0; i < 10; i += 1) {
+          const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.18;
+          const speed = 30 + Math.random() * 70;
+          state.particles.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 0.28 + Math.random() * 0.34,
+            color
+          });
+        }
+      }
+
+      function finishRound() {
+        if (!state.running) {
+          return;
+        }
+        state.running = false;
+        const beatBest = state.score > state.best;
+        const nextBest = Math.max(state.best, state.score);
+        if (beatBest) {
+          state.best = nextBest;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        overlayTitle.textContent = beatBest ? "自己ベスト更新" : "ラウンド終了";
+        overlayText.textContent = `Score ${state.score} / Best ${state.best}。青 ${state.collected} 本回収、赤 ${state.hits} 回接触。もう一度タップ感覚を詰められます。`;
+        overlay.classList.remove("hidden");
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = `x${Math.max(1, state.combo)}`;
+        comboValue.className = "value" + (state.combo >= 3 ? " hot" : "");
+
+        let label = "Ready";
+        let cls = "value ready";
+        if (state.tetherTimer > 0) {
+          label = "Live";
+          cls = "value fire";
+        } else if (state.cooldownTimer > 0) {
+          label = "Charge";
+          cls = "value cool";
+        }
+        stateValue.textContent = label;
+        stateValue.className = cls;
+      }
+
+      function draw() {
+        const w = state.width;
+        const h = state.height;
+        const kiteY = 74;
+        const tetherBottom = h - 34;
+        const tetherActive = state.tetherTimer > 0;
+        const readyGlow = 0.24 + Math.max(0, 1 - state.cooldownTimer / (TETHER_DURATION + TETHER_COOLDOWN)) * 0.2;
+
+        ctx.clearRect(0, 0, w, h);
+
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, "rgba(21, 32, 61, 0.92)");
+        sky.addColorStop(0.48, "rgba(9, 15, 32, 0.95)");
+        sky.addColorStop(1, "rgba(4, 7, 13, 1)");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = "rgba(255,255,255,0.06)";
+        for (let i = 0; i < 30; i += 1) {
+          const px = (i * 83) % w;
+          const py = (i * 47 + state.elapsed * 14) % h;
+          ctx.beginPath();
+          ctx.arc(px, py, i % 3 === 0 ? 1.5 : 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let y = 128; y < h; y += 84) {
+          ctx.moveTo(14, y);
+          ctx.lineTo(w - 14, y);
+        }
+        ctx.stroke();
+
+        if (tetherActive) {
+          const gradient = ctx.createLinearGradient(state.kiteX, kiteY, state.kiteX, tetherBottom);
+          gradient.addColorStop(0, "rgba(255, 224, 139, 0.98)");
+          gradient.addColorStop(0.5, "rgba(137, 231, 255, 0.92)");
+          gradient.addColorStop(1, "rgba(137, 231, 255, 0.1)");
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = 7;
+          ctx.lineCap = "round";
+          ctx.shadowColor = "rgba(137, 231, 255, 0.7)";
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.moveTo(state.kiteX, kiteY + 18);
+          ctx.lineTo(state.kiteX, tetherBottom);
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+
+        for (const item of state.items) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          if (item.type === "blue") {
+            ctx.fillStyle = "rgba(137, 231, 255, 0.95)";
+            ctx.shadowColor = "rgba(137, 231, 255, 0.65)";
+            ctx.shadowBlur = 14;
+            ctx.beginPath();
+            ctx.arc(0, 0, item.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255,255,255,0.72)";
+            ctx.beginPath();
+            ctx.arc(-item.radius * 0.3, -item.radius * 0.35, item.radius * 0.28, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.rotate(state.elapsed * item.spin);
+            ctx.strokeStyle = "rgba(255, 122, 146, 0.94)";
+            ctx.lineWidth = 3;
+            ctx.shadowColor = "rgba(255, 122, 146, 0.55)";
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.moveTo(-item.radius, -item.radius);
+            ctx.lineTo(item.radius, item.radius);
+            ctx.moveTo(item.radius, -item.radius);
+            ctx.lineTo(-item.radius, item.radius);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        for (const p of state.particles) {
+          ctx.fillStyle = `rgba(${p.color}, ${Math.max(0, p.life / 0.62)})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.save();
+        ctx.translate(state.kiteX, kiteY);
+        ctx.fillStyle = `rgba(255, 224, 139, ${0.78 + readyGlow})`;
+        ctx.shadowColor = "rgba(255, 224, 139, 0.48)";
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.lineTo(22, 0);
+        ctx.lineTo(0, 18);
+        ctx.lineTo(-18, 4);
+        ctx.lineTo(-10, -4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "rgba(14, 20, 36, 0.94)";
+        ctx.fillRect(-3, -18, 6, 36);
+        ctx.strokeStyle = "rgba(255,255,255,0.24)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -22);
+        ctx.lineTo(0, 24);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.fillStyle = "rgba(137, 231, 255, 0.08)";
+        ctx.beginPath();
+        ctx.ellipse(state.kiteX, kiteY + 10, 34, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function loop(timestamp) {
+        if (!state.running) {
+          draw();
+          return;
+        }
+        if (!state.lastTime) {
+          state.lastTime = timestamp;
+        }
+        const dt = Math.min(0.032, (timestamp - state.lastTime) / 1000);
+        state.lastTime = timestamp;
+        update(dt);
+        updateHud();
+        draw();
+        if (state.running) {
+          state.rafId = requestAnimationFrame(loop);
+        } else {
+          state.rafId = 0;
+        }
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        if (!state.running) {
+          return;
+        }
+        activateTether();
+      });
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRound();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRound();
+      });
+
+      window.addEventListener("resize", () => {
+        syncCanvas();
+        draw();
+      });
+
+      syncCanvas();
+      resetRound();
+      draw();
+    })();
+  </script>
+</body>
+</html>
