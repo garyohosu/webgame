@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ブルームケージ</title>
+  <meta name="description" content="タップで花籠を閉じ、渦巻く青い花片だけをまとめ捕獲する60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #1f1532;
+      --bg-bottom: #090611;
+      --panel: rgba(16, 11, 27, 0.82);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f7f4ff;
+      --mint: #98ffd7;
+      --cyan: #96e8ff;
+      --gold: #ffd88a;
+      --rose: #ff7a94;
+      --violet: #c3a1ff;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(195, 161, 255, 0.24), transparent 30%),
+        radial-gradient(circle at 20% 18%, rgba(150, 232, 255, 0.16), transparent 26%),
+        radial-gradient(circle at 82% 16%, rgba(255, 122, 148, 0.12), transparent 24%),
+        linear-gradient(180deg, var(--bg-top) 0%, #140d20 44%, var(--bg-bottom) 100%);
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(247, 244, 255, 0.72);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.78rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.56;
+      color: rgba(247, 244, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(247, 244, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #stateValue.ready {
+      color: var(--mint);
+    }
+
+    #stateValue.clasp {
+      color: var(--gold);
+    }
+
+    #stateValue.cool {
+      color: var(--rose);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 40%, rgba(255, 216, 138, 0.06), transparent 20%),
+        radial-gradient(circle at 50% 50%, rgba(195, 161, 255, 0.16), transparent 30%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 16%),
+        linear-gradient(180deg, rgba(17, 11, 29, 0.98), rgba(6, 4, 11, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(7, 5, 12, 0.18), rgba(7, 5, 12, 0.84));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(15, 10, 24, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(247, 244, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(10, 7, 17, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(247, 244, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .back {
+      padding: 12px 10px;
+      color: rgba(247, 244, 255, 0.84);
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    button {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #140d20;
+      background: linear-gradient(135deg, var(--gold), #fff1d2);
+      box-shadow: 0 10px 24px rgba(255, 216, 138, 0.22);
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, var(--cyan), #f2fbff);
+      box-shadow: 0 10px 24px rgba(150, 232, 255, 0.22);
+    }
+
+    @media (max-width: 390px) {
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+
+      .controls {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+
+      button,
+      .back {
+        padding-inline: 10px;
+        font-size: 0.88rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">One Tap Bloom Trap</div>
+      <h1>ブルームケージ</h1>
+      <p class="sub">タップで花籠を一瞬だけ閉じ、渦の中心へ寄ってきた青い花片だけをまとめ捕獲。赤い棘種を抱え込むと減点。</p>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat"><div class="label">Score</div><div id="scoreValue" class="value">0</div></div>
+      <div class="stat"><div class="label">Time</div><div id="timeValue" class="value">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div id="bestValue" class="value">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div id="comboValue" class="value">x1</div></div>
+      <div class="stat"><div class="label">State</div><div id="stateValue" class="value ready">READY</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="402" height="720" aria-label="game area"></canvas>
+      <div id="overlay" class="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">花籠を閉じるタイミングを読め</h2>
+          <p id="overlayText">外周から渦巻いてくる青い花片を、中心の輪へ引きつけてからタップ。赤い棘種まで閉じ込めると失点する。</p>
+        </div>
+      </div>
+      <div class="tap-note">プレイ中はどこでもタップで捕獲</div>
+    </section>
+
+    <section class="controls">
+      <a class="back" href="../../">../../</a>
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" type="button" class="secondary">リトライ</button>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame_bloom_cage_best";
+      const GAME_SECONDS = 60;
+      const CLOSE_MS = 260;
+      const COOLDOWN_MS = 340;
+      const CAPTURE_RADIUS = 74;
+      const MAX_PARTICLES = 7;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const stateValue = document.getElementById("stateValue");
+
+      const state = {
+        width: canvas.width,
+        height: canvas.height,
+        centerX: canvas.width / 2,
+        centerY: canvas.height * 0.54,
+        running: false,
+        score: 0,
+        combo: 0,
+        maxCombo: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: GAME_SECONDS,
+        elapsed: 0,
+        buds: [],
+        particles: [],
+        captureFlash: 0,
+        lastFrame: 0,
+        spawnTimer: 0,
+        closeTimer: 0,
+        cooldownTimer: 0
+      };
+
+      bestValue.textContent = String(state.best);
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        const width = Math.max(320, Math.floor(rect.width * ratio));
+        const height = Math.max(540, Math.floor(rect.height * ratio));
+        canvas.width = width;
+        canvas.height = height;
+        state.width = width;
+        state.height = height;
+        state.centerX = width / 2;
+        state.centerY = height * 0.54;
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.maxCombo = 0;
+        state.timeLeft = GAME_SECONDS;
+        state.elapsed = 0;
+        state.buds.length = 0;
+        state.particles.length = 0;
+        state.captureFlash = 0;
+        state.spawnTimer = 0;
+        state.closeTimer = 0;
+        state.cooldownTimer = 0;
+        updateHud();
+      }
+
+      function startGame() {
+        resetGame();
+        state.running = true;
+        state.lastFrame = performance.now();
+        overlay.classList.add("hidden");
+        overlayTitle.textContent = "花籠を閉じるタイミングを読め";
+        overlayText.textContent = "プレイ中はどこでもタップ。青は加点、赤は減点。まとめ取りほど気持ちいいが欲張ると刺さる。";
+        requestAnimationFrame(frame);
+      }
+
+      function finishGame() {
+        state.running = false;
+        const isNewBest = state.score > state.best;
+        if (isNewBest) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        overlayTitle.textContent = isNewBest ? "新しい花籠記録" : "60秒終了";
+        overlayText.textContent = "スコア " + state.score + " / 最大コンボ x" + Math.max(1, state.maxCombo + 1) + " / ベスト " + state.best + "。もう一度タップの間を詰める？";
+        overlay.classList.remove("hidden");
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + Math.max(1, state.combo + 1);
+        comboValue.className = "value" + (state.combo >= 4 ? " hot" : "");
+
+        let label = "READY";
+        let klass = "value ready";
+        if (state.closeTimer > 0) {
+          label = "CLASP";
+          klass = "value clasp";
+        } else if (state.cooldownTimer > 0) {
+          label = "COOL";
+          klass = "value cool";
+        }
+        stateValue.textContent = label;
+        stateValue.className = klass;
+      }
+
+      function currentDifficulty() {
+        if (state.elapsed < 30) {
+          return { spawn: 0.76, speed: 88, swirl: 1.35, redChance: 0.2 };
+        }
+        if (state.elapsed < 45) {
+          return { spawn: 0.6, speed: 112, swirl: 1.75, redChance: 0.28 };
+        }
+        return { spawn: 0.47, speed: 138, swirl: 2.1, redChance: 0.37 };
+      }
+
+      function spawnBud() {
+        const difficulty = currentDifficulty();
+        const angle = Math.random() * Math.PI * 2;
+        const edgeRadius = Math.max(state.width, state.height) * 0.48;
+        const isRed = Math.random() < difficulty.redChance;
+        state.buds.push({
+          angle,
+          radius: edgeRadius + Math.random() * 28,
+          radialSpeed: difficulty.speed + Math.random() * 24,
+          swirlSpeed: (Math.random() * 0.9 + difficulty.swirl) * (Math.random() < 0.5 ? -1 : 1),
+          size: isRed ? 12 + Math.random() * 4 : 11 + Math.random() * 5,
+          hue: isRed ? "#ff7a94" : (Math.random() < 0.5 ? "#96e8ff" : "#98ffd7"),
+          isRed,
+          pulse: Math.random() * Math.PI * 2
+        });
+      }
+
+      function createParticles(x, y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          state.particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 140,
+            vy: (Math.random() - 0.5) * 140,
+            life: 0.45 + Math.random() * 0.28,
+            maxLife: 0.45 + Math.random() * 0.28,
+            color
+          });
+        }
+        if (state.particles.length > 90) {
+          state.particles.splice(0, state.particles.length - 90);
+        }
+      }
+
+      function doCapture() {
+        if (!state.running || state.closeTimer > 0 || state.cooldownTimer > 0) {
+          return;
+        }
+        state.closeTimer = CLOSE_MS / 1000;
+        state.cooldownTimer = (CLOSE_MS + COOLDOWN_MS) / 1000;
+        state.captureFlash = 1;
+
+        let gained = 0;
+        let penalty = 0;
+        for (let i = state.buds.length - 1; i >= 0; i -= 1) {
+          const bud = state.buds[i];
+          const x = state.centerX + Math.cos(bud.angle) * bud.radius;
+          const y = state.centerY + Math.sin(bud.angle) * bud.radius;
+          const dist = Math.hypot(x - state.centerX, y - state.centerY);
+          if (dist <= CAPTURE_RADIUS) {
+            if (bud.isRed) {
+              penalty += 3;
+              state.combo = 0;
+              createParticles(x, y, "#ff7a94", MAX_PARTICLES);
+            } else {
+              gained += 1 + Math.floor(state.combo / 3);
+              state.combo += 1;
+              state.maxCombo = Math.max(state.maxCombo, state.combo);
+              createParticles(x, y, bud.hue, MAX_PARTICLES);
+            }
+            state.buds.splice(i, 1);
+          }
+        }
+
+        if (!gained && !penalty) {
+          state.combo = 0;
+        }
+
+        state.score += gained;
+        state.score = Math.max(0, state.score - penalty);
+        updateHud();
+      }
+
+      function update(dt) {
+        state.elapsed += dt;
+        state.timeLeft = Math.max(0, GAME_SECONDS - state.elapsed);
+        if (state.timeLeft <= 0) {
+          finishGame();
+          return;
+        }
+
+        state.closeTimer = Math.max(0, state.closeTimer - dt);
+        state.cooldownTimer = Math.max(0, state.cooldownTimer - dt);
+        state.captureFlash = Math.max(0, state.captureFlash - dt * 3.2);
+
+        const difficulty = currentDifficulty();
+        state.spawnTimer -= dt;
+        while (state.spawnTimer <= 0) {
+          spawnBud();
+          state.spawnTimer += difficulty.spawn;
+        }
+
+        for (let i = state.buds.length - 1; i >= 0; i -= 1) {
+          const bud = state.buds[i];
+          bud.angle += bud.swirlSpeed * dt;
+          bud.radius -= bud.radialSpeed * dt;
+          bud.pulse += dt * 4;
+          if (bud.radius < 18) {
+            state.buds.splice(i, 1);
+            if (!bud.isRed) {
+              state.combo = 0;
+            }
+          }
+        }
+
+        for (let i = state.particles.length - 1; i >= 0; i -= 1) {
+          const p = state.particles[i];
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+          if (p.life <= 0) {
+            state.particles.splice(i, 1);
+          }
+        }
+
+        updateHud();
+      }
+
+      function drawPetals(closedAmount) {
+        const petalCount = 6;
+        const inner = 26;
+        const outer = 112 - closedAmount * 56;
+        for (let i = 0; i < petalCount; i += 1) {
+          const a = (Math.PI * 2 * i) / petalCount - Math.PI / 2;
+          const spread = 0.34 + (1 - closedAmount) * 0.2;
+          const x1 = state.centerX + Math.cos(a - spread) * inner;
+          const y1 = state.centerY + Math.sin(a - spread) * inner;
+          const x2 = state.centerX + Math.cos(a) * outer;
+          const y2 = state.centerY + Math.sin(a) * outer;
+          const x3 = state.centerX + Math.cos(a + spread) * inner;
+          const y3 = state.centerY + Math.sin(a + spread) * inner;
+
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.quadraticCurveTo(
+            state.centerX + Math.cos(a - spread * 0.2) * (outer * 0.84),
+            state.centerY + Math.sin(a - spread * 0.2) * (outer * 0.84),
+            x2,
+            y2
+          );
+          ctx.quadraticCurveTo(
+            state.centerX + Math.cos(a + spread * 0.2) * (outer * 0.84),
+            state.centerY + Math.sin(a + spread * 0.2) * (outer * 0.84),
+            x3,
+            y3
+          );
+          ctx.closePath();
+          const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+          grad.addColorStop(0, "rgba(255, 255, 255, 0.09)");
+          grad.addColorStop(1, i % 2 ? "rgba(150, 232, 255, 0.28)" : "rgba(195, 161, 255, 0.28)");
+          ctx.fillStyle = grad;
+          ctx.strokeStyle = "rgba(255,255,255,0.12)";
+          ctx.lineWidth = 1.4;
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      function drawBud(bud) {
+        const x = state.centerX + Math.cos(bud.angle) * bud.radius;
+        const y = state.centerY + Math.sin(bud.angle) * bud.radius;
+        const glow = 0.6 + Math.sin(bud.pulse) * 0.2;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(bud.angle + bud.pulse * 0.14);
+        ctx.shadowBlur = bud.isRed ? 16 : 18;
+        ctx.shadowColor = bud.hue;
+        ctx.fillStyle = bud.hue;
+
+        if (bud.isRed) {
+          ctx.beginPath();
+          for (let i = 0; i < 4; i += 1) {
+            const a = (Math.PI / 2) * i;
+            const r = i % 2 === 0 ? bud.size : bud.size * 0.48;
+            const px = Math.cos(a) * r;
+            const py = Math.sin(a) * r;
+            if (i === 0) {
+              ctx.moveTo(px, py);
+            } else {
+              ctx.lineTo(px, py);
+            }
+          }
+          ctx.closePath();
+          ctx.fill();
+        } else {
+          ctx.globalAlpha = glow;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, bud.size * 0.74, bud.size, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = "rgba(255,255,255,0.65)";
+          ctx.beginPath();
+          ctx.arc(-bud.size * 0.16, -bud.size * 0.22, bud.size * 0.18, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      function drawParticles() {
+        for (const p of state.particles) {
+          ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, state.width, state.height);
+
+        const bgGrad = ctx.createRadialGradient(
+          state.centerX,
+          state.centerY,
+          16,
+          state.centerX,
+          state.centerY,
+          state.height * 0.7
+        );
+        bgGrad.addColorStop(0, "rgba(255, 216, 138, 0.08)");
+        bgGrad.addColorStop(0.35, "rgba(195, 161, 255, 0.12)");
+        bgGrad.addColorStop(1, "rgba(5, 4, 10, 0)");
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        for (let i = 0; i < 18; i += 1) {
+          const ratio = i / 18;
+          ctx.strokeStyle = "rgba(255,255,255," + (0.06 - ratio * 0.03) + ")";
+          ctx.beginPath();
+          ctx.arc(state.centerX, state.centerY, 58 + ratio * 220, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (const bud of state.buds) {
+          const x = state.centerX + Math.cos(bud.angle) * bud.radius;
+          const y = state.centerY + Math.sin(bud.angle) * bud.radius;
+          ctx.strokeStyle = bud.isRed ? "rgba(255,122,148,0.16)" : "rgba(150,232,255,0.16)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(state.centerX, state.centerY);
+          ctx.stroke();
+        }
+
+        const closedAmount = state.closeTimer > 0 ? Math.min(1, state.closeTimer / (CLOSE_MS / 1000) * 1.2) : 0;
+        drawPetals(closedAmount);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(state.centerX, state.centerY, CAPTURE_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+
+        for (const bud of state.buds) {
+          drawBud(bud);
+        }
+
+        drawParticles();
+
+        const flashAlpha = 0.18 + state.captureFlash * 0.22;
+        ctx.fillStyle = "rgba(255, 216, 138, " + flashAlpha + ")";
+        ctx.beginPath();
+        ctx.arc(state.centerX, state.centerY, 22 + state.captureFlash * 18, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function frame(now) {
+        if (!state.running) {
+          draw();
+          return;
+        }
+        const dt = Math.min(0.033, (now - state.lastFrame) / 1000);
+        state.lastFrame = now;
+        update(dt);
+        draw();
+        if (state.running) {
+          requestAnimationFrame(frame);
+        }
+      }
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (!state.running) {
+          return;
+        }
+        event.preventDefault();
+        doCapture();
+      });
+
+      window.addEventListener("resize", () => {
+        resize();
+        draw();
+      });
+
+      resize();
+      resetGame();
+      draw();
+    })();
+  </script>
+</body>
+</html>
