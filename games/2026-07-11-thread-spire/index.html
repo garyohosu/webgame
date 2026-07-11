@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>スレッドスパイア</title>
+  <meta name="description" content="往復する針の位置でタップし、縦の糸筋で青い粒だけを縫い取る60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #1b1027;
+      --bg-bottom: #06040c;
+      --panel: rgba(18, 12, 28, 0.82);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f8f4ff;
+      --cyan: #87f5ff;
+      --mint: #96ffca;
+      --gold: #ffd47b;
+      --rose: #ff6f99;
+      --violet: #c8a4ff;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(200, 164, 255, 0.24), transparent 34%),
+        radial-gradient(circle at 20% 18%, rgba(135, 245, 255, 0.14), transparent 28%),
+        radial-gradient(circle at 82% 20%, rgba(255, 111, 153, 0.16), transparent 24%),
+        linear-gradient(180deg, var(--bg-top) 0%, #120a1c 46%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(248, 244, 255, 0.68);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.76rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.92rem;
+      line-height: 1.56;
+      color: rgba(248, 244, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(248, 244, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #statusValue.ready {
+      color: var(--mint);
+    }
+
+    #statusValue.cool {
+      color: var(--rose);
+    }
+
+    #statusValue.burst {
+      color: var(--gold);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 40%, rgba(255, 212, 123, 0.08), transparent 18%),
+        radial-gradient(circle at 50% 50%, rgba(200, 164, 255, 0.16), transparent 32%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 16%),
+        linear-gradient(180deg, rgba(17, 11, 29, 0.98), rgba(6, 4, 11, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(7, 5, 12, 0.18), rgba(7, 5, 12, 0.84));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(15, 10, 24, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(248, 244, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(10, 7, 17, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(248, 244, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: #1a1025;
+      background: linear-gradient(135deg, var(--cyan), var(--mint));
+      box-shadow: 0 12px 24px rgba(135, 245, 255, 0.2);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-width: 380px) {
+      h1 {
+        font-size: 1.56rem;
+      }
+
+      .sub,
+      .overlay-card p {
+        font-size: 0.88rem;
+      }
+
+      .value {
+        font-size: 0.82rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>スレッドスパイア</h1>
+      <div class="sub">左右に走る針を見てタップ。縦の糸筋で青い粒だけをまとめて縫い取り、赤い結び目を避ける 60 秒。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+      <div class="stat">
+        <div class="label">State</div>
+        <div class="value ready" id="statusValue">READY</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="gameCanvas" aria-label="game canvas"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青い粒だけを縫い取れ</h2>
+          <p id="overlayText">針は自動で左右に往復する。<br />画面をタップして縦の糸筋を走らせ、同じ列にいる青いルーメンをまとめて回収。赤いノットは減点だ。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY AREA: pointerdown anywhere</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button class="secondary" id="retryButton" type="button">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const GAME_DURATION = 60000;
+      const STORAGE_KEY = "dailygame_thread_spire_best";
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const statusValue = document.getElementById("statusValue");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+
+      let width = 0;
+      let height = 0;
+      let dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      let running = false;
+      let animationId = 0;
+      let lastTime = 0;
+      let timeLeft = GAME_DURATION;
+      let score = 0;
+      let highScore = 0;
+      let combo = 0;
+      let bestCombo = 0;
+      let needleX = 0;
+      let needleDir = 1;
+      let beamTimer = 0;
+      let cooldownTimer = 0;
+      let spawnTimer = 0;
+      let phase = "calm";
+      let particles = [];
+      let flashes = [];
+
+      function readBest() {
+        const value = Number.parseInt(window.localStorage.getItem(STORAGE_KEY) || "0", 10);
+        highScore = Number.isFinite(value) ? value : 0;
+        bestValue.textContent = String(highScore);
+      }
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        width = Math.max(320, Math.floor(rect.width));
+        height = Math.max(360, Math.floor(rect.height));
+        dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (!needleX) {
+          needleX = width * 0.5;
+        }
+      }
+
+      function resetGame() {
+        running = false;
+        lastTime = 0;
+        timeLeft = GAME_DURATION;
+        score = 0;
+        combo = 0;
+        bestCombo = 0;
+        beamTimer = 0;
+        cooldownTimer = 0;
+        spawnTimer = 0;
+        phase = "calm";
+        particles = [];
+        flashes = [];
+        needleX = width * 0.5;
+        needleDir = Math.random() > 0.5 ? 1 : -1;
+        updateHud();
+        draw();
+      }
+
+      function startGame() {
+        resetGame();
+        running = true;
+        lastTime = performance.now();
+        overlay.classList.add("hidden");
+        statusValue.textContent = "READY";
+        statusValue.className = "value ready";
+      }
+
+      function endGame() {
+        running = false;
+        if (score > highScore) {
+          highScore = score;
+          window.localStorage.setItem(STORAGE_KEY, String(highScore));
+          bestValue.textContent = String(highScore);
+        }
+        overlayTitle.textContent = score >= highScore ? "新記録を刻んだ" : "60秒終了";
+        overlayText.innerHTML = "スコア " + score + " / 最大コンボ x" + Math.max(1, bestCombo) + "<br />スタートかリトライで再挑戦。";
+        overlay.classList.remove("hidden");
+        statusValue.textContent = "END";
+        statusValue.className = "value";
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(score);
+        timeValue.textContent = (timeLeft / 1000).toFixed(1);
+        bestValue.textContent = String(highScore);
+        comboValue.textContent = "x" + (combo + 1);
+        comboValue.className = combo >= 3 ? "value hot" : "value";
+
+        if (!running) {
+          return;
+        }
+        if (beamTimer > 0) {
+          statusValue.textContent = "BURST";
+          statusValue.className = "value burst";
+        } else if (cooldownTimer > 0) {
+          statusValue.textContent = "COOL";
+          statusValue.className = "value cool";
+        } else {
+          statusValue.textContent = "READY";
+          statusValue.className = "value ready";
+        }
+      }
+
+      function currentStage(progress) {
+        if (progress < 0.5) {
+          return { needleSpeed: 130, fallSpeed: 98, spawnEvery: 0.58, redChance: 0.19, sway: 18, beamHalf: 22 };
+        }
+        if (progress < 0.75) {
+          return { needleSpeed: 168, fallSpeed: 124, spawnEvery: 0.46, redChance: 0.29, sway: 28, beamHalf: 20 };
+        }
+        return { needleSpeed: 208, fallSpeed: 148, spawnEvery: 0.38, redChance: 0.37, sway: 36, beamHalf: 18 };
+      }
+
+      function spawnParticle(progress) {
+        const stage = currentStage(progress);
+        const kind = Math.random() < stage.redChance ? "bad" : "good";
+        const x = 28 + Math.random() * (width - 56);
+        const size = kind === "good" ? 8 + Math.random() * 5 : 9 + Math.random() * 6;
+        particles.push({
+          kind,
+          x,
+          baseX: x,
+          y: -16 - Math.random() * 40,
+          size,
+          speedY: stage.fallSpeed + Math.random() * 28,
+          sway: stage.sway * (0.5 + Math.random()),
+          swaySpeed: 1.4 + Math.random() * 1.2,
+          swayPhase: Math.random() * Math.PI * 2,
+          spin: (Math.random() - 0.5) * 2.4,
+          angle: Math.random() * Math.PI * 2
+        });
+      }
+
+      function addFlash(x, y, color, amount) {
+        flashes.push({
+          x,
+          y,
+          color,
+          amount,
+          life: 0.52
+        });
+      }
+
+      function fireBeam() {
+        if (!running || cooldownTimer > 0) {
+          return;
+        }
+        const progress = 1 - timeLeft / GAME_DURATION;
+        const stage = currentStage(progress);
+        beamTimer = 0.15;
+        cooldownTimer = 0.34;
+
+        let goodHits = 0;
+        let badHits = 0;
+        const remaining = [];
+        for (const particle of particles) {
+          const inColumn = Math.abs(particle.x - needleX) <= stage.beamHalf;
+          if (inColumn && particle.y < height - 28) {
+            if (particle.kind === "good") {
+              goodHits += 1;
+              addFlash(particle.x, particle.y, "rgba(135,245,255,0.95)", "+");
+            } else {
+              badHits += 1;
+              addFlash(particle.x, particle.y, "rgba(255,111,153,0.95)", "!");
+            }
+          } else {
+            remaining.push(particle);
+          }
+        }
+        particles = remaining;
+
+        if (goodHits > 0) {
+          const bonus = Math.min(4, combo);
+          score += goodHits * (1 + bonus);
+          combo += goodHits;
+          bestCombo = Math.max(bestCombo, combo);
+          addFlash(needleX, height - 98, "rgba(255,212,123,0.95)", "+" + goodHits);
+        }
+        if (badHits > 0) {
+          score = Math.max(0, score - badHits * 4);
+          combo = 0;
+          addFlash(needleX, height - 124, "rgba(255,111,153,0.95)", "-" + (badHits * 4));
+        }
+        updateHud();
+      }
+
+      function update(delta) {
+        if (!running) {
+          return;
+        }
+
+        timeLeft -= delta * 1000;
+        if (timeLeft <= 0) {
+          timeLeft = 0;
+          updateHud();
+          endGame();
+          return;
+        }
+
+        const progress = 1 - timeLeft / GAME_DURATION;
+        const stage = currentStage(progress);
+        phase = progress < 0.5 ? "calm" : progress < 0.75 ? "surge" : "rush";
+
+        const margin = 32;
+        needleX += needleDir * stage.needleSpeed * delta;
+        if (needleX < margin) {
+          needleX = margin;
+          needleDir = 1;
+        } else if (needleX > width - margin) {
+          needleX = width - margin;
+          needleDir = -1;
+        }
+
+        if (beamTimer > 0) {
+          beamTimer = Math.max(0, beamTimer - delta);
+        }
+        if (cooldownTimer > 0) {
+          cooldownTimer = Math.max(0, cooldownTimer - delta);
+        }
+
+        spawnTimer += delta;
+        while (spawnTimer >= stage.spawnEvery) {
+          spawnTimer -= stage.spawnEvery;
+          spawnParticle(progress);
+        }
+
+        particles = particles.filter((particle) => {
+          particle.y += particle.speedY * delta;
+          particle.angle += particle.spin * delta;
+          particle.x = particle.baseX + Math.sin((performance.now() * 0.001 * particle.swaySpeed) + particle.swayPhase) * particle.sway;
+
+          if (particle.y - particle.size > height + 12) {
+            if (particle.kind === "good") {
+              combo = 0;
+            }
+            return false;
+          }
+          return true;
+        });
+
+        flashes = flashes.filter((flash) => {
+          flash.life -= delta;
+          flash.y -= 14 * delta;
+          return flash.life > 0;
+        });
+
+        updateHud();
+      }
+
+      function drawBackground() {
+        ctx.clearRect(0, 0, width, height);
+
+        const glow = ctx.createRadialGradient(width * 0.5, height * 0.28, 10, width * 0.5, height * 0.28, width * 0.55);
+        glow.addColorStop(0, "rgba(200,164,255,0.17)");
+        glow.addColorStop(1, "rgba(200,164,255,0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 1;
+        for (let y = 24; y < height; y += 36) {
+          ctx.beginPath();
+          ctx.moveTo(18, y);
+          ctx.lineTo(width - 18, y);
+          ctx.stroke();
+        }
+
+        for (let x = 28; x < width; x += 46) {
+          ctx.beginPath();
+          ctx.moveTo(x, 20);
+          ctx.lineTo(x, height - 28);
+          ctx.stroke();
+        }
+
+        ctx.strokeStyle = phase === "rush" ? "rgba(255,111,153,0.28)" : phase === "surge" ? "rgba(255,212,123,0.22)" : "rgba(135,245,255,0.18)";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(16, 16, width - 32, height - 32);
+      }
+
+      function drawParticles() {
+        for (const particle of particles) {
+          ctx.save();
+          ctx.translate(particle.x, particle.y);
+          ctx.rotate(particle.angle);
+          if (particle.kind === "good") {
+            ctx.fillStyle = "rgba(135,245,255,0.96)";
+            ctx.shadowColor = "rgba(135,245,255,0.8)";
+            ctx.shadowBlur = 12;
+            ctx.beginPath();
+            ctx.moveTo(0, -particle.size);
+            ctx.lineTo(particle.size * 0.7, 0);
+            ctx.lineTo(0, particle.size);
+            ctx.lineTo(-particle.size * 0.7, 0);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.strokeStyle = "rgba(255,111,153,0.96)";
+            ctx.lineWidth = 3;
+            ctx.shadowColor = "rgba(255,111,153,0.8)";
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(-particle.size, -particle.size);
+            ctx.lineTo(particle.size, particle.size);
+            ctx.moveTo(particle.size, -particle.size);
+            ctx.lineTo(-particle.size, particle.size);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+
+      function drawNeedle() {
+        const needleY = height - 40;
+
+        ctx.save();
+        ctx.translate(needleX, needleY);
+        ctx.shadowColor = "rgba(255,212,123,0.55)";
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = "rgba(255,212,123,0.96)";
+        ctx.beginPath();
+        ctx.moveTo(0, -20);
+        ctx.lineTo(15, 14);
+        ctx.lineTo(0, 8);
+        ctx.lineTo(-15, 14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.2)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(20, needleY + 16);
+        ctx.lineTo(width - 20, needleY + 16);
+        ctx.stroke();
+
+        if (beamTimer > 0) {
+          const alpha = beamTimer / 0.15;
+          const beamWidth = 14 + alpha * 20;
+          const gradient = ctx.createLinearGradient(needleX, 26, needleX, needleY);
+          gradient.addColorStop(0, "rgba(135,245,255,0)");
+          gradient.addColorStop(0.14, "rgba(135,245,255," + (0.45 * alpha) + ")");
+          gradient.addColorStop(0.5, "rgba(255,212,123," + (0.85 * alpha) + ")");
+          gradient.addColorStop(1, "rgba(255,111,153,0)");
+          ctx.fillStyle = gradient;
+          ctx.fillRect(needleX - beamWidth * 0.5, 24, beamWidth, needleY - 24);
+        }
+      }
+
+      function drawFlashes() {
+        ctx.font = "bold 16px Trebuchet MS, sans-serif";
+        ctx.textAlign = "center";
+        for (const flash of flashes) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, flash.life / 0.52);
+          ctx.fillStyle = flash.color;
+          ctx.shadowColor = flash.color;
+          ctx.shadowBlur = 10;
+          ctx.fillText(flash.amount, flash.x, flash.y);
+          ctx.restore();
+        }
+      }
+
+      function draw() {
+        drawBackground();
+        drawParticles();
+        drawNeedle();
+        drawFlashes();
+      }
+
+      function frame(now) {
+        if (!lastTime) {
+          lastTime = now;
+        }
+        const delta = Math.min(0.033, (now - lastTime) / 1000);
+        lastTime = now;
+        update(delta);
+        draw();
+        animationId = window.requestAnimationFrame(frame);
+      }
+
+      function onPlayPointer(event) {
+        event.preventDefault();
+        if (!running) {
+          return;
+        }
+        fireBeam();
+      }
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      arena.addEventListener("pointerdown", onPlayPointer);
+
+      window.addEventListener("resize", () => {
+        resize();
+        draw();
+      });
+
+      readBest();
+      resize();
+      resetGame();
+      animationId = window.requestAnimationFrame(frame);
+
+      window.addEventListener("pagehide", () => {
+        window.cancelAnimationFrame(animationId);
+      });
+    })();
+  </script>
+</body>
+</html>
