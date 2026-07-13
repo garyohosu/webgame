@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>フラッシュターンスタイル</title>
+  <meta name="description" content="中央ゲートを短時間だけ発光させ、3レーンを横切る青い印章だけをまとめて焼き付ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #0b1020;
+      --bg-bottom: #03060b;
+      --panel: rgba(10, 16, 28, 0.86);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #f5fbff;
+      --cyan: #7de9ff;
+      --mint: #9ff7c8;
+      --gold: #ffd671;
+      --coral: #ff6f7d;
+      --steel: #9db8d2;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(125, 233, 255, 0.16), transparent 34%),
+        radial-gradient(circle at 12% 18%, rgba(255, 214, 113, 0.12), transparent 24%),
+        radial-gradient(circle at 88% 24%, rgba(255, 111, 125, 0.13), transparent 26%),
+        linear-gradient(180deg, #111a2f 0%, var(--bg-top) 38%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(245, 251, 255, 0.62);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.02;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.92rem;
+      line-height: 1.56;
+      color: rgba(245, 251, 255, 0.8);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(245, 251, 255, 0.54);
+    }
+
+    .value {
+      font-size: 0.9rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #statusValue.ready {
+      color: var(--mint);
+    }
+
+    #statusValue.cool {
+      color: var(--coral);
+    }
+
+    #statusValue.pulse {
+      color: var(--gold);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(125, 233, 255, 0.14), transparent 26%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        linear-gradient(180deg, rgba(10, 16, 28, 0.98), rgba(3, 6, 11, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(4, 7, 12, 0.22), rgba(4, 7, 12, 0.86));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(9, 14, 22, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(245, 251, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(8, 12, 18, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(245, 251, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: #09121a;
+      background: linear-gradient(135deg, var(--cyan), var(--mint));
+      box-shadow: 0 12px 24px rgba(125, 233, 255, 0.22);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:active,
+    .back-link:active {
+      transform: translateY(1px) scale(0.99);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel">
+      <div class="eyebrow">Arcade Toll</div>
+      <h1>フラッシュターンスタイル</h1>
+      <div class="sub">中央ゲートを短時間だけ発光。青い印章だけを焼き付けて、赤い詰まり札は見送る。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat"><div class="label">Score</div><div class="value" id="scoreValue">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="timeValue">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="bestValue">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="comboValue">x1</div></div>
+      <div class="stat"><div class="label">Gate</div><div class="value ready" id="statusValue">READY</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="402" height="720"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青い印章だけ通す</h2>
+          <p id="overlayText">3レーンの中央でタップ。短い発光中に青い印章をまとめ取りし、赤い詰まり札は巻き込まない。</p>
+        </div>
+      </div>
+      <div class="tap-note">PLAY中に画面タップでゲート通電</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" type="button" class="secondary">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame_flash_turnstile_best";
+      const GAME_SECONDS = 60;
+      const PULSE_DURATION = 0.18;
+      const COOLDOWN_DURATION = 0.24;
+      const BASE_SPAWN_INTERVAL = 0.72;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const statusValue = document.getElementById("statusValue");
+
+      let width = 402;
+      let height = 720;
+      let centerX = width * 0.5;
+      let laneYs = [height * 0.28, height * 0.5, height * 0.72];
+      let gateHalfWidth = 34;
+
+      let running = false;
+      let score = 0;
+      let best = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      let newBestAchieved = false;
+      let combo = 0;
+      let timeLeft = GAME_SECONDS;
+      let elapsed = 0;
+      let spawnTimer = 0;
+      let pulseTimer = 0;
+      let coolTimer = 0;
+      let lastFrame = performance.now();
+      let tokens = [];
+      let particles = [];
+
+      bestValue.textContent = String(best);
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        width = Math.max(320, rect.width);
+        height = Math.max(360, rect.height);
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        centerX = width * 0.5;
+        laneYs = [height * 0.28, height * 0.5, height * 0.72];
+        gateHalfWidth = Math.max(30, width * 0.08);
+      }
+
+      function resetRun() {
+        score = 0;
+        combo = 0;
+        newBestAchieved = false;
+        timeLeft = GAME_SECONDS;
+        elapsed = 0;
+        spawnTimer = 0;
+        pulseTimer = 0;
+        coolTimer = 0;
+        tokens = [];
+        particles = [];
+        running = true;
+        overlay.classList.add("hidden");
+        updateHud();
+      }
+
+      function startGame() {
+        resetRun();
+      }
+
+      function endGame() {
+        running = false;
+        if (score > best) {
+          best = score;
+          localStorage.setItem(STORAGE_KEY, String(best));
+          newBestAchieved = true;
+        }
+        bestValue.textContent = String(best);
+        overlayTitle.textContent = newBestAchieved ? "ベスト更新" : "タイムアップ";
+        overlayText.textContent = `スコア ${score} / ベスト ${best}。中央発光にレーンを重ねるほど強い。`;
+        overlay.classList.remove("hidden");
+        updateHud();
+      }
+
+      function difficultyFactor() {
+        if (elapsed < 30) return 1;
+        if (elapsed < 45) return 1.35;
+        return 1.72;
+      }
+
+      function spawnToken() {
+        const laneIndex = Math.floor(Math.random() * laneYs.length);
+        const direction = Math.random() < 0.5 ? 1 : -1;
+        const speed = (78 + Math.random() * 30) * difficultyFactor();
+        const badChance = elapsed < 30 ? 0.2 : elapsed < 45 ? 0.28 : 0.38;
+        const bad = Math.random() < badChance;
+        tokens.push({
+          x: direction > 0 ? -28 : width + 28,
+          y: laneYs[laneIndex],
+          lane: laneIndex,
+          vx: speed * direction,
+          radius: 11 + Math.random() * 4,
+          bad,
+          wobble: Math.random() * Math.PI * 2,
+          spin: (Math.random() * 2 - 1) * 2.8,
+          angle: Math.random() * Math.PI * 2,
+          captured: false
+        });
+      }
+
+      function spawnBurst(x, y, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          particles.push({
+            x,
+            y,
+            vx: (Math.random() * 2 - 1) * 120,
+            vy: (Math.random() * 2 - 1) * 120,
+            life: 0.5 + Math.random() * 0.4,
+            color
+          });
+        }
+      }
+
+      function triggerPulse() {
+        if (!running || pulseTimer > 0 || coolTimer > 0) {
+          return;
+        }
+        pulseTimer = PULSE_DURATION;
+        let gained = 0;
+        let chain = 0;
+
+        for (const token of tokens) {
+          if (token.captured) {
+            continue;
+          }
+          if (Math.abs(token.x - centerX) <= gateHalfWidth + token.radius * 0.9) {
+            token.captured = true;
+            if (token.bad) {
+              score = Math.max(0, score - 18);
+              combo = 0;
+              chain = 0;
+              coolTimer = COOLDOWN_DURATION + 0.06;
+              spawnBurst(token.x, token.y, "#ff6f7d", 18);
+            } else {
+              combo += 1;
+              chain += 1;
+              const points = 8 + Math.min(combo, 8) * 2;
+              score += points;
+              gained += points;
+              spawnBurst(token.x, token.y, "#7de9ff", 14);
+            }
+          }
+        }
+
+        if (chain === 0 && coolTimer <= 0) {
+          combo = 0;
+          coolTimer = COOLDOWN_DURATION;
+        } else if (chain >= 2) {
+          score += chain * 3;
+          gained += chain * 3;
+        }
+
+        if (gained > 0 && score > best) {
+          best = score;
+          localStorage.setItem(STORAGE_KEY, String(best));
+          newBestAchieved = true;
+          bestValue.textContent = String(best);
+        }
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(score);
+        timeValue.textContent = timeLeft.toFixed(1);
+        bestValue.textContent = String(best);
+        comboValue.textContent = `x${Math.max(1, combo)}`;
+        comboValue.classList.toggle("hot", combo >= 5);
+
+        let status = "READY";
+        let className = "ready";
+        if (pulseTimer > 0) {
+          status = "PULSE";
+          className = "pulse";
+        } else if (coolTimer > 0) {
+          status = "COOL";
+          className = "cool";
+        }
+        statusValue.textContent = status;
+        statusValue.className = `value ${className}`;
+      }
+
+      function update(dt) {
+        if (!running) {
+          return;
+        }
+
+        elapsed += dt;
+        timeLeft = Math.max(0, GAME_SECONDS - elapsed);
+        pulseTimer = Math.max(0, pulseTimer - dt);
+        coolTimer = Math.max(0, coolTimer - dt);
+
+        const interval = BASE_SPAWN_INTERVAL / difficultyFactor();
+        spawnTimer += dt;
+        while (spawnTimer >= interval) {
+          spawnTimer -= interval;
+          spawnToken();
+          if (Math.random() < 0.24 * (difficultyFactor() - 0.82)) {
+            spawnToken();
+          }
+        }
+
+        tokens = tokens.filter((token) => !token.captured && token.x > -56 && token.x < width + 56);
+        for (const token of tokens) {
+          token.x += token.vx * dt;
+          token.wobble += dt * 3.6;
+          token.y = laneYs[token.lane] + Math.sin(token.wobble) * 7;
+          token.angle += token.spin * dt;
+        }
+
+        particles = particles.filter((particle) => particle.life > 0);
+        for (const particle of particles) {
+          particle.life -= dt;
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.vx *= 0.98;
+          particle.vy *= 0.98;
+        }
+
+        if (timeLeft <= 0) {
+          endGame();
+        } else {
+          updateHud();
+        }
+      }
+
+      function drawGate() {
+        const pulse = pulseTimer > 0 ? pulseTimer / PULSE_DURATION : 0;
+        const gateGlow = pulse > 0 ? 0.35 + pulse * 0.65 : 0.08;
+        const gateWidth = gateHalfWidth * 2;
+
+        ctx.save();
+        ctx.translate(centerX, height * 0.5);
+
+        const beam = ctx.createLinearGradient(0, -height * 0.42, 0, height * 0.42);
+        beam.addColorStop(0, `rgba(125, 233, 255, ${gateGlow * 0.2})`);
+        beam.addColorStop(0.45, `rgba(125, 233, 255, ${gateGlow * 0.8})`);
+        beam.addColorStop(0.55, `rgba(255, 214, 113, ${gateGlow * 0.9})`);
+        beam.addColorStop(1, `rgba(125, 233, 255, ${gateGlow * 0.2})`);
+        ctx.fillStyle = beam;
+        ctx.fillRect(-gateHalfWidth, -height * 0.42, gateWidth, height * 0.84);
+
+        ctx.strokeStyle = `rgba(255,255,255,${0.18 + gateGlow * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-gateHalfWidth, -height * 0.42, gateWidth, height * 0.84);
+
+        for (let i = 0; i < laneYs.length; i += 1) {
+          const laneY = laneYs[i] - height * 0.5;
+          ctx.fillStyle = `rgba(255,255,255,${0.06 + pulse * 0.1})`;
+          ctx.fillRect(-width * 0.45, laneY - 9, width * 0.9, 18);
+        }
+        ctx.restore();
+      }
+
+      function drawToken(token) {
+        ctx.save();
+        ctx.translate(token.x, token.y);
+        ctx.rotate(token.angle);
+        ctx.fillStyle = token.bad ? "#ff6f7d" : "#7de9ff";
+        ctx.strokeStyle = token.bad ? "rgba(255, 169, 177, 0.95)" : "rgba(220, 252, 255, 0.95)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i += 1) {
+          const angle = (Math.PI * 2 * i) / 6;
+          const radius = i % 2 === 0 ? token.radius : token.radius * 0.58;
+          const px = Math.cos(angle) * radius;
+          const py = Math.sin(angle) * radius;
+          if (i === 0) {
+            ctx.moveTo(px, py);
+          } else {
+            ctx.lineTo(px, py);
+          }
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawParticles() {
+        for (const particle of particles) {
+          ctx.fillStyle = `${particle.color}${Math.max(0, Math.floor(particle.life * 255)).toString(16).padStart(2, "0")}`;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, 2.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, width, height);
+
+        const bg = ctx.createLinearGradient(0, 0, 0, height);
+        bg.addColorStop(0, "#0b1020");
+        bg.addColorStop(1, "#03060b");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < laneYs.length; i += 1) {
+          ctx.strokeStyle = `rgba(157, 184, 210, ${0.16 + i * 0.05})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(width * 0.06, laneYs[i]);
+          ctx.lineTo(width * 0.94, laneYs[i]);
+          ctx.stroke();
+        }
+
+        drawGate();
+        for (const token of tokens) {
+          drawToken(token);
+        }
+        drawParticles();
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.033, (now - lastFrame) / 1000);
+        lastFrame = now;
+        update(dt);
+        render();
+        requestAnimationFrame(loop);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        triggerPulse();
+      });
+      startButton.addEventListener("pointerdown", startGame);
+      retryButton.addEventListener("pointerdown", startGame);
+      window.addEventListener("resize", resize);
+
+      resize();
+      updateHud();
+      requestAnimationFrame((now) => {
+        lastFrame = now;
+        requestAnimationFrame(loop);
+      });
+    })();
+  </script>
+</body>
+</html>
