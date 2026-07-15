@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ムーンベールフェリー</title>
+  <meta name="description" content="巡回するフェリー位置に合わせてタップし、月幕で青い灯粒だけをすくい上げる60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #081423;
+      --bg-bottom: #020814;
+      --panel: rgba(8, 18, 34, 0.84);
+      --line: rgba(202, 231, 255, 0.14);
+      --text: #f1f7ff;
+      --ice: #9ed9ff;
+      --mint: #9ff8d1;
+      --gold: #ffe39a;
+      --rose: #ff8787;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(158, 217, 255, 0.16), transparent 26%),
+        radial-gradient(circle at 78% 12%, rgba(255, 227, 154, 0.16), transparent 24%),
+        linear-gradient(180deg, #112540 0%, var(--bg-top) 42%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 40px var(--shadow);
+      position: relative;
+      z-index: 2;
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(241, 247, 255, 0.64);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.92rem;
+      line-height: 1.55;
+      color: rgba(241, 247, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(241, 247, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.88rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #dockValue {
+      color: var(--gold);
+    }
+
+    #comboValue.hot {
+      color: var(--mint);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.07), transparent 28%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        linear-gradient(180deg, rgba(8, 20, 35, 0.95), rgba(2, 8, 20, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(2, 8, 20, 0.18), rgba(2, 8, 20, 0.88));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(8, 18, 34, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(241, 247, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(2, 8, 20, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(241, 247, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: #0b1630;
+      background: linear-gradient(135deg, var(--gold), var(--ice));
+      box-shadow: 0 12px 24px rgba(158, 217, 255, 0.22);
+    }
+
+    button.secondary,
+    .back-link {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:active,
+    .back-link:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    @media (max-width: 380px) {
+      .shell {
+        padding-inline: 10px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .sub {
+        font-size: 0.86rem;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Moon Ferry Timing Game</div>
+      <h1>ムーンベールフェリー</h1>
+      <p class="sub">巡回するフェリーの真下へ月幕を落とし、青い灯粒だけをまとめてすくう。赤い灰は通すな。</p>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat"><div class="label">Score</div><div class="value" id="scoreValue">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="timeValue">60.0</div></div>
+      <div class="stat"><div class="label">High</div><div class="value" id="highValue">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="comboValue">x0</div></div>
+      <div class="stat"><div class="label">Dock</div><div class="value" id="dockValue">1</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="402" height="540" aria-label="game area"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">青だけをすくえ</h2>
+          <p id="overlayText">フェリーは自動で4つの桟橋を巡回。タップで今いる位置に月幕を落とし、青い灯粒を拾って赤い灰粒を避ける60秒。</p>
+        </div>
+      </div>
+      <div class="tap-note">タップで月幕を展開</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" class="secondary" type="button">リトライ</button>
+      <a class="back-link" href="../../">作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame_highscore_moon_veil_ferry";
+      const PLAY_TIME = 60;
+      const VEIL_DURATION = 0.24;
+      const TAP_COOLDOWN = 0.16;
+      const MAX_PARTICLES = 28;
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const highValue = document.getElementById("highValue");
+      const comboValue = document.getElementById("comboValue");
+      const dockValue = document.getElementById("dockValue");
+
+      let highScore = Number(localStorage.getItem(STORAGE_KEY) || 0);
+      let running = false;
+      let score = 0;
+      let combo = 0;
+      let timeLeft = PLAY_TIME;
+      let ferryPos = 0;
+      let ferryDir = 1;
+      let ferryX = 0;
+      let veilTimer = 0;
+      let cooldown = 0;
+      let spawnTimer = 0;
+      let particles = [];
+      let flashes = [];
+      let lastFrame = performance.now();
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(rect.width * ratio);
+        canvas.height = Math.round(rect.height * ratio);
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function dockXs() {
+        const w = arena.clientWidth;
+        const margin = w * 0.14;
+        const span = w - margin * 2;
+        return [0, 1, 2, 3].map((index) => margin + span * (index / 3));
+      }
+
+      function getFerryY() {
+        return arena.clientHeight * 0.23;
+      }
+
+      function phaseSettings() {
+        if (timeLeft > 45) {
+          return { spawn: 0.66, speed: 108, ferry: 1.42, redChance: 0.28 };
+        }
+        if (timeLeft > 15) {
+          return { spawn: 0.49, speed: 136, ferry: 1.86, redChance: 0.36 };
+        }
+        return { spawn: 0.37, speed: 166, ferry: 2.22, redChance: 0.46 };
+      }
+
+      function resetState() {
+        running = false;
+        score = 0;
+        combo = 0;
+        timeLeft = PLAY_TIME;
+        ferryPos = 0;
+        ferryDir = 1;
+        veilTimer = 0;
+        cooldown = 0;
+        spawnTimer = 0.2;
+        particles = [];
+        flashes = [];
+        updateHud();
+        showOverlay("青だけをすくえ", "フェリーは自動で4つの桟橋を巡回。タップで今いる位置に月幕を落とし、青い灯粒を拾って赤い灰粒を避ける60秒。");
+      }
+
+      function startGame() {
+        score = 0;
+        combo = 0;
+        timeLeft = PLAY_TIME;
+        ferryPos = 0;
+        ferryDir = 1;
+        veilTimer = 0;
+        cooldown = 0;
+        spawnTimer = 0.15;
+        particles = [];
+        flashes = [];
+        running = true;
+        hideOverlay();
+        updateHud();
+      }
+
+      function endGame() {
+        running = false;
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem(STORAGE_KEY, String(highScore));
+        }
+        updateHud();
+        showOverlay("航海終了", "スコア " + score + " 点。ベストは " + highScore + " 点。タイミングを欲張りすぎず、青が重なる瞬間だけ幕を落とすと伸びる。");
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function updateHud() {
+        const dockIndex = Math.round(ferryPos) + 1;
+        scoreValue.textContent = String(score);
+        timeValue.textContent = timeLeft.toFixed(1);
+        highValue.textContent = String(highScore);
+        comboValue.textContent = "x" + combo;
+        dockValue.textContent = String(Math.max(1, Math.min(4, dockIndex)));
+        comboValue.classList.toggle("hot", combo >= 5);
+      }
+
+      function spawnParticle() {
+        if (particles.length >= MAX_PARTICLES) {
+          return;
+        }
+        const settings = phaseSettings();
+        const docks = dockXs();
+        const index = Math.floor(Math.random() * docks.length);
+        const laneX = docks[index];
+        const laneWidth = arena.clientWidth * 0.09;
+        const type = Math.random() < settings.redChance ? "red" : "blue";
+        particles.push({
+          x: laneX + (Math.random() - 0.5) * laneWidth,
+          y: arena.clientHeight + 18,
+          radius: type === "blue" ? 8 + Math.random() * 4 : 7 + Math.random() * 4,
+          speed: settings.speed + Math.random() * 28,
+          drift: (Math.random() - 0.5) * 14,
+          wobble: Math.random() * Math.PI * 2,
+          type,
+          hit: false
+        });
+      }
+
+      function deployVeil() {
+        if (!running || cooldown > 0) {
+          return;
+        }
+        veilTimer = VEIL_DURATION;
+        cooldown = TAP_COOLDOWN;
+        flashes.push({
+          x: ferryX,
+          y: getFerryY(),
+          t: 0,
+          good: true
+        });
+      }
+
+      function addFlash(x, y, good) {
+        flashes.push({ x, y, t: 0, good });
+      }
+
+      function update(dt) {
+        const settings = phaseSettings();
+        if (running) {
+          timeLeft = Math.max(0, timeLeft - dt);
+          ferryPos += ferryDir * settings.ferry * dt;
+          if (ferryPos >= 3) {
+            ferryPos = 3;
+            ferryDir = -1;
+          } else if (ferryPos <= 0) {
+            ferryPos = 0;
+            ferryDir = 1;
+          }
+
+          veilTimer = Math.max(0, veilTimer - dt);
+          cooldown = Math.max(0, cooldown - dt);
+          spawnTimer -= dt;
+          while (spawnTimer <= 0) {
+            spawnTimer += settings.spawn;
+            spawnParticle();
+          }
+        }
+
+        const docks = dockXs();
+        const leftIndex = Math.floor(ferryPos);
+        const blend = ferryPos - leftIndex;
+        const leftX = docks[leftIndex];
+        const rightX = docks[Math.min(docks.length - 1, leftIndex + 1)];
+        ferryX = leftX + (rightX - leftX) * blend;
+
+        const ferryY = getFerryY();
+        const veilWidth = arena.clientWidth * 0.12;
+        const veilTop = ferryY + 26;
+        const veilBottom = arena.clientHeight - 38;
+
+        particles = particles.filter((particle) => {
+          particle.y -= particle.speed * dt;
+          particle.wobble += dt * 3.2;
+          particle.x += Math.sin(particle.wobble) * particle.drift * dt;
+
+          if (running && veilTimer > 0 && !particle.hit) {
+            const withinX = Math.abs(particle.x - ferryX) < veilWidth * 0.5;
+            const withinY = particle.y > veilTop && particle.y < veilBottom;
+            if (withinX && withinY) {
+              particle.hit = true;
+              if (particle.type === "blue") {
+                combo += 1;
+                score += 10 + Math.min(18, combo * 2);
+                addFlash(particle.x, particle.y, true);
+              } else {
+                combo = 0;
+                score = Math.max(0, score - 14);
+                addFlash(particle.x, particle.y, false);
+              }
+              return false;
+            }
+          }
+
+          return particle.y + particle.radius > -20;
+        });
+
+        flashes = flashes.filter((flash) => {
+          flash.t += dt;
+          return flash.t < 0.32;
+        });
+
+        if (running && timeLeft <= 0) {
+          endGame();
+        }
+        updateHud();
+      }
+
+      function drawBackground(width, height) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, "rgba(18, 41, 74, 0.98)");
+        gradient.addColorStop(1, "rgba(2, 8, 20, 1)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 18; i += 1) {
+          const x = (width * ((i * 53) % 97)) / 96;
+          const y = ((i * 71) % 110) / 110 * height * 0.62;
+          const r = 1 + (i % 3);
+          ctx.fillStyle = i % 4 === 0 ? "rgba(255, 227, 154, 0.35)" : "rgba(158, 217, 255, 0.26)";
+          ctx.beginPath();
+          ctx.arc(x, y, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function drawScene() {
+        const width = arena.clientWidth;
+        const height = arena.clientHeight;
+        ctx.clearRect(0, 0, width, height);
+
+        drawBackground(width, height);
+
+        const docks = dockXs();
+        const ferryY = getFerryY();
+
+        ctx.strokeStyle = "rgba(241, 247, 255, 0.08)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(docks[0], ferryY);
+        ctx.lineTo(docks[docks.length - 1], ferryY);
+        ctx.stroke();
+
+        docks.forEach((x, index) => {
+          ctx.fillStyle = index + 1 === Math.round(ferryPos) + 1 ? "rgba(255, 227, 154, 0.3)" : "rgba(255, 255, 255, 0.08)";
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(x - 22, ferryY - 18, 44, 36, 14);
+          ctx.fill();
+          ctx.stroke();
+        });
+
+        if (veilTimer > 0) {
+          const alpha = veilTimer / VEIL_DURATION;
+          const veilGradient = ctx.createLinearGradient(ferryX, ferryY + 26, ferryX, height - 34);
+          veilGradient.addColorStop(0, "rgba(255, 227, 154, " + (0.44 * alpha) + ")");
+          veilGradient.addColorStop(1, "rgba(158, 217, 255, " + (0.14 * alpha) + ")");
+          ctx.fillStyle = veilGradient;
+          ctx.fillRect(ferryX - width * 0.06, ferryY + 20, width * 0.12, height - ferryY - 54);
+        }
+
+        particles.forEach((particle) => {
+          const color = particle.type === "blue" ? "#9ed9ff" : "#ff8787";
+          const glow = particle.type === "blue" ? "rgba(158, 217, 255, 0.22)" : "rgba(255, 135, 135, 0.2)";
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.radius + 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        flashes.forEach((flash) => {
+          const alpha = 1 - flash.t / 0.32;
+          ctx.strokeStyle = flash.good ? "rgba(159, 248, 209, " + alpha + ")" : "rgba(255, 135, 135, " + alpha + ")";
+          ctx.lineWidth = 2 + alpha * 6;
+          ctx.beginPath();
+          ctx.arc(flash.x, flash.y, 10 + flash.t * 46, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+
+        ctx.save();
+        ctx.translate(ferryX, ferryY);
+        ctx.fillStyle = "rgba(255, 227, 154, 0.22)";
+        ctx.beginPath();
+        ctx.ellipse(0, 10, 40, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const hull = ctx.createLinearGradient(-30, -18, 30, 18);
+        hull.addColorStop(0, "#f6e7ad");
+        hull.addColorStop(1, "#97c7ff");
+        ctx.fillStyle = hull;
+        ctx.beginPath();
+        ctx.moveTo(-28, -6);
+        ctx.quadraticCurveTo(0, -24, 28, -6);
+        ctx.lineTo(18, 14);
+        ctx.quadraticCurveTo(0, 20, -18, 14);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+        ctx.beginPath();
+        ctx.arc(0, -7, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.fillRect(0, height - 32, width, 32);
+
+        ctx.fillStyle = "rgba(241, 247, 255, 0.62)";
+        ctx.font = "12px Trebuchet MS, sans-serif";
+        ctx.fillText("青をすくう / 赤は避ける", 14, height - 12);
+      }
+
+      function frame(now) {
+        const dt = Math.min(0.033, (now - lastFrame) / 1000);
+        lastFrame = now;
+        update(dt);
+        drawScene();
+        requestAnimationFrame(frame);
+      }
+
+      function onArenaPointerDown(event) {
+        if (event.target.closest("button, a")) {
+          return;
+        }
+        if (running) {
+          deployVeil();
+        }
+      }
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      arena.addEventListener("pointerdown", onArenaPointerDown);
+      window.addEventListener("resize", resize);
+
+      highValue.textContent = String(highScore);
+      resetState();
+      resize();
+      requestAnimationFrame((now) => {
+        lastFrame = now;
+        requestAnimationFrame(frame);
+      });
+    })();
+  </script>
+</body>
+</html>
