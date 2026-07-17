@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ウェーブスタンプ</title>
+  <meta name="description" content="上下に往復するスキャン帯へタップを合わせ、横一閃のスタンプで青い欠片だけを刻む60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #08111f;
+      --bg-bottom: #02060d;
+      --panel: rgba(10, 20, 34, 0.84);
+      --line: rgba(197, 236, 255, 0.14);
+      --text: #edf7ff;
+      --cyan: #8ce7ff;
+      --mint: #a6ffda;
+      --amber: #ffd58f;
+      --rose: #ff8399;
+      --ink: #07101d;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(140, 231, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 82% 16%, rgba(255, 131, 153, 0.12), transparent 22%),
+        linear-gradient(180deg, #10203d 0%, var(--bg-top) 42%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(237, 247, 255, 0.6);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(237, 247, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(237, 247, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.88rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #laneValue {
+      color: var(--amber);
+    }
+
+    #comboValue.hot {
+      color: var(--mint);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 7%, rgba(255, 255, 255, 0.09), transparent 20%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+        linear-gradient(180deg, rgba(7, 14, 25, 0.96), rgba(2, 6, 13, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(2, 6, 13, 0.18), rgba(2, 6, 13, 0.9));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(10, 20, 34, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(237, 247, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(2, 6, 13, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(237, 247, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--amber), var(--cyan));
+      box-shadow: 0 12px 24px rgba(140, 231, 255, 0.22);
+    }
+
+    button.secondary,
+    .back-link {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:active,
+    .back-link:active {
+      transform: translateY(1px) scale(0.99);
+    }
+
+    @media (max-width: 380px) {
+      .shell {
+        padding-inline: 10px;
+      }
+
+      .panel {
+        padding-inline: 14px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.8rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory / 2026-07-17</div>
+      <h1>ウェーブスタンプ</h1>
+      <div class="sub">上下へ往復するスキャン帯に合わせてタップ。青い欠片は刻んで、赤いノイズは横一閃に巻き込まない。</div>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat"><div class="label">Score</div><div class="value" id="scoreValue">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="timeValue">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="bestValue">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="comboValue">x1</div></div>
+      <div class="stat"><div class="label">Lane</div><div class="value" id="laneValue">MID</div></div>
+    </section>
+
+    <section class="arena">
+      <canvas id="game" width="390" height="620" aria-label="game area"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">水平に刻め</h2>
+          <p id="overlayText">スキャン帯が上下に往復します。帯の高さへタップを合わせ、青い欠片だけをまとめて刻んでください。赤を巻き込むと減点です。</p>
+        </div>
+      </div>
+      <div class="tap-note">画面タップで水平スタンプ</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" type="button" class="secondary">リトライ</button>
+      <a class="back-link" href="../../">作品集へ戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "dailygame_wave_stamp_best";
+      const PLAY_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const laneValue = document.getElementById("laneValue");
+
+      const state = {
+        running: false,
+        score: 0,
+        combo: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        timeLeft: PLAY_TIME,
+        particles: [],
+        bursts: [],
+        scanPhase: 0,
+        scanY: canvas.height * 0.5,
+        slashTimer: 0,
+        spawnTimer: 0,
+        lastTime: 0
+      };
+
+      bestValue.textContent = String(state.best);
+
+      function resetState() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = PLAY_TIME;
+        state.particles = [];
+        state.bursts = [];
+        state.scanPhase = 0;
+        state.scanY = canvas.height * 0.5;
+        state.slashTimer = 0;
+        state.spawnTimer = 0;
+        updateHud();
+      }
+
+      function getDifficulty() {
+        const elapsed = PLAY_TIME - state.timeLeft;
+        if (elapsed < 30) {
+          return { speed: 0.75, spawn: 0.55, redRate: 0.2, band: 34 };
+        }
+        if (elapsed < 45) {
+          return { speed: 1.05, spawn: 0.42, redRate: 0.29, band: 30 };
+        }
+        return { speed: 1.32, spawn: 0.33, redRate: 0.38, band: 25 };
+      }
+
+      function laneName(y) {
+        if (y < canvas.height * 0.33) {
+          return "HIGH";
+        }
+        if (y < canvas.height * 0.66) {
+          return "MID";
+        }
+        return "LOW";
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(Math.max(0, state.score));
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + Math.max(1, state.combo);
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        laneValue.textContent = laneName(state.scanY);
+      }
+
+      function addBurst(x, y, color, text) {
+        state.bursts.push({
+          x,
+          y,
+          color,
+          text,
+          life: 0.8
+        });
+      }
+
+      function spawnParticle() {
+        const difficulty = getDifficulty();
+        const fromLeft = Math.random() < 0.5;
+        const isRed = Math.random() < difficulty.redRate;
+        const radius = 9 + Math.random() * 7;
+        const y = 70 + Math.random() * (canvas.height - 140);
+        const speed = (55 + Math.random() * 60) * difficulty.speed;
+        state.particles.push({
+          x: fromLeft ? -radius - 12 : canvas.width + radius + 12,
+          y,
+          baseY: y,
+          radius,
+          vx: fromLeft ? speed : -speed,
+          bob: Math.random() * Math.PI * 2,
+          bobSpeed: 1.4 + Math.random() * 1.6,
+          bobRange: 10 + Math.random() * 14,
+          type: isRed ? "red" : "blue",
+          hit: false
+        });
+      }
+
+      function startGame() {
+        resetState();
+        state.running = true;
+        state.lastTime = performance.now();
+        overlay.classList.add("hidden");
+        overlayTitle.textContent = "水平に刻め";
+        overlayText.textContent = "青だけをまとめ撃ち。赤を巻き込むと減点です。";
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        overlayTitle.textContent = state.score >= state.best ? "自己記録タイ" : "60秒終了";
+        overlayText.textContent = "スコア " + Math.max(0, state.score) + " / BEST " + state.best + "。リトライで帯の高さを刻み直せます。";
+        overlay.classList.remove("hidden");
+      }
+
+      function fireStamp() {
+        if (!state.running) {
+          return;
+        }
+        const difficulty = getDifficulty();
+        const band = difficulty.band;
+        let hitBlue = 0;
+        let hitRed = 0;
+        let hitX = canvas.width * 0.5;
+        for (const particle of state.particles) {
+          if (particle.hit) {
+            continue;
+          }
+          if (Math.abs(particle.y - state.scanY) <= band) {
+            particle.hit = true;
+            hitX = particle.x;
+            if (particle.type === "blue") {
+              hitBlue += 1;
+            } else {
+              hitRed += 1;
+            }
+          }
+        }
+
+        state.slashTimer = 0.18;
+        if (hitBlue > 0) {
+          const bonus = Math.max(0, state.combo - 1);
+          const gain = hitBlue + bonus;
+          state.combo += hitBlue;
+          state.score += gain;
+          addBurst(hitX, state.scanY - 10, "#a6ffda", "+" + gain);
+        } else if (hitRed === 0) {
+          state.combo = 0;
+          addBurst(canvas.width * 0.5, state.scanY - 10, "#ffd58f", "MISS");
+        }
+
+        if (hitRed > 0) {
+          state.score -= hitRed * 3;
+          state.combo = 0;
+          addBurst(hitX, state.scanY + 18, "#ff8399", "-" + (hitRed * 3));
+        }
+
+        state.score = Math.max(0, state.score);
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, "#122541");
+        gradient.addColorStop(0.45, "#0a1627");
+        gradient.addColorStop(1, "#030711");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 11; i += 1) {
+          const y = 56 + i * 48;
+          ctx.strokeStyle = "rgba(255,255,255,0.035)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(22, y);
+          ctx.lineTo(canvas.width - 22, y);
+          ctx.stroke();
+        }
+      }
+
+      function drawScanner() {
+        const difficulty = getDifficulty();
+        const band = difficulty.band;
+        const glow = 0.45 + Math.sin(state.scanPhase * 3.6) * 0.1;
+        const top = state.scanY - band;
+        const height = band * 2;
+        const fill = ctx.createLinearGradient(0, top, 0, top + height);
+        fill.addColorStop(0, "rgba(140,231,255,0)");
+        fill.addColorStop(0.5, "rgba(140,231,255," + glow.toFixed(3) + ")");
+        fill.addColorStop(1, "rgba(140,231,255,0)");
+        ctx.fillStyle = fill;
+        ctx.fillRect(16, top, canvas.width - 32, height);
+
+        ctx.strokeStyle = "rgba(255,213,143,0.9)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(26, state.scanY);
+        ctx.lineTo(canvas.width - 26, state.scanY);
+        ctx.stroke();
+
+        if (state.slashTimer > 0) {
+          const alpha = state.slashTimer / 0.18;
+          ctx.fillStyle = "rgba(255,245,220," + (0.22 * alpha).toFixed(3) + ")";
+          ctx.fillRect(18, state.scanY - band, canvas.width - 36, band * 2);
+          ctx.strokeStyle = "rgba(255,255,255," + (0.9 * alpha).toFixed(3) + ")";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(22, state.scanY);
+          ctx.lineTo(canvas.width - 22, state.scanY);
+          ctx.stroke();
+        }
+      }
+
+      function drawParticles(dt) {
+        state.particles = state.particles.filter((particle) => {
+          if (particle.hit) {
+            addBurst(particle.x, particle.y, particle.type === "blue" ? "#8ce7ff" : "#ff8399", "");
+            return false;
+          }
+
+          particle.x += particle.vx * dt;
+          particle.bob += dt * particle.bobSpeed;
+          particle.y = particle.baseY + Math.sin(particle.bob) * particle.bobRange;
+
+          if (particle.x < -40 || particle.x > canvas.width + 40) {
+            return false;
+          }
+
+          const blue = particle.type === "blue";
+          const glow = blue ? "rgba(140,231,255,0.24)" : "rgba(255,131,153,0.24)";
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.radius + 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = blue ? "#8ce7ff" : "#ff8399";
+          ctx.beginPath();
+          ctx.moveTo(particle.x, particle.y - particle.radius);
+          ctx.lineTo(particle.x + particle.radius * 0.7, particle.y);
+          ctx.lineTo(particle.x, particle.y + particle.radius);
+          ctx.lineTo(particle.x - particle.radius * 0.7, particle.y);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = blue ? "rgba(237,247,255,0.8)" : "rgba(255,225,230,0.8)";
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+          return true;
+        });
+      }
+
+      function drawBursts(dt) {
+        state.bursts = state.bursts.filter((burst) => {
+          burst.life -= dt;
+          burst.y -= dt * 28;
+          if (burst.life <= 0) {
+            return false;
+          }
+
+          const alpha = Math.min(1, burst.life / 0.8);
+          if (burst.text) {
+            ctx.fillStyle = burst.color.replace(")", "," + alpha.toFixed(3) + ")");
+          }
+          const rgba = burst.color.startsWith("#") ? hexToRgba(burst.color, alpha) : burst.color;
+          ctx.strokeStyle = rgba;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(burst.x, burst.y, (1 - alpha) * 18 + 8, 0, Math.PI * 2);
+          ctx.stroke();
+
+          if (burst.text) {
+            ctx.fillStyle = rgba;
+            ctx.font = "bold 18px Trebuchet MS";
+            ctx.textAlign = "center";
+            ctx.fillText(burst.text, burst.x, burst.y - 10);
+          }
+          return true;
+        });
+      }
+
+      function hexToRgba(hex, alpha) {
+        const value = hex.replace("#", "");
+        const num = Number.parseInt(value, 16);
+        const r = (num >> 16) & 255;
+        const g = (num >> 8) & 255;
+        const b = num & 255;
+        return "rgba(" + r + "," + g + "," + b + "," + alpha.toFixed(3) + ")";
+      }
+
+      function render(dt) {
+        drawBackground();
+        if (state.running) {
+          state.spawnTimer -= dt;
+          const difficulty = getDifficulty();
+          while (state.spawnTimer <= 0) {
+            spawnParticle();
+            state.spawnTimer += difficulty.spawn;
+          }
+
+          state.timeLeft = Math.max(0, state.timeLeft - dt);
+          state.scanPhase += dt * difficulty.speed;
+          state.scanY = 72 + (canvas.height - 144) * (0.5 + Math.sin(state.scanPhase) * 0.5);
+          state.slashTimer = Math.max(0, state.slashTimer - dt);
+          if (state.timeLeft <= 0) {
+            endGame();
+          }
+        }
+
+        drawScanner();
+        drawParticles(dt);
+        drawBursts(dt);
+        updateHud();
+      }
+
+      function frame(now) {
+        const dt = Math.min(0.033, (now - state.lastTime) / 1000 || 0.016);
+        state.lastTime = now;
+        render(dt);
+        requestAnimationFrame(frame);
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        fireStamp();
+      });
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      resetState();
+      updateHud();
+      requestAnimationFrame((now) => {
+        state.lastTime = now;
+        requestAnimationFrame(frame);
+      });
+    })();
+  </script>
+</body>
+</html>
