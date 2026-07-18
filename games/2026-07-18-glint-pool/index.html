@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>グリントプール</title>
+  <meta name="description" content="タップした地点に一瞬の吸引プールを開き、青いグリントだけをまとめて吸い込む60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #09111f;
+      --bg-bottom: #010409;
+      --panel: rgba(9, 19, 34, 0.84);
+      --line: rgba(181, 232, 255, 0.14);
+      --text: #ecf8ff;
+      --cyan: #7fe7ff;
+      --mint: #a9ffd4;
+      --amber: #ffd991;
+      --rose: #ff7f9c;
+      --ink: #07101a;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 14%, rgba(127, 231, 255, 0.18), transparent 24%),
+        radial-gradient(circle at 84% 16%, rgba(255, 127, 156, 0.16), transparent 24%),
+        linear-gradient(180deg, #102340 0%, var(--bg-top) 46%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(236, 248, 255, 0.62);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(236, 248, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(236, 248, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.88rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #chargeValue.ready {
+      color: var(--mint);
+    }
+
+    #comboValue.hot {
+      color: var(--amber);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.09), transparent 20%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+        linear-gradient(180deg, rgba(6, 12, 21, 0.94), rgba(1, 4, 9, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(1, 4, 9, 0.22), rgba(1, 4, 9, 0.9));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(9, 19, 34, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(236, 248, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(1, 4, 9, 0.74);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(236, 248, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--amber), var(--cyan));
+      box-shadow: 0 12px 24px rgba(127, 231, 255, 0.22);
+    }
+
+    button.secondary,
+    .back-link {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:active,
+    .back-link:active {
+      transform: scale(0.98);
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>グリントプール</h1>
+      <div class="sub">タップした水面に一瞬の吸引プールを開き、青いグリントだけをまとめて吸い上げろ。</div>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+      <div class="stat">
+        <div class="label">Charge</div>
+        <div class="value ready" id="chargeValue">100%</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="gameCanvas" aria-label="game field"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">Tap To Cast</h2>
+          <p id="overlayText">青い群れの中心へタップして吸引プールを置く。赤を巻き込むと減点。60秒でハイスコアを狙え。</p>
+        </div>
+      </div>
+      <div class="tap-note">FIELD をタップしてプールを展開</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button class="secondary" id="retryButton" type="button">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "daily-game-glint-pool-best";
+      const PLAY_TIME = 60;
+      const COOLDOWN = 0.36;
+      const BASE_RADIUS = 58;
+
+      const arena = document.getElementById("arena");
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const chargeValue = document.getElementById("chargeValue");
+
+      const state = {
+        width: 0,
+        height: 0,
+        dpr: Math.min(window.devicePixelRatio || 1, 2),
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 1,
+        timeLeft: PLAY_TIME,
+        elapsed: 0,
+        cooldown: 0,
+        spawnClock: 0,
+        particles: [],
+        ripples: [],
+        pulse: null,
+        lastFrame: 0,
+        pointer: null
+      };
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        state.width = rect.width;
+        state.height = rect.height;
+        canvas.width = Math.round(rect.width * state.dpr);
+        canvas.height = Math.round(rect.height * state.dpr);
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function stageConfig() {
+        if (state.elapsed < 30) {
+          return { interval: 0.72, speed: 52, redRate: 0.24, drift: 11, max: 14 };
+        }
+        if (state.elapsed < 45) {
+          return { interval: 0.52, speed: 70, redRate: 0.31, drift: 18, max: 18 };
+        }
+        return { interval: 0.38, speed: 90, redRate: 0.38, drift: 24, max: 22 };
+      }
+
+      function resetGame() {
+        state.score = 0;
+        state.combo = 1;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.cooldown = 0;
+        state.spawnClock = 0;
+        state.particles = [];
+        state.ripples = [];
+        state.pulse = null;
+        state.pointer = null;
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + state.combo;
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        const charge = state.cooldown <= 0 ? 100 : Math.round((1 - state.cooldown / COOLDOWN) * 100);
+        chargeValue.textContent = charge + "%";
+        chargeValue.classList.toggle("ready", state.cooldown <= 0);
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function spawnParticle() {
+        const config = stageConfig();
+        if (state.particles.length >= config.max) {
+          return;
+        }
+        const side = Math.floor(Math.random() * 4);
+        const margin = 14;
+        let x = 0;
+        let y = 0;
+        if (side === 0) {
+          x = -margin;
+          y = Math.random() * state.height;
+        } else if (side === 1) {
+          x = state.width + margin;
+          y = Math.random() * state.height;
+        } else if (side === 2) {
+          x = Math.random() * state.width;
+          y = -margin;
+        } else {
+          x = Math.random() * state.width;
+          y = state.height + margin;
+        }
+
+        const tx = state.width * (0.18 + Math.random() * 0.64);
+        const ty = state.height * (0.18 + Math.random() * 0.64);
+        const angle = Math.atan2(ty - y, tx - x);
+        const speed = config.speed + Math.random() * 22;
+        const tangent = angle + Math.PI / 2;
+        const drift = (Math.random() * 2 - 1) * config.drift;
+        const type = Math.random() < config.redRate ? "red" : "blue";
+
+        state.particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed + Math.cos(tangent) * drift,
+          vy: Math.sin(angle) * speed + Math.sin(tangent) * drift,
+          r: type === "blue" ? 6 + Math.random() * 3 : 7 + Math.random() * 3,
+          type,
+          wobble: Math.random() * Math.PI * 2,
+          wobbleRate: 1.4 + Math.random() * 2.2,
+          dead: false
+        });
+      }
+
+      function createPulse(x, y) {
+        state.pulse = {
+          x,
+          y,
+          age: 0,
+          life: 0.28,
+          radius: BASE_RADIUS
+        };
+        state.cooldown = COOLDOWN;
+        state.ripples.push({ x, y, age: 0, life: 0.6 });
+      }
+
+      function applyPulseHits(radius) {
+        if (!state.pulse) {
+          return;
+        }
+        let gained = 0;
+        let penalty = 0;
+        for (const particle of state.particles) {
+          if (particle.dead) {
+            continue;
+          }
+          const dx = particle.x - state.pulse.x;
+          const dy = particle.y - state.pulse.y;
+          if ((dx * dx) + (dy * dy) <= radius * radius) {
+            particle.dead = true;
+            if (particle.type === "blue") {
+              gained += 1;
+            } else {
+              penalty += 2;
+            }
+          }
+        }
+        if (gained > 0) {
+          state.score += gained * state.combo;
+          state.combo = Math.min(9, state.combo + gained);
+        }
+        if (penalty > 0) {
+          state.score = Math.max(0, state.score - penalty);
+          state.combo = 1;
+        }
+        if (gained === 0 && penalty === 0) {
+          state.combo = 1;
+        }
+      }
+
+      function startGame() {
+        resetGame();
+        for (let i = 0; i < 8; i += 1) {
+          spawnParticle();
+        }
+        state.running = true;
+        state.lastFrame = performance.now();
+        hideOverlay();
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        showOverlay("Time Up", "スコア " + state.score + " 点。青い密集へ早めに置き、赤が混じる群れは見送ると伸ばしやすい。");
+      }
+
+      function handleFieldTap(event) {
+        if (!state.running || state.cooldown > 0) {
+          return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const x = clamp(event.clientX - rect.left, 0, rect.width);
+        const y = clamp(event.clientY - rect.top, 0, rect.height);
+        state.pointer = { x, y, age: 0 };
+        createPulse(x, y);
+      }
+
+      function update(dt) {
+        if (!state.running) {
+          updateVisuals(dt);
+          return;
+        }
+
+        state.elapsed += dt;
+        state.timeLeft = Math.max(0, PLAY_TIME - state.elapsed);
+        state.cooldown = Math.max(0, state.cooldown - dt);
+
+        const config = stageConfig();
+        state.spawnClock += dt;
+        while (state.spawnClock >= config.interval) {
+          state.spawnClock -= config.interval;
+          spawnParticle();
+        }
+
+        for (const particle of state.particles) {
+          particle.wobble += dt * particle.wobbleRate;
+          const wobbleForce = Math.sin(particle.wobble) * config.drift * 0.18;
+          particle.x += (particle.vx + wobbleForce) * dt;
+          particle.y += (particle.vy + Math.cos(particle.wobble * 0.7) * config.drift * 0.12) * dt;
+
+          if (
+            particle.x < -32 ||
+            particle.x > state.width + 32 ||
+            particle.y < -32 ||
+            particle.y > state.height + 32
+          ) {
+            particle.dead = true;
+          }
+        }
+
+        if (state.pulse) {
+          state.pulse.age += dt;
+          const progress = state.pulse.age / state.pulse.life;
+          const radius = state.pulse.radius * (0.55 + progress * 0.65);
+          applyPulseHits(radius);
+          if (state.pulse.age >= state.pulse.life) {
+            state.pulse = null;
+          }
+        }
+
+        updateVisuals(dt);
+
+        state.particles = state.particles.filter((particle) => !particle.dead);
+        if (state.timeLeft <= 0) {
+          endGame();
+        } else {
+          updateHud();
+        }
+      }
+
+      function updateVisuals(dt) {
+        for (const ripple of state.ripples) {
+          ripple.age += dt;
+        }
+        state.ripples = state.ripples.filter((ripple) => ripple.age < ripple.life);
+
+        if (state.pointer) {
+          state.pointer.age += dt;
+          if (state.pointer.age > 0.24) {
+            state.pointer = null;
+          }
+        }
+      }
+
+      function drawBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
+        gradient.addColorStop(0, "rgba(14, 29, 51, 0.92)");
+        gradient.addColorStop(1, "rgba(2, 6, 12, 0.98)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        ctx.strokeStyle = "rgba(255,255,255,0.04)";
+        ctx.lineWidth = 1;
+        for (let y = 28; y < state.height; y += 28) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(state.width, y);
+          ctx.stroke();
+        }
+      }
+
+      function drawPulse() {
+        if (!state.pulse) {
+          return;
+        }
+        const progress = state.pulse.age / state.pulse.life;
+        const radius = state.pulse.radius * (0.55 + progress * 0.65);
+        const alpha = 0.32 * (1 - progress);
+
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.fillStyle = "rgba(127, 231, 255," + alpha + ")";
+        ctx.beginPath();
+        ctx.arc(state.pulse.x, state.pulse.y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(169, 255, 212," + (0.9 - progress * 0.6) + ")";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(state.pulse.x, state.pulse.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawRipples() {
+        for (const ripple of state.ripples) {
+          const progress = ripple.age / ripple.life;
+          const radius = 12 + progress * 92;
+          ctx.strokeStyle = "rgba(127, 231, 255," + (0.32 * (1 - progress)) + ")";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(ripple.x, ripple.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      function drawParticles() {
+        for (const particle of state.particles) {
+          const glow = particle.type === "blue" ? "127,231,255" : "255,127,156";
+          ctx.fillStyle = "rgba(" + glow + ",0.96)";
+          ctx.shadowColor = "rgba(" + glow + ",0.55)";
+          ctx.shadowBlur = particle.r * 1.8;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          ctx.strokeStyle = particle.type === "blue" ? "rgba(236,248,255,0.42)" : "rgba(255,229,234,0.38)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(particle.x - particle.r * 1.5, particle.y);
+          ctx.lineTo(particle.x + particle.r * 1.5, particle.y);
+          ctx.stroke();
+        }
+      }
+
+      function drawPointer() {
+        if (!state.pointer || state.running) {
+          return;
+        }
+        const alpha = 0.45 * (1 - state.pointer.age / 0.24);
+        ctx.strokeStyle = "rgba(169,255,212," + alpha + ")";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(state.pointer.x, state.pointer.y, 18, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      function drawChargeHalo() {
+        const charge = state.cooldown <= 0 ? 1 : 1 - state.cooldown / COOLDOWN;
+        const haloWidth = 18 + charge * 42;
+        const haloY = state.height - 22;
+        ctx.fillStyle = "rgba(255,255,255,0.05)";
+        ctx.fillRect(22, haloY, state.width - 44, 6);
+        ctx.fillStyle = "rgba(169,255,212,0.8)";
+        ctx.fillRect(22, haloY, (state.width - 44) * charge, 6);
+        ctx.fillStyle = "rgba(236,248,255,0.74)";
+        ctx.fillRect(22 + (state.width - 44) * charge - 2, haloY - 3, 4, 12);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.strokeRect(22, haloY, state.width - 44, 6);
+        ctx.fillStyle = "rgba(236,248,255,0.34)";
+        ctx.fillRect((state.width - haloWidth) / 2, 16, haloWidth, 3);
+      }
+
+      function render() {
+        drawBackground();
+        drawRipples();
+        drawParticles();
+        drawPulse();
+        drawChargeHalo();
+        drawPointer();
+      }
+
+      function frame(now) {
+        if (!state.lastFrame) {
+          state.lastFrame = now;
+        }
+        const dt = Math.min(0.033, (now - state.lastFrame) / 1000);
+        state.lastFrame = now;
+        update(dt);
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      canvas.addEventListener("pointerdown", handleFieldTap);
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      window.addEventListener("resize", resize);
+
+      resize();
+      updateHud();
+      render();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
