@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>タイドラティス</title>
+  <meta name="description" content="タップで中央ラティスの傾きを反転し、青い粒を採集湾へ、赤い粒を廃棄ベントへ流し分ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #13233d;
+      --bg-bottom: #03060b;
+      --panel: rgba(10, 20, 36, 0.84);
+      --line: rgba(175, 230, 255, 0.16);
+      --text: #eef7ff;
+      --cyan: #89e8ff;
+      --mint: #b0ffd7;
+      --gold: #ffd884;
+      --rose: #ff7b91;
+      --ink: #071019;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(137, 232, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 82% 16%, rgba(255, 123, 145, 0.13), transparent 24%),
+        linear-gradient(180deg, #1a3257 0%, var(--bg-top) 42%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(238, 247, 255, 0.62);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.68rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(238, 247, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(238, 247, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.88rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #flowValue.left {
+      color: var(--cyan);
+    }
+
+    #flowValue.right {
+      color: var(--rose);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.09), transparent 18%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+        linear-gradient(180deg, rgba(8, 18, 31, 0.92), rgba(2, 5, 9, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(2, 5, 9, 0.22), rgba(2, 5, 9, 0.9));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(10, 20, 36, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(238, 247, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(2, 5, 9, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(238, 247, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--gold), var(--cyan));
+      box-shadow: 0 12px 24px rgba(137, 232, 255, 0.2);
+    }
+
+    button.secondary,
+    .back-link {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:active,
+    .back-link:active {
+      transform: scale(0.98);
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>タイドラティス</h1>
+      <div class="sub">タップで格子の傾きを返し、青い粒を採集湾へ、赤い粒を廃棄ベントへまとめて流し分けろ。</div>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+      <div class="stat">
+        <div class="label">Flow</div>
+        <div class="value left" id="flowValue">LEFT</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="gameCanvas" aria-label="game field"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">Tap To Tilt</h2>
+          <p id="overlayText">フィールドをタップしてラティスの傾きを反転。青は左の採集湾へ、赤は右のベントへ逃がして60秒を捌け。</p>
+        </div>
+      </div>
+      <div class="tap-note">FIELD をタップして流向反転</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button class="secondary" id="retryButton" type="button">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "daily-game-tide-lattice-best";
+      const PLAY_TIME = 60;
+
+      const arena = document.getElementById("arena");
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const flowValue = document.getElementById("flowValue");
+
+      const state = {
+        width: 0,
+        height: 0,
+        dpr: Math.min(window.devicePixelRatio || 1, 2),
+        running: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 1,
+        timeLeft: PLAY_TIME,
+        elapsed: 0,
+        spawnClock: 0,
+        tilt: -1,
+        particles: [],
+        ripples: [],
+        pops: [],
+        lanes: [],
+        flash: 0,
+        lastTime: 0
+      };
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        state.width = rect.width;
+        state.height = rect.height;
+        canvas.width = Math.round(rect.width * state.dpr);
+        canvas.height = Math.round(rect.height * state.dpr);
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+        state.lanes = [state.width * 0.32, state.width * 0.5, state.width * 0.68];
+      }
+
+      function phase() {
+        if (state.elapsed < 30) {
+          return { interval: 0.58, speed: 124, slide: 156, redChance: 0.26, burst: 0.22 };
+        }
+        if (state.elapsed < 45) {
+          return { interval: 0.46, speed: 148, slide: 182, redChance: 0.36, burst: 0.35 };
+        }
+        return { interval: 0.34, speed: 174, slide: 214, redChance: 0.46, burst: 0.48 };
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 1;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.spawnClock = 0;
+        state.tilt = -1;
+        state.particles = [];
+        state.ripples = [];
+        state.pops = [];
+        state.flash = 0;
+        updateHud();
+        showOverlay("Tap To Tilt", "フィールドをタップしてラティスの傾きを反転。青は左で採集、赤は右へ廃棄。");
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.combo = 1;
+        state.timeLeft = PLAY_TIME;
+        state.elapsed = 0;
+        state.spawnClock = 0;
+        state.tilt = -1;
+        state.particles = [];
+        state.ripples = [];
+        state.pops = [];
+        state.flash = 0;
+        hideOverlay();
+        updateHud();
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function updateHud() {
+        scoreValue.textContent = Math.max(0, Math.round(state.score));
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = Math.round(state.best);
+        comboValue.textContent = "x" + state.combo;
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        flowValue.textContent = state.tilt < 0 ? "LEFT" : "RIGHT";
+        flowValue.classList.toggle("left", state.tilt < 0);
+        flowValue.classList.toggle("right", state.tilt > 0);
+      }
+
+      function spawnParticle(profile, laneX) {
+        const isRed = Math.random() < profile.redChance;
+        const radius = 7 + Math.random() * 4;
+        state.particles.push({
+          x: laneX + (Math.random() - 0.5) * 26,
+          y: -18 - Math.random() * 20,
+          vx: (Math.random() - 0.5) * 10,
+          vy: profile.speed + Math.random() * 28,
+          radius,
+          type: isRed ? "red" : "blue",
+          routed: false,
+          glow: 0
+        });
+      }
+
+      function addPop(x, y, text, tone) {
+        state.pops.push({ x, y, text, tone, life: 0.8 });
+      }
+
+      function updateGame(dt) {
+        if (!state.running) {
+          animateEffects(dt);
+          return;
+        }
+
+        state.elapsed += dt;
+        state.timeLeft = Math.max(0, PLAY_TIME - state.elapsed);
+        const profile = phase();
+
+        state.spawnClock += dt;
+        while (state.spawnClock >= profile.interval) {
+          state.spawnClock -= profile.interval;
+          const lane = state.lanes[(Math.random() * state.lanes.length) | 0];
+          const burst = 1 + (Math.random() < profile.burst ? 1 : 0) + (Math.random() < profile.burst * 0.35 ? 1 : 0);
+          for (let i = 0; i < burst; i += 1) {
+            spawnParticle(profile, lane + (i - (burst - 1) / 2) * 16);
+          }
+        }
+
+        const latticeY = state.height * 0.48;
+        const latticeHalf = state.width * 0.23;
+        const slope = 0.62 * state.tilt;
+
+        for (let i = state.particles.length - 1; i >= 0; i -= 1) {
+          const p = state.particles[i];
+          p.glow = Math.max(0, p.glow - dt * 2.6);
+
+          if (!p.routed) {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+
+            const relX = p.x - state.width * 0.5;
+            const lineY = latticeY + relX * slope;
+            if (Math.abs(relX) < latticeHalf && Math.abs(p.y - lineY) < 12) {
+              p.routed = true;
+              p.vx = state.tilt * (profile.slide + Math.random() * 24);
+              p.vy = 66 + Math.random() * 24;
+              p.glow = 1;
+              state.ripples.push({ x: p.x, y: p.y, life: 0.32, radius: 10, color: p.type === "blue" ? "cyan" : "rose" });
+            }
+          } else {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+          }
+
+          if (p.routed && p.y > state.height - 78) {
+            if (p.x < state.width * 0.36) {
+              if (p.type === "blue") {
+                state.score += 10 + (state.combo - 1) * 2;
+                state.combo += 1;
+                state.flash = Math.min(1, state.flash + 0.16);
+                addPop(p.x, p.y, "+" + (10 + (state.combo - 2) * 2), "good");
+              } else {
+                state.score = Math.max(0, state.score - 12);
+                state.combo = 1;
+                addPop(p.x, p.y, "-12", "bad");
+              }
+              state.particles.splice(i, 1);
+              continue;
+            }
+
+            if (p.x > state.width * 0.64) {
+              if (p.type === "red") {
+                state.score += 2;
+                addPop(p.x, p.y, "+2", "safe");
+              } else {
+                state.combo = 1;
+                addPop(p.x, p.y, "MISS", "miss");
+              }
+              state.particles.splice(i, 1);
+              continue;
+            }
+          }
+
+          if (p.y > state.height + 30 || p.x < -40 || p.x > state.width + 40) {
+            if (p.type === "blue") {
+              state.combo = 1;
+            }
+            state.particles.splice(i, 1);
+          }
+        }
+
+        animateEffects(dt);
+
+        if (state.timeLeft <= 0) {
+          endGame();
+        } else {
+          updateHud();
+        }
+      }
+
+      function animateEffects(dt) {
+        state.flash = Math.max(0, state.flash - dt * 0.9);
+
+        for (let i = state.ripples.length - 1; i >= 0; i -= 1) {
+          const ripple = state.ripples[i];
+          ripple.life -= dt;
+          ripple.radius += dt * 74;
+          if (ripple.life <= 0) {
+            state.ripples.splice(i, 1);
+          }
+        }
+
+        for (let i = state.pops.length - 1; i >= 0; i -= 1) {
+          const pop = state.pops[i];
+          pop.life -= dt;
+          pop.y -= dt * 24;
+          if (pop.life <= 0) {
+            state.pops.splice(i, 1);
+          }
+        }
+      }
+
+      function endGame() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = Math.round(state.score);
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        showOverlay("Run Complete", "スコア " + Math.round(state.score) + "。青を左、赤を右へ流すテンポを詰めてベスト更新を狙え。");
+      }
+
+      function flipTilt() {
+        state.tilt *= -1;
+        state.ripples.push({
+          x: state.width * 0.5,
+          y: state.height * 0.48,
+          life: 0.26,
+          radius: 18,
+          color: state.tilt < 0 ? "cyan" : "rose"
+        });
+        updateHud();
+      }
+
+      function drawScene() {
+        ctx.clearRect(0, 0, state.width, state.height);
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, state.height);
+        gradient.addColorStop(0, "rgba(150, 220, 255, 0.12)");
+        gradient.addColorStop(0.42, "rgba(20, 38, 62, 0.22)");
+        gradient.addColorStop(1, "rgba(2, 5, 9, 0)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        drawLanes();
+        drawPits();
+        drawLattice();
+        drawParticles();
+        drawEffects();
+      }
+
+      function drawLanes() {
+        ctx.save();
+        ctx.setLineDash([5, 12]);
+        for (const x of state.lanes) {
+          ctx.strokeStyle = "rgba(255,255,255,0.08)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, state.height * 0.4);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawPits() {
+        ctx.save();
+
+        ctx.fillStyle = "rgba(137, 232, 255, 0.18)";
+        ctx.beginPath();
+        ctx.roundRect(18, state.height - 86, state.width * 0.31, 60, 24);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(137, 232, 255, 0.48)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255,255,255,0.86)";
+        ctx.font = "700 13px Trebuchet MS";
+        ctx.fillText("COLLECT", 34, state.height - 52);
+
+        ctx.fillStyle = "rgba(255, 123, 145, 0.16)";
+        ctx.beginPath();
+        ctx.roundRect(state.width * 0.69 - 18, state.height - 86, state.width * 0.31, 60, 24);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 123, 145, 0.44)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255,255,255,0.86)";
+        ctx.fillText("VENT", state.width * 0.69 + 6, state.height - 52);
+        ctx.restore();
+      }
+
+      function drawLattice() {
+        const cx = state.width * 0.5;
+        const cy = state.height * 0.48;
+        const width = state.width * 0.5;
+        const thickness = 20;
+        const angle = state.tilt < 0 ? -0.56 : 0.56;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.shadowBlur = 22 + state.flash * 22;
+        ctx.shadowColor = state.tilt < 0 ? "rgba(137, 232, 255, 0.55)" : "rgba(255, 123, 145, 0.55)";
+        ctx.fillStyle = "rgba(243, 249, 255, 0.92)";
+        ctx.beginPath();
+        ctx.roundRect(-width * 0.5, -thickness * 0.5, width, thickness, 12);
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = state.tilt < 0 ? "rgba(137, 232, 255, 0.9)" : "rgba(255, 123, 145, 0.9)";
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(11, 19, 33, 0.6)";
+        ctx.lineWidth = 2;
+        for (let x = -width * 0.42; x <= width * 0.42; x += 16) {
+          ctx.beginPath();
+          ctx.moveTo(x, -thickness * 0.5);
+          ctx.lineTo(x, thickness * 0.5);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawParticles() {
+        for (const p of state.particles) {
+          ctx.save();
+          ctx.globalAlpha = 0.96;
+          ctx.shadowBlur = 12 + p.glow * 16;
+          ctx.shadowColor = p.type === "blue" ? "rgba(137, 232, 255, 0.75)" : "rgba(255, 123, 145, 0.75)";
+          const fill = ctx.createRadialGradient(p.x - p.radius * 0.35, p.y - p.radius * 0.35, 2, p.x, p.y, p.radius * 1.2);
+          if (p.type === "blue") {
+            fill.addColorStop(0, "#f0ffff");
+            fill.addColorStop(0.5, "#a8f7ff");
+            fill.addColorStop(1, "#45b8f5");
+          } else {
+            fill.addColorStop(0, "#fff0f4");
+            fill.addColorStop(0.5, "#ffa0b3");
+            fill.addColorStop(1, "#f05474");
+          }
+          ctx.fillStyle = fill;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function drawEffects() {
+        for (const ripple of state.ripples) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, ripple.life * 1.8);
+          ctx.strokeStyle = ripple.color === "cyan" ? "rgba(137, 232, 255, 0.95)" : "rgba(255, 123, 145, 0.95)";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(ripple.x, ripple.y, ripple.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        for (const pop of state.pops) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, pop.life * 1.3);
+          ctx.font = "700 14px Trebuchet MS";
+          if (pop.tone === "good") {
+            ctx.fillStyle = "#b6ffd8";
+          } else if (pop.tone === "safe") {
+            ctx.fillStyle = "#ffd884";
+          } else if (pop.tone === "miss") {
+            ctx.fillStyle = "#d7e6f8";
+          } else {
+            ctx.fillStyle = "#ff94a8";
+          }
+          ctx.fillText(pop.text, pop.x - 18, pop.y);
+          ctx.restore();
+        }
+      }
+
+      function frame(ts) {
+        if (!state.lastTime) {
+          state.lastTime = ts;
+        }
+        const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
+        state.lastTime = ts;
+        updateGame(dt);
+        drawScene();
+        requestAnimationFrame(frame);
+      }
+
+      function handleFieldPointer(event) {
+        event.preventDefault();
+        if (!state.running) {
+          return;
+        }
+        flipTilt();
+      }
+
+      function bindPress(button, handler) {
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          handler();
+        });
+      }
+
+      bindPress(startButton, startGame);
+      bindPress(retryButton, startGame);
+      arena.addEventListener("pointerdown", handleFieldPointer);
+      window.addEventListener("resize", resize);
+
+      resize();
+      resetGame();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
