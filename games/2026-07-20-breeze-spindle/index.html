@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ブリーズスピンドル</title>
+  <meta name="description" content="タップで中央スピンドルの回転方向を反転し、青い粒を左へ拾って赤い粒を右へ逃がす60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #17314e;
+      --bg-bottom: #04070d;
+      --panel: rgba(8, 18, 31, 0.84);
+      --line: rgba(184, 233, 255, 0.16);
+      --text: #edf6ff;
+      --cyan: #8de7ff;
+      --mint: #bafed7;
+      --gold: #ffd78d;
+      --rose: #ff7b92;
+      --ink: #08111b;
+      --shadow: rgba(0, 0, 0, 0.36);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 15% 12%, rgba(141, 231, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 84% 18%, rgba(255, 123, 146, 0.14), transparent 22%),
+        linear-gradient(180deg, #20456d 0%, var(--bg-top) 42%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(237, 246, 255, 0.62);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.68rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(237, 246, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(237, 246, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.86rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #spinValue.left {
+      color: var(--cyan);
+    }
+
+    #spinValue.right {
+      color: var(--rose);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.08), transparent 18%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 18%),
+        linear-gradient(180deg, rgba(7, 15, 26, 0.94), rgba(2, 5, 10, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(2, 5, 10, 0.18), rgba(2, 5, 10, 0.88));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(8, 18, 31, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(237, 246, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(2, 5, 10, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(237, 246, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--gold), var(--cyan));
+      box-shadow: 0 12px 24px rgba(141, 231, 255, 0.2);
+    }
+
+    button.secondary,
+    .back-link {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    button:active,
+    .back-link:active {
+      transform: scale(0.98);
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Wind Sorting</div>
+      <h1>ブリーズスピンドル</h1>
+      <p class="sub">タップで回転を反転。青いルーメン粒は左の採集ポッドへ、赤いスパークは右ベントへ弾き分ける60秒ゲーム。</p>
+    </section>
+
+    <section class="hud" aria-label="ステータス">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Spin</div>
+        <div class="value left" id="spinValue">LEFT</div>
+      </div>
+    </section>
+
+    <section class="arena">
+      <canvas id="game" width="390" height="540" aria-label="ゲームキャンバス"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">回転を合わせろ</h2>
+          <p id="overlayText">粒が中央スピンドルに触れる前にタップで向きを反転しよう。青は左、赤は右へ流せば高得点。</p>
+        </div>
+      </div>
+      <div class="tap-note">ARENA TAP: SPIN REVERSE</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button class="secondary" id="retryButton" type="button">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "daily-game-breeze-spindle-best";
+      const PLAY_DURATION = 60000;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const spinValue = document.getElementById("spinValue");
+
+      const state = {
+        width: 390,
+        height: 540,
+        dpr: 1,
+        running: false,
+        score: 0,
+        combo: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        spin: -1,
+        particles: [],
+        bursts: [],
+        spawnTimer: 0,
+        remaining: PLAY_DURATION,
+        lastFrame: 0,
+        spindleAngle: 0,
+        lastTapPulse: 0
+      };
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        state.dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+        state.width = rect.width || 390;
+        state.height = rect.height || 540;
+        canvas.width = Math.round(state.width * state.dpr);
+        canvas.height = Math.round(state.height * state.dpr);
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      }
+
+      function resetRound() {
+        state.running = false;
+        state.score = 0;
+        state.combo = 0;
+        state.spin = -1;
+        state.particles = [];
+        state.bursts = [];
+        state.spawnTimer = 0;
+        state.remaining = PLAY_DURATION;
+        state.lastTapPulse = 0;
+        updateHud();
+        showOverlay("回転を合わせろ", "粒が中央スピンドルに触れる前にタップで向きを反転しよう。青は左、赤は右へ流せば高得点。");
+      }
+
+      function startRound() {
+        state.running = true;
+        state.score = 0;
+        state.combo = 0;
+        state.spin = -1;
+        state.particles = [];
+        state.bursts = [];
+        state.spawnTimer = 0;
+        state.remaining = PLAY_DURATION;
+        state.lastFrame = performance.now();
+        hideOverlay();
+        updateHud();
+      }
+
+      function endRound() {
+        state.running = false;
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        updateHud();
+        showOverlay(
+          state.score > 0 ? "60秒終了" : "スコア0で終了",
+          "Score " + state.score + " / Best " + state.best + "。もう一度スタートして、群れごと左と右へ裁き直そう。"
+        );
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function toggleSpin() {
+        state.spin *= -1;
+        state.lastTapPulse = 140;
+        burst(
+          state.width * 0.5,
+          state.height * 0.52,
+          state.spin === -1 ? "141, 231, 255" : "255, 123, 146",
+          18,
+          0.55
+        );
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = (state.remaining / 1000).toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + state.combo;
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        spinValue.textContent = state.spin === -1 ? "LEFT" : "RIGHT";
+        spinValue.classList.toggle("left", state.spin === -1);
+        spinValue.classList.toggle("right", state.spin === 1);
+      }
+
+      function getStage() {
+        const elapsed = PLAY_DURATION - state.remaining;
+        if (elapsed < 30000) {
+          return { spawn: 520, speed: 122, redChance: 0.28 };
+        }
+        if (elapsed < 45000) {
+          return { spawn: 390, speed: 152, redChance: 0.39 };
+        }
+        return { spawn: 290, speed: 182, redChance: 0.49 };
+      }
+
+      function spawnParticle() {
+        const stage = getStage();
+        const blue = Math.random() > stage.redChance;
+        state.particles.push({
+          x: 34 + Math.random() * (state.width - 68),
+          y: -18,
+          vx: (Math.random() - 0.5) * 24,
+          vy: stage.speed + Math.random() * 30,
+          radius: blue ? 8 : 9,
+          blue,
+          diverted: false,
+          glow: 1
+        });
+      }
+
+      function burst(x, y, color, count, alpha = 0.55) {
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 30 + Math.random() * 120;
+          state.bursts.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 380 + Math.random() * 240,
+            maxLife: 620,
+            color,
+            alpha
+          });
+        }
+      }
+
+      function scoreParticle(particle, leftSide) {
+        if (leftSide && particle.blue) {
+          state.combo += 1;
+          const gain = 2 + Math.floor(state.combo / 3);
+          state.score += gain;
+          burst(particle.x, particle.y, "141, 231, 255", 12, 0.5);
+          return;
+        }
+        if (!leftSide && !particle.blue) {
+          state.score += 1;
+          burst(particle.x, particle.y, "255, 215, 141", 8, 0.36);
+          return;
+        }
+        if (leftSide && !particle.blue) {
+          state.score = Math.max(0, state.score - 4);
+          state.combo = 0;
+          burst(particle.x, particle.y, "255, 123, 146", 14, 0.55);
+          return;
+        }
+        state.combo = 0;
+        burst(particle.x, particle.y, "186, 254, 215", 8, 0.3);
+      }
+
+      function update(delta) {
+        if (state.lastTapPulse > 0) {
+          state.lastTapPulse = Math.max(0, state.lastTapPulse - delta);
+        }
+
+        state.spindleAngle += delta * 0.0034 * state.spin;
+
+        if (!state.running) {
+          updateBursts(delta);
+          return;
+        }
+
+        state.remaining = Math.max(0, state.remaining - delta);
+        if (state.remaining === 0) {
+          endRound();
+          updateBursts(delta);
+          updateHud();
+          return;
+        }
+
+        const stage = getStage();
+        state.spawnTimer += delta;
+        while (state.spawnTimer >= stage.spawn) {
+          state.spawnTimer -= stage.spawn;
+          spawnParticle();
+        }
+
+        const cx = state.width * 0.5;
+        const cy = state.height * 0.52;
+        const spindleRadius = Math.min(state.width, state.height) * 0.12;
+        const leftBox = {
+          x: 20,
+          y: state.height - 88,
+          w: state.width * 0.27,
+          h: 54
+        };
+        const rightBox = {
+          x: state.width - 20 - state.width * 0.27,
+          y: state.height - 88,
+          w: state.width * 0.27,
+          h: 54
+        };
+
+        const nextParticles = [];
+        for (const particle of state.particles) {
+          particle.x += particle.vx * delta / 1000;
+          particle.y += particle.vy * delta / 1000;
+          particle.glow = Math.max(0, particle.glow - delta / 1600);
+
+          const dx = particle.x - cx;
+          const dy = particle.y - cy;
+          const distance = Math.hypot(dx, dy);
+
+          if (!particle.diverted && distance < spindleRadius + particle.radius + 6) {
+            particle.diverted = true;
+            particle.vx = state.spin * (160 + Math.random() * 36);
+            particle.vy = 104 + Math.random() * 34;
+            particle.y = cy + 8;
+            burst(particle.x, particle.y, particle.blue ? "141, 231, 255" : "255, 123, 146", 6, particle.blue ? 0.35 : 0.32);
+          }
+
+          const insideLeft = particle.x > leftBox.x && particle.x < leftBox.x + leftBox.w && particle.y > leftBox.y && particle.y < leftBox.y + leftBox.h;
+          const insideRight = particle.x > rightBox.x && particle.x < rightBox.x + rightBox.w && particle.y > rightBox.y && particle.y < rightBox.y + rightBox.h;
+
+          if (insideLeft) {
+            scoreParticle(particle, true);
+            continue;
+          }
+          if (insideRight) {
+            scoreParticle(particle, false);
+            continue;
+          }
+
+          if (particle.y < state.height + 24 && particle.x > -30 && particle.x < state.width + 30) {
+            nextParticles.push(particle);
+          } else if (particle.blue) {
+            state.combo = 0;
+          }
+        }
+        state.particles = nextParticles;
+        updateBursts(delta);
+        updateHud();
+      }
+
+      function updateBursts(delta) {
+        state.bursts = state.bursts.filter((part) => {
+          part.life -= delta;
+          if (part.life <= 0) {
+            return false;
+          }
+          part.x += part.vx * delta / 1000;
+          part.y += part.vy * delta / 1000;
+          part.vx *= 0.985;
+          part.vy *= 0.985;
+          return true;
+        });
+      }
+
+      function drawRoundedRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function drawScene() {
+        const w = state.width;
+        const h = state.height;
+        ctx.clearRect(0, 0, w, h);
+
+        const sky = ctx.createLinearGradient(0, 0, 0, h);
+        sky.addColorStop(0, "rgba(22, 47, 74, 0.9)");
+        sky.addColorStop(0.55, "rgba(10, 20, 35, 0.95)");
+        sky.addColorStop(1, "rgba(3, 6, 11, 1)");
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h);
+
+        for (let i = 0; i < 18; i += 1) {
+          const px = (i * 53.7) % w;
+          const py = (i * 91.3 + state.spindleAngle * 45) % h;
+          ctx.fillStyle = "rgba(255,255,255,0.06)";
+          ctx.beginPath();
+          ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const leftBox = { x: 20, y: h - 88, w: w * 0.27, h: 54 };
+        const rightBox = { x: w - 20 - w * 0.27, y: h - 88, w: w * 0.27, h: 54 };
+        const cx = w * 0.5;
+        const cy = h * 0.52;
+        const spindleRadius = Math.min(w, h) * 0.12;
+
+        drawRoundedRect(leftBox.x, leftBox.y, leftBox.w, leftBox.h, 18);
+        ctx.fillStyle = "rgba(20, 95, 132, 0.52)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(141, 231, 255, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        drawRoundedRect(rightBox.x, rightBox.y, rightBox.w, rightBox.h, 18);
+        ctx.fillStyle = "rgba(112, 42, 56, 0.5)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 123, 146, 0.42)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(237, 246, 255, 0.74)";
+        ctx.font = "700 12px Trebuchet MS";
+        ctx.textAlign = "center";
+        ctx.fillText("COLLECT", leftBox.x + leftBox.w / 2, leftBox.y + 20);
+        ctx.fillText("VENT", rightBox.x + rightBox.w / 2, rightBox.y + 20);
+
+        const pulse = state.lastTapPulse > 0 ? state.lastTapPulse / 140 : 0;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(state.spindleAngle);
+        for (let i = 0; i < 3; i += 1) {
+          ctx.rotate((Math.PI * 2) / 3);
+          ctx.beginPath();
+          ctx.moveTo(-8, -10);
+          ctx.quadraticCurveTo(spindleRadius * 0.78, -18, spindleRadius * 1.04, 0);
+          ctx.quadraticCurveTo(spindleRadius * 0.78, 18, -8, 10);
+          ctx.closePath();
+          ctx.fillStyle = i === 0
+            ? "rgba(255, 215, 141, 0.92)"
+            : "rgba(141, 231, 255, " + (0.34 + pulse * 0.24).toFixed(3) + ")";
+          ctx.fill();
+        }
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, spindleRadius * (0.44 + pulse * 0.08), 0, Math.PI * 2);
+        ctx.fillStyle = state.spin === -1 ? "rgba(141, 231, 255, 0.86)" : "rgba(255, 123, 146, 0.86)";
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(16, leftBox.y - 18);
+        ctx.lineTo(w - 16, leftBox.y - 18);
+        ctx.stroke();
+
+        for (const particle of state.particles) {
+          const glow = particle.blue ? "141,231,255" : "255,123,146";
+          const gradient = ctx.createRadialGradient(
+            particle.x,
+            particle.y,
+            0,
+            particle.x,
+            particle.y,
+            particle.radius * 2.8
+          );
+          gradient.addColorStop(0, "rgba(" + glow + ",0.95)");
+          gradient.addColorStop(0.55, "rgba(" + glow + ",0.42)");
+          gradient.addColorStop(1, "rgba(" + glow + ",0)");
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.radius * 2.4, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = particle.blue ? "#8de7ff" : "#ff7b92";
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (const part of state.bursts) {
+          const alpha = Math.max(0, (part.life / part.maxLife) * part.alpha);
+          ctx.fillStyle = "rgba(" + part.color + "," + alpha.toFixed(3) + ")";
+          ctx.beginPath();
+          ctx.arc(part.x, part.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.font = "700 13px Trebuchet MS";
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(237, 246, 255, 0.85)";
+        ctx.fillText("青を左へ / 赤を右へ", 18, 28);
+      }
+
+      function frame(now) {
+        if (!state.lastFrame) {
+          state.lastFrame = now;
+        }
+        const delta = Math.min(32, now - state.lastFrame);
+        state.lastFrame = now;
+        update(delta);
+        drawScene();
+        requestAnimationFrame(frame);
+      }
+
+      canvas.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        if (!state.running) {
+          return;
+        }
+        toggleSpin();
+      });
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRound();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startRound();
+      });
+
+      window.addEventListener("resize", resize);
+
+      bestValue.textContent = String(state.best);
+      resize();
+      resetRound();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
