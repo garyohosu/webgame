@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>リボンバラスト</title>
+  <meta name="description" content="タップで浮力リボンを反転し、青いバブルを上へ、赤いシンダーを下へ流し分ける60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #16364d;
+      --bg-mid: #091826;
+      --bg-bottom: #04070d;
+      --panel: rgba(9, 20, 31, 0.84);
+      --line: rgba(202, 236, 255, 0.14);
+      --text: #edf8ff;
+      --sky: #89e4ff;
+      --mint: #b9ffd9;
+      --gold: #ffd884;
+      --rose: #ff7b84;
+      --ink: #08131c;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(137, 228, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 85% 12%, rgba(255, 123, 132, 0.14), transparent 20%),
+        linear-gradient(180deg, #214967 0%, var(--bg-top) 30%, var(--bg-mid) 66%, var(--bg-bottom) 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(237, 248, 255, 0.62);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(237, 248, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(237, 248, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.84rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #modeValue.up {
+      color: var(--sky);
+    }
+
+    #modeValue.down {
+      color: var(--rose);
+    }
+
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.08), transparent 18%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        linear-gradient(180deg, rgba(7, 15, 26, 0.94), rgba(2, 5, 10, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 42px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(2, 5, 10, 0.18), rgba(2, 5, 10, 0.88));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(8, 18, 31, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(237, 248, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(2, 5, 10, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(237, 248, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--gold), var(--sky));
+      box-shadow: 0 12px 24px rgba(137, 228, 255, 0.2);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>リボンバラスト</h1>
+      <div class="sub">画面タップで浮力を反転。青いバブルを上ハッチへ、赤いシンダーを下ベントへ流し込め。</div>
+    </section>
+
+    <section class="hud">
+      <div class="stat">
+        <div class="label">Score</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Best</div>
+        <div class="value" id="bestValue">0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Time</div>
+        <div class="value" id="timeValue">60.0</div>
+      </div>
+      <div class="stat">
+        <div class="label">Mode</div>
+        <div class="value up" id="modeValue">UP</div>
+      </div>
+      <div class="stat">
+        <div class="label">Combo</div>
+        <div class="value" id="comboValue">x1</div>
+      </div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">60秒の積み荷整理</h2>
+          <p id="overlayText">タップで浮力リボンを反転し、右端へ向かう群れを上下に仕分ける。青は上、赤は下。まとめて決めると高コンボ。</p>
+        </div>
+      </div>
+      <div class="tap-note">RUN中はどこでもタップで UP / DOWN 切替</div>
+    </section>
+
+    <section class="controls">
+      <a class="back-link" href="../../">戻る</a>
+      <button id="startButton" type="button">スタート</button>
+      <button class="secondary" id="retryButton" type="button">リトライ</button>
+    </section>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "daily-game-ribbon-ballast-best";
+    const GAME_DURATION = 60000;
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const arena = document.getElementById("arena");
+    const overlay = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayText = document.getElementById("overlayText");
+    const startButton = document.getElementById("startButton");
+    const retryButton = document.getElementById("retryButton");
+    const scoreValue = document.getElementById("scoreValue");
+    const bestValue = document.getElementById("bestValue");
+    const timeValue = document.getElementById("timeValue");
+    const modeValue = document.getElementById("modeValue");
+    const comboValue = document.getElementById("comboValue");
+
+    const state = {
+      width: 0,
+      height: 0,
+      running: false,
+      startTime: 0,
+      lastFrame: 0,
+      score: 0,
+      best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+      combo: 1,
+      mode: "up",
+      particles: [],
+      sparks: [],
+      spawnClock: 0,
+      flash: 0
+    };
+
+    bestValue.textContent = String(state.best);
+
+    function fitCanvas() {
+      const rect = arena.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      state.width = rect.width;
+      state.height = rect.height;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function resetGame() {
+      state.running = false;
+      state.startTime = 0;
+      state.lastFrame = 0;
+      state.score = 0;
+      state.combo = 1;
+      state.mode = "up";
+      state.particles = [];
+      state.sparks = [];
+      state.spawnClock = 0;
+      state.flash = 0;
+      updateHud(60);
+      showOverlay("60秒の積み荷整理", "タップで浮力リボンを反転し、右端へ向かう群れを上下に仕分ける。青は上、赤は下。まとめて決めると高コンボ。");
+      drawScene(0);
+    }
+
+    function startGame() {
+      state.running = true;
+      state.startTime = performance.now();
+      state.lastFrame = state.startTime;
+      state.score = 0;
+      state.combo = 1;
+      state.mode = "up";
+      state.particles = [];
+      state.sparks = [];
+      state.spawnClock = 0;
+      state.flash = 0;
+      hideOverlay();
+      updateHud(60);
+      requestAnimationFrame(frame);
+    }
+
+    function showOverlay(title, text) {
+      overlayTitle.textContent = title;
+      overlayText.textContent = text;
+      overlay.classList.remove("hidden");
+    }
+
+    function hideOverlay() {
+      overlay.classList.add("hidden");
+    }
+
+    function toggleMode() {
+      if (!state.running) return;
+      state.mode = state.mode === "up" ? "down" : "up";
+      state.flash = 0.22;
+      spawnSpark(state.width * 0.18, state.height * 0.5, state.mode === "up" ? "#89e4ff" : "#ff7b84", 12);
+      updateHud(getTimeLeft());
+    }
+
+    function getTimeLeft() {
+      if (!state.running) return 60;
+      return Math.max(0, (GAME_DURATION - (performance.now() - state.startTime)) / 1000);
+    }
+
+    function updateHud(timeLeft) {
+      scoreValue.textContent = String(state.score);
+      bestValue.textContent = String(state.best);
+      timeValue.textContent = timeLeft.toFixed(1);
+      modeValue.textContent = state.mode.toUpperCase();
+      modeValue.className = "value " + state.mode;
+      comboValue.textContent = "x" + state.combo;
+      comboValue.className = state.combo >= 4 ? "value hot" : "value";
+    }
+
+    function difficulty(elapsed) {
+      if (elapsed < 30) {
+        return { rate: 1.5, speed: 112, drift: 95, redChance: 0.28 };
+      }
+      if (elapsed < 45) {
+        return { rate: 2.2, speed: 136, drift: 125, redChance: 0.36 };
+      }
+      return { rate: 2.9, speed: 162, drift: 152, redChance: 0.43 };
+    }
+
+    function spawnParticle(config) {
+      const topBand = state.height * 0.22;
+      const bottomBand = state.height * 0.78;
+      const zone = Math.random() < 0.5 ? topBand : bottomBand;
+      const jitter = (Math.random() - 0.5) * state.height * 0.16;
+      const isRed = Math.random() < config.redChance;
+      state.particles.push({
+        x: -24,
+        y: Math.max(30, Math.min(state.height - 30, zone + jitter)),
+        vx: config.speed + Math.random() * 36,
+        vy: (Math.random() - 0.5) * 30,
+        r: isRed ? 9 : 10,
+        kind: isRed ? "red" : "blue"
+      });
+    }
+
+    function spawnSpark(x, y, color, amount) {
+      for (let i = 0; i < amount; i += 1) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 40 + Math.random() * 120;
+        state.sparks.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.24 + Math.random() * 0.28,
+          maxLife: 0.52,
+          color
+        });
+      }
+    }
+
+    function scoreParticle(particle) {
+      const upperGoal = state.height * 0.38;
+      const lowerGoal = state.height * 0.62;
+      const exitedHigh = particle.y <= upperGoal;
+      const exitedLow = particle.y >= lowerGoal;
+
+      if (particle.kind === "blue" && exitedHigh) {
+        const gain = 8 + state.combo * 2;
+        state.score += gain;
+        state.combo += 1;
+        spawnSpark(state.width - 26, Math.max(24, particle.y), "#89e4ff", 10);
+      } else if (particle.kind === "red" && exitedLow) {
+        state.score += 3;
+        state.combo += 1;
+        spawnSpark(state.width - 26, Math.min(state.height - 24, particle.y), "#ffb36d", 8);
+      } else if (particle.kind === "blue") {
+        state.score = Math.max(0, state.score - 7);
+        state.combo = 1;
+        spawnSpark(state.width - 26, particle.y, "#ff7b84", 12);
+      } else if (particle.kind === "red") {
+        state.score = Math.max(0, state.score - 9);
+        state.combo = 1;
+        spawnSpark(state.width - 26, particle.y, "#ff7b84", 12);
+      }
+    }
+
+    function update(dt, elapsed) {
+      const config = difficulty(elapsed);
+      state.spawnClock += dt * config.rate;
+      while (state.spawnClock >= 1) {
+        state.spawnClock -= 1;
+        spawnParticle(config);
+      }
+
+      const buoyancy = state.mode === "up" ? -config.drift : config.drift;
+      for (let i = state.particles.length - 1; i >= 0; i -= 1) {
+        const particle = state.particles[i];
+        particle.vy += buoyancy * dt;
+        particle.vy *= 0.992;
+        particle.x += particle.vx * dt;
+        particle.y += particle.vy * dt;
+
+        if (particle.y < 18) {
+          particle.y = 18;
+          particle.vy *= -0.35;
+        } else if (particle.y > state.height - 18) {
+          particle.y = state.height - 18;
+          particle.vy *= -0.35;
+        }
+
+        if (particle.x > state.width + 28) {
+          scoreParticle(particle);
+          state.particles.splice(i, 1);
+        }
+      }
+
+      for (let i = state.sparks.length - 1; i >= 0; i -= 1) {
+        const spark = state.sparks[i];
+        spark.life -= dt;
+        if (spark.life <= 0) {
+          state.sparks.splice(i, 1);
+          continue;
+        }
+        spark.x += spark.vx * dt;
+        spark.y += spark.vy * dt;
+        spark.vx *= 0.97;
+        spark.vy *= 0.97;
+      }
+
+      state.flash = Math.max(0, state.flash - dt);
+      updateHud(Math.max(0, 60 - elapsed));
+    }
+
+    function drawScene(elapsed) {
+      const w = state.width;
+      const h = state.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const glow = ctx.createLinearGradient(0, 0, 0, h);
+      glow.addColorStop(0, "#173952");
+      glow.addColorStop(0.5, "#091521");
+      glow.addColorStop(1, "#03070d");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.globalAlpha = 0.12 + state.flash * 0.3;
+      ctx.fillStyle = state.mode === "up" ? "#89e4ff" : "#ff7b84";
+      ctx.fillRect(0, h * 0.44, w, h * 0.12);
+      ctx.restore();
+
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(16, h * 0.38);
+      ctx.lineTo(w - 30, h * 0.38);
+      ctx.moveTo(16, h * 0.62);
+      ctx.lineTo(w - 30, h * 0.62);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "rgba(137,228,255,0.18)";
+      ctx.fillRect(w - 34, 0, 34, h * 0.38);
+      ctx.fillStyle = "rgba(255,123,132,0.18)";
+      ctx.fillRect(w - 34, h * 0.62, 34, h * 0.38);
+
+      ctx.fillStyle = "#dff8ff";
+      ctx.font = "700 12px Trebuchet MS, sans-serif";
+      ctx.fillText("UP HATCH", w - 84, 20);
+      ctx.fillText("DOWN VENT", w - 102, h - 12);
+
+      ctx.save();
+      ctx.translate(w * 0.18, h * 0.5);
+      ctx.strokeStyle = state.mode === "up" ? "#89e4ff" : "#ff7b84";
+      ctx.lineWidth = 5;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(-28, 0);
+      ctx.bezierCurveTo(-8, 0, 4, state.mode === "up" ? -34 : 34, 28, state.mode === "up" ? -34 : 34);
+      ctx.stroke();
+      ctx.fillStyle = state.mode === "up" ? "#89e4ff" : "#ff7b84";
+      ctx.beginPath();
+      if (state.mode === "up") {
+        ctx.moveTo(28, -34);
+        ctx.lineTo(18, -28);
+        ctx.lineTo(22, -18);
+      } else {
+        ctx.moveTo(28, 34);
+        ctx.lineTo(18, 28);
+        ctx.lineTo(22, 18);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+
+      for (const particle of state.particles) {
+        const blue = particle.kind === "blue";
+        ctx.fillStyle = blue ? "#89e4ff" : "#ff7b84";
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = blue ? "rgba(255,255,255,0.55)" : "rgba(255,220,220,0.45)";
+        ctx.beginPath();
+        ctx.arc(particle.x - particle.r * 0.25, particle.y - particle.r * 0.25, particle.r * 0.35, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const spark of state.sparks) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, spark.life / spark.maxLife);
+        ctx.fillStyle = spark.color;
+        ctx.fillRect(spark.x, spark.y, 3, 3);
+        ctx.restore();
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.08)";
+      for (let i = 0; i < 8; i += 1) {
+        const x = (elapsed * (10 + i * 3) + i * 49) % (w + 40) - 20;
+        const y = 26 + i * (h - 52) / 7;
+        ctx.fillRect(x, y, 12, 2);
+      }
+    }
+
+    function endGame() {
+      state.running = false;
+      if (state.score > state.best) {
+        state.best = state.score;
+        localStorage.setItem(STORAGE_KEY, String(state.best));
+      }
+      updateHud(0);
+      showOverlay("運搬終了", "スコア " + state.score + "。ベスト " + state.best + "。青は上、赤は下。もう一度タップの流れを磨け。");
+    }
+
+    function frame(now) {
+      if (!state.running) return;
+      const dt = Math.min(0.033, (now - state.lastFrame) / 1000);
+      state.lastFrame = now;
+      const elapsed = (now - state.startTime) / 1000;
+
+      update(dt, elapsed);
+      drawScene(elapsed);
+
+      if (elapsed >= 60) {
+        endGame();
+        return;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    arena.addEventListener("pointerdown", (event) => {
+      if (!state.running) return;
+      event.preventDefault();
+      toggleMode();
+    });
+
+    startButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      startGame();
+    });
+
+    retryButton.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      startGame();
+    });
+
+    window.addEventListener("resize", () => {
+      fitCanvas();
+      drawScene(0);
+    });
+
+    fitCanvas();
+    resetGame();
+  </script>
+</body>
+</html>
