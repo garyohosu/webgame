@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>シルクシェルフ</title>
+  <meta name="description" content="タップで棚の高さを動かし、青いドロップを左へ流して赤いエンバーを下へ逃がす60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --sky: #b7f5ff;
+      --teal: #68d6ff;
+      --mint: #8dffcb;
+      --gold: #ffd26b;
+      --rose: #ff7f7f;
+      --ink: #07111a;
+      --panel: rgba(7, 15, 24, 0.84);
+      --line: rgba(255, 255, 255, 0.11);
+      --text: #edf8ff;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 10%, rgba(104, 214, 255, 0.22), transparent 24%),
+        radial-gradient(circle at 82% 14%, rgba(255, 210, 107, 0.2), transparent 22%),
+        linear-gradient(180deg, #183247 0%, #0b1624 54%, #050910 100%);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 42px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      margin-bottom: 4px;
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(237, 248, 255, 0.62);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      font-size: 0.93rem;
+      line-height: 1.55;
+      color: rgba(237, 248, 255, 0.82);
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(237, 248, 255, 0.56);
+    }
+
+    .value {
+      font-size: 0.84rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #shelfValue.hot,
+    #comboValue.hot {
+      color: var(--gold);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.08), transparent 18%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
+        linear-gradient(180deg, rgba(7, 16, 25, 0.92), rgba(3, 6, 10, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(2, 5, 10, 0.18), rgba(2, 5, 10, 0.88));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(8, 18, 31, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      font-size: 0.95rem;
+      line-height: 1.62;
+      color: rgba(237, 248, 255, 0.82);
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      background: rgba(2, 5, 10, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(237, 248, 255, 0.86);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--gold), var(--teal));
+      box-shadow: 0 12px 24px rgba(104, 214, 255, 0.2);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>シルクシェルフ</h1>
+      <p class="sub">タップした高さに発光棚を滑らせ、青いドロップだけを左へ流して赤いエンバーは下へ逃がす。</p>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat"><div class="label">Score</div><div class="value" id="scoreValue">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="timeValue">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="bestValue">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="comboValue">x1</div></div>
+      <div class="stat"><div class="label">Shelf</div><div class="value" id="shelfValue">MID</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="390" height="600" aria-label="game canvas"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">Silk Shelf</h2>
+          <p id="overlayText">青は棚で左へ回収、赤は棚を避けて下ベントへ。タップで棚の高さを切り替えて60秒を捌く。</p>
+        </div>
+      </div>
+      <div class="tap-note">ARENA をタップして棚を上下</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" class="secondary" type="button">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame-silk-shelf-best";
+      const GAME_TIME = 60;
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const shelfValue = document.getElementById("shelfValue");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+
+      const state = {
+        running: false,
+        lastTime: 0,
+        elapsed: 0,
+        spawnTimer: 0,
+        score: 0,
+        combo: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        shelfY: 0,
+        targetShelfY: 0,
+        particles: [],
+        sparks: []
+      };
+
+      function resize() {
+        const rect = arena.getBoundingClientRect();
+        canvas.width = Math.max(320, Math.floor(rect.width));
+        canvas.height = Math.max(360, Math.floor(rect.height));
+        if (!state.shelfY) {
+          state.shelfY = canvas.height * 0.58;
+          state.targetShelfY = state.shelfY;
+        }
+      }
+
+      function difficulty() {
+        if (state.elapsed < 30) {
+          return { spawnEvery: 0.84, minSpeed: 128, maxSpeed: 168, redChance: 0.28, sway: 28 };
+        }
+        if (state.elapsed < 45) {
+          return { spawnEvery: 0.66, minSpeed: 154, maxSpeed: 198, redChance: 0.42, sway: 34 };
+        }
+        return { spawnEvery: 0.5, minSpeed: 182, maxSpeed: 232, redChance: 0.52, sway: 40 };
+      }
+
+      function resetGame() {
+        state.running = false;
+        state.lastTime = 0;
+        state.elapsed = 0;
+        state.spawnTimer = 0;
+        state.score = 0;
+        state.combo = 0;
+        state.particles = [];
+        state.sparks = [];
+        state.shelfY = canvas.height * 0.58;
+        state.targetShelfY = state.shelfY;
+        updateHud();
+        showOverlay("Silk Shelf", "青は棚で左へ回収、赤は棚を避けて下ベントへ。タップで棚の高さを決めてスタート。");
+      }
+
+      function startGame() {
+        state.running = true;
+        state.lastTime = 0;
+        state.elapsed = 0;
+        state.spawnTimer = 0;
+        state.score = 0;
+        state.combo = 0;
+        state.particles = [];
+        state.sparks = [];
+        hideOverlay();
+        updateHud();
+      }
+
+      function showOverlay(title, text) {
+        overlayTitle.textContent = title;
+        overlayText.textContent = text;
+        overlay.classList.remove("hidden");
+      }
+
+      function hideOverlay() {
+        overlay.classList.add("hidden");
+      }
+
+      function shelfLabel() {
+        const ratio = state.shelfY / canvas.height;
+        if (ratio < 0.38) {
+          return "HIGH";
+        }
+        if (ratio < 0.68) {
+          return "MID";
+        }
+        return "LOW";
+      }
+
+      function updateHud() {
+        scoreValue.textContent = Math.round(state.score);
+        timeValue.textContent = Math.max(0, GAME_TIME - state.elapsed).toFixed(1);
+        bestValue.textContent = state.best;
+        comboValue.textContent = `x${Math.max(1, state.combo + 1)}`;
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        const label = shelfLabel();
+        shelfValue.textContent = label;
+        shelfValue.classList.toggle("hot", label === "HIGH");
+      }
+
+      function addSpark(x, y, color, count) {
+        for (let i = 0; i < count; i += 1) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 30 + Math.random() * 90;
+          const maxLife = 0.3 + Math.random() * 0.35;
+          state.sparks.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: maxLife,
+            maxLife,
+            color
+          });
+        }
+      }
+
+      function spawnParticle() {
+        const diff = difficulty();
+        const kind = Math.random() < diff.redChance ? "red" : "blue";
+        const pad = 28;
+        state.particles.push({
+          kind,
+          x: pad + Math.random() * (canvas.width - pad * 2),
+          y: -18,
+          vy: diff.minSpeed + Math.random() * (diff.maxSpeed - diff.minSpeed),
+          vx: (Math.random() - 0.5) * 22,
+          phase: Math.random() * Math.PI * 2,
+          sway: diff.sway * (0.6 + Math.random() * 0.9),
+          radius: kind === "blue" ? 10 : 9,
+          ride: false,
+          remove: false
+        });
+      }
+
+      function score(delta, keepCombo) {
+        state.score = Math.max(0, state.score + delta);
+        state.combo = keepCombo ? Math.min(9, state.combo + 1) : 0;
+        if (state.score > state.best) {
+          state.best = Math.round(state.score);
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+      }
+
+      function handleArenaPointer(event) {
+        const rect = arena.getBoundingClientRect();
+        const y = event.clientY - rect.top;
+        const min = canvas.height * 0.2;
+        const max = canvas.height * 0.82;
+        state.targetShelfY = Math.max(min, Math.min(max, y));
+        if (!state.running) {
+          state.shelfY = state.targetShelfY;
+          updateHud();
+        }
+      }
+
+      function update(delta) {
+        state.shelfY += (state.targetShelfY - state.shelfY) * Math.min(1, delta * 10);
+
+        if (!state.running) {
+          return;
+        }
+
+        state.elapsed += delta;
+        if (state.elapsed >= GAME_TIME) {
+          state.elapsed = GAME_TIME;
+          state.running = false;
+          showOverlay("Time Up", `スコア ${Math.round(state.score)}。ベスト ${state.best}。もう一度棚を読み切れ。`);
+        }
+
+        const diff = difficulty();
+        state.spawnTimer += delta;
+        while (state.spawnTimer >= diff.spawnEvery) {
+          state.spawnTimer -= diff.spawnEvery;
+          spawnParticle();
+        }
+
+        const shelfLeft = 62;
+        const shelfRight = canvas.width - 64;
+        const ventX = canvas.width - 46;
+        const ventY = canvas.height - 26;
+
+        for (const particle of state.particles) {
+          if (particle.ride) {
+            particle.x -= 180 * delta;
+            particle.y = state.shelfY - 8;
+            if (particle.x <= 36) {
+              score(4 + state.combo, true);
+              addSpark(44, state.shelfY - 8, "#8dffcb", 8);
+              particle.remove = true;
+            }
+            continue;
+          }
+
+          particle.phase += delta * 2.4;
+          particle.x += particle.vx * delta + Math.sin(particle.phase) * particle.sway * delta;
+          particle.y += particle.vy * delta;
+
+          if (
+            particle.y >= state.shelfY - 10 &&
+            particle.y <= state.shelfY + 8 &&
+            particle.x >= shelfLeft &&
+            particle.x <= shelfRight
+          ) {
+            if (particle.kind === "blue") {
+              particle.ride = true;
+              particle.y = state.shelfY - 8;
+              addSpark(particle.x, particle.y, "#68d6ff", 5);
+            } else {
+              score(-3, false);
+              addSpark(particle.x, state.shelfY, "#ff7f7f", 9);
+              particle.remove = true;
+            }
+            continue;
+          }
+
+          if (particle.y >= canvas.height - 24) {
+            if (particle.kind === "red" && particle.x >= ventX - 34) {
+              score(1, true);
+              addSpark(Math.min(canvas.width - 20, particle.x), ventY, "#ffd26b", 4);
+            } else if (particle.kind === "blue") {
+              score(-2, false);
+              addSpark(particle.x, canvas.height - 18, "#68d6ff", 7);
+            }
+            particle.remove = true;
+          } else if (particle.x < -24 || particle.x > canvas.width + 24) {
+            particle.remove = true;
+          }
+        }
+
+        state.particles = state.particles.filter((particle) => !particle.remove);
+
+        for (const spark of state.sparks) {
+          spark.life -= delta;
+          spark.x += spark.vx * delta;
+          spark.y += spark.vy * delta;
+          spark.vy += 60 * delta;
+        }
+        state.sparks = state.sparks.filter((spark) => spark.life > 0);
+        updateHud();
+      }
+
+      function drawRoundedRect(x, y, width, height, radius) {
+        if (typeof ctx.roundRect === "function") {
+          ctx.beginPath();
+          ctx.roundRect(x, y, width, height, radius);
+          return;
+        }
+        const r = Math.min(radius, width / 2, height / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + width, y, x + width, y + height, r);
+        ctx.arcTo(x + width, y + height, x, y + height, r);
+        ctx.arcTo(x, y + height, x, y, r);
+        ctx.arcTo(x, y, x + width, y, r);
+      }
+
+      function drawShelf() {
+        const shelfLeft = 62;
+        const shelfRight = canvas.width - 64;
+        const shimmer = 0.5 + Math.sin(performance.now() * 0.004) * 0.5;
+
+        ctx.save();
+        ctx.strokeStyle = `rgba(183,245,255,${0.22 + shimmer * 0.18})`;
+        ctx.lineWidth = 14;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(shelfLeft, state.shelfY);
+        ctx.lineTo(shelfRight, state.shelfY);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#8dffcb";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(shelfLeft + 10, state.shelfY);
+        ctx.lineTo(shelfRight - 10, state.shelfY);
+        ctx.stroke();
+
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        ctx.moveTo(18, state.targetShelfY);
+        ctx.lineTo(canvas.width - 18, state.targetShelfY);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawHudDecor() {
+        const shelfY = state.shelfY;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(42, 18);
+        ctx.lineTo(42, canvas.height - 38);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(canvas.width - 42, 18);
+        ctx.lineTo(canvas.width - 42, canvas.height - 38);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(141,255,203,0.16)";
+        drawRoundedRect(16, shelfY - 26, 38, 52, 16);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,210,107,0.16)";
+        drawRoundedRect(canvas.width - 66, canvas.height - 62, 48, 44, 16);
+        ctx.fill();
+
+        ctx.fillStyle = "#edf8ff";
+        ctx.font = "12px Trebuchet MS";
+        ctx.fillText("POD", 22, shelfY + 4);
+        ctx.fillText("VENT", canvas.width - 63, canvas.height - 34);
+        ctx.restore();
+      }
+
+      function drawParticles() {
+        for (const particle of state.particles) {
+          ctx.save();
+          if (particle.kind === "blue") {
+            const glow = ctx.createRadialGradient(particle.x, particle.y, 2, particle.x, particle.y, 16);
+            glow.addColorStop(0, "rgba(183,245,255,0.95)");
+            glow.addColorStop(1, "rgba(104,214,255,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, 16, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#8dffcb";
+          } else {
+            const glow = ctx.createRadialGradient(particle.x, particle.y, 2, particle.x, particle.y, 15);
+            glow.addColorStop(0, "rgba(255,210,107,0.88)");
+            glow.addColorStop(1, "rgba(255,127,127,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#ff8a7d";
+          }
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function drawSparks() {
+        for (const spark of state.sparks) {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, spark.life / spark.maxLife);
+          ctx.fillStyle = spark.color;
+          ctx.beginPath();
+          ctx.arc(spark.x, spark.y, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        gradient.addColorStop(0, "rgba(183,245,255,0.12)");
+        gradient.addColorStop(0.5, "rgba(104,214,255,0.02)");
+        gradient.addColorStop(1, "rgba(0,0,0,0.22)");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        for (let i = 0; i < 8; i += 1) {
+          const x = ((i * 73) + performance.now() * 0.02) % (canvas.width + 40) - 20;
+          ctx.fillStyle = "rgba(255,255,255,0.04)";
+          ctx.fillRect(x, 0, 2, canvas.height);
+        }
+
+        drawHudDecor();
+        drawShelf();
+        drawParticles();
+        drawSparks();
+      }
+
+      function tick(timestamp) {
+        if (!state.lastTime) {
+          state.lastTime = timestamp;
+        }
+        const delta = Math.min(0.033, (timestamp - state.lastTime) / 1000);
+        state.lastTime = timestamp;
+        update(delta);
+        draw();
+        requestAnimationFrame(tick);
+      }
+
+      arena.addEventListener("pointerdown", handleArenaPointer);
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        resetGame();
+        startGame();
+      });
+      window.addEventListener("resize", resize);
+
+      resize();
+      bestValue.textContent = state.best;
+      resetGame();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>
