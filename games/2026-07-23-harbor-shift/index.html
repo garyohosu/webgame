@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>ハーバーシフト</title>
+  <meta name="description" content="タップで上下の港を入れ替え、青い舟を着岸させて赤い障害舟を排水路へ流す60秒ゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #10243f;
+      --bg-bottom: #04101f;
+      --panel: rgba(7, 16, 28, 0.84);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #eef6ff;
+      --muted: rgba(238, 246, 255, 0.72);
+      --cyan: #6de7ff;
+      --mint: #89ffcb;
+      --amber: #ffd36a;
+      --coral: #ff7d7d;
+      --ink: #07131e;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 10%, rgba(109, 231, 255, 0.18), transparent 22%),
+        radial-gradient(circle at 82% 18%, rgba(255, 211, 106, 0.16), transparent 20%),
+        linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      color: var(--text);
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .panel,
+    .hud,
+    .controls {
+      position: relative;
+      z-index: 2;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(238, 246, 255, 0.58);
+    }
+
+    h1 {
+      margin: 4px 0 0;
+      font-size: 1.76rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.55;
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(238, 246, 255, 0.52);
+    }
+
+    .value {
+      font-size: 0.84rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #modeValue.hot,
+    #comboValue.hot {
+      color: var(--amber);
+    }
+
+    .arena {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        radial-gradient(circle at 50% 6%, rgba(255, 255, 255, 0.08), transparent 16%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 20%),
+        linear-gradient(180deg, rgba(8, 20, 36, 0.96), rgba(2, 8, 16, 1));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(3, 9, 16, 0.2), rgba(3, 9, 16, 0.88));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(7, 18, 32, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.62;
+    }
+
+    .tap-note {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 2;
+      pointer-events: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+      color: rgba(238, 246, 255, 0.88);
+      background: rgba(3, 9, 16, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: var(--ink);
+      background: linear-gradient(135deg, var(--amber), var(--cyan));
+      box-shadow: 0 12px 24px rgba(109, 231, 255, 0.18);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    @media (max-width: 380px) {
+      .shell {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      h1 {
+        font-size: 1.54rem;
+      }
+
+      .sub {
+        font-size: 0.88rem;
+      }
+
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.76rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">Daily Game Factory</div>
+      <h1>ハーバーシフト</h1>
+      <p class="sub">タップで上下の港を入れ替え、青い舟を着岸させて赤い障害舟を排水路へ流す。</p>
+    </section>
+
+    <section class="hud" aria-label="status">
+      <div class="stat"><div class="label">Score</div><div class="value" id="scoreValue">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="timeValue">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="bestValue">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="comboValue">x1</div></div>
+      <div class="stat"><div class="label">港</div><div class="value" id="modeValue">上</div></div>
+    </section>
+
+    <section class="arena" id="arena">
+      <canvas id="game" width="402" height="620" aria-label="game area"></canvas>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">上港と下港を切り替えろ</h2>
+          <p id="overlayText">タップするたびに、青舟を迎える港と赤舟を捨てる排水路が上下で入れ替わる。青は着岸で加点、赤は港に入れると失点。</p>
+        </div>
+      </div>
+      <div class="tap-note">画面タップでも上下スワップ</div>
+    </section>
+
+    <section class="controls">
+      <button id="startButton" type="button">スタート</button>
+      <button id="retryButton" class="secondary" type="button">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "harbor-shift-highscore";
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const arena = document.getElementById("arena");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const modeValue = document.getElementById("modeValue");
+
+      const state = {
+        running: false,
+        started: false,
+        score: 0,
+        best: Number(localStorage.getItem(STORAGE_KEY) || 0),
+        combo: 0,
+        timeLeft: 60,
+        modeTopHarbor: true,
+        boats: [],
+        particles: [],
+        spawnTimer: 0,
+        lastTime: 0
+      };
+
+      const laneY = [184, 408];
+      const harborX = 336;
+      const drainX = 344;
+
+      function fitCanvas() {
+        const rect = arena.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      function phaseConfig(elapsed) {
+        if (elapsed < 30) {
+          return { speed: 158, spawn: 0.98, redChance: 0.25 };
+        }
+        if (elapsed < 45) {
+          return { speed: 198, spawn: 0.78, redChance: 0.36 };
+        }
+        return { speed: 238, spawn: 0.62, redChance: 0.44 };
+      }
+
+      function resetState() {
+        state.running = false;
+        state.started = false;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = 60;
+        state.modeTopHarbor = true;
+        state.boats = [];
+        state.particles = [];
+        state.spawnTimer = 0.2;
+        state.lastTime = 0;
+        syncHud();
+        overlayTitle.textContent = "上港と下港を切り替えろ";
+        overlayText.textContent = "タップするたびに、青舟を迎える港と赤舟を捨てる排水路が上下で入れ替わる。青は着岸で加点、赤は港に入れると失点。";
+        overlay.classList.remove("hidden");
+      }
+
+      function startGame() {
+        state.running = true;
+        state.started = true;
+        state.score = 0;
+        state.combo = 0;
+        state.timeLeft = 60;
+        state.modeTopHarbor = true;
+        state.boats = [];
+        state.particles = [];
+        state.spawnTimer = 0.2;
+        state.lastTime = 0;
+        syncHud();
+        overlay.classList.add("hidden");
+      }
+
+      function swapMode() {
+        if (!state.running) {
+          return;
+        }
+        state.modeTopHarbor = !state.modeTopHarbor;
+        modeValue.textContent = state.modeTopHarbor ? "上" : "下";
+        modeValue.classList.add("hot");
+        window.setTimeout(() => modeValue.classList.remove("hot"), 120);
+      }
+
+      function spawnBoat() {
+        const elapsed = 60 - state.timeLeft;
+        const config = phaseConfig(elapsed);
+        const lane = Math.random() < 0.5 ? 0 : 1;
+        const isRed = Math.random() < config.redChance;
+        state.boats.push({
+          x: -34,
+          y: laneY[lane],
+          lane,
+          red: isRed,
+          speed: config.speed * (0.92 + Math.random() * 0.2),
+          bob: Math.random() * Math.PI * 2
+        });
+      }
+
+      function burst(x, y, color, amount) {
+        for (let i = 0; i < amount; i += 1) {
+          state.particles.push({
+            x,
+            y,
+            vx: (Math.random() - 0.5) * 80,
+            vy: (Math.random() - 0.5) * 80,
+            life: 0.6 + Math.random() * 0.4,
+            size: 2 + Math.random() * 4,
+            color
+          });
+        }
+      }
+
+      function adjustScore(delta, keepCombo) {
+        state.score = Math.max(0, state.score + delta);
+        if (keepCombo) {
+          state.combo += 1;
+        } else {
+          state.combo = 0;
+        }
+        if (state.score > state.best) {
+          state.best = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.best));
+        }
+        syncHud();
+      }
+
+      function resolveBoat(boat) {
+        const topHarborLane = state.modeTopHarbor ? 0 : 1;
+        const harborLane = boat.lane === topHarborLane;
+        if (!boat.red && harborLane) {
+          burst(harborX, boat.y, "#89ffcb", 10);
+          adjustScore(10 + Math.min(state.combo, 8) * 2, true);
+          return;
+        }
+        if (boat.red && !harborLane) {
+          burst(drainX, boat.y, "#ffd36a", 6);
+          adjustScore(4, true);
+          return;
+        }
+        burst(harborLane ? harborX : drainX, boat.y, "#ff7d7d", 9);
+        adjustScore(-8, false);
+      }
+
+      function endGame() {
+        state.running = false;
+        overlayTitle.textContent = state.score >= state.best ? "ハイスコア更新" : "航路クローズ";
+        overlayText.textContent = "スコア " + state.score + " / BEST " + state.best + "。リトライでもう一度 60 秒の港さばき。";
+        overlay.classList.remove("hidden");
+      }
+
+      function syncHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = state.timeLeft.toFixed(1);
+        bestValue.textContent = String(state.best);
+        comboValue.textContent = "x" + Math.max(1, state.combo);
+        comboValue.classList.toggle("hot", state.combo >= 4);
+        modeValue.textContent = state.modeTopHarbor ? "上" : "下";
+      }
+
+      function drawBackground(width, height) {
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, "#1e4268");
+        gradient.addColorStop(0.52, "#0d1c33");
+        gradient.addColorStop(1, "#040d18");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.fillStyle = "rgba(255,255,255,0.05)";
+        for (let i = 0; i < 18; i += 1) {
+          ctx.beginPath();
+          ctx.arc(((i * 47) % width), 34 + (i % 4) * 16, 1.5 + (i % 3), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 2;
+        laneY.forEach((y) => {
+          ctx.beginPath();
+          ctx.moveTo(24, y);
+          ctx.lineTo(width - 24, y);
+          ctx.stroke();
+        });
+      }
+
+      function drawHarbor(width) {
+        const harborLane = state.modeTopHarbor ? 0 : 1;
+        laneY.forEach((y, lane) => {
+          const isHarbor = lane === harborLane;
+          ctx.fillStyle = isHarbor ? "rgba(109,231,255,0.18)" : "rgba(255,125,125,0.12)";
+          ctx.strokeStyle = isHarbor ? "#6de7ff" : "#ff7d7d";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.roundRect(width - 86, y - 54, 58, 108, 18);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = isHarbor ? "#89ffcb" : "#ffd36a";
+          ctx.font = "bold 14px Trebuchet MS";
+          ctx.textAlign = "center";
+          ctx.fillText(isHarbor ? "HARBOR" : "DRAIN", width - 57, y - 66);
+
+          if (isHarbor) {
+            ctx.fillStyle = "rgba(137,255,203,0.26)";
+            ctx.fillRect(width - 106, y - 10, 20, 20);
+          } else {
+            ctx.strokeStyle = "rgba(255,211,106,0.5)";
+            ctx.beginPath();
+            ctx.moveTo(width - 114, y - 18);
+            ctx.lineTo(width - 90, y + 18);
+            ctx.moveTo(width - 90, y - 18);
+            ctx.lineTo(width - 114, y + 18);
+            ctx.stroke();
+          }
+        });
+
+        ctx.fillStyle = "rgba(255,255,255,0.08)";
+        ctx.fillRect(24, laneY[0] - 96, 30, 320);
+        ctx.fillStyle = "rgba(255,255,255,0.72)";
+        ctx.font = "bold 14px Trebuchet MS";
+        ctx.textAlign = "center";
+        ctx.fillText("IN", 39, laneY[0] - 108);
+      }
+
+      function drawBoat(boat, elapsed) {
+        const bobOffset = Math.sin(elapsed * 4 + boat.bob) * 3;
+        ctx.save();
+        ctx.translate(boat.x, boat.y + bobOffset);
+        ctx.fillStyle = boat.red ? "#ff7d7d" : "#6de7ff";
+        ctx.strokeStyle = boat.red ? "#ffd0d0" : "#d8ffff";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-18, 8);
+        ctx.lineTo(14, 8);
+        ctx.lineTo(8, 16);
+        ctx.lineTo(-12, 16);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = boat.red ? "#ffd36a" : "#89ffcb";
+        ctx.beginPath();
+        ctx.moveTo(-4, 6);
+        ctx.lineTo(-4, -12);
+        ctx.lineTo(10, -2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function drawParticles(dt) {
+        state.particles = state.particles.filter((particle) => {
+          particle.life -= dt;
+          if (particle.life <= 0) {
+            return false;
+          }
+          particle.x += particle.vx * dt;
+          particle.y += particle.vy * dt;
+          particle.vx *= 0.96;
+          particle.vy *= 0.96;
+          ctx.globalAlpha = Math.max(0, particle.life);
+          ctx.fillStyle = particle.color;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          return true;
+        });
+      }
+
+      function render(now) {
+        if (!state.lastTime) {
+          state.lastTime = now;
+        }
+        const dt = Math.min((now - state.lastTime) / 1000, 0.032);
+        state.lastTime = now;
+
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        drawBackground(width, height);
+        drawHarbor(width);
+
+        if (state.running) {
+          state.timeLeft = Math.max(0, state.timeLeft - dt);
+          const elapsed = 60 - state.timeLeft;
+          const config = phaseConfig(elapsed);
+
+          state.spawnTimer -= dt;
+          if (state.spawnTimer <= 0) {
+            spawnBoat();
+            state.spawnTimer = config.spawn * (0.88 + Math.random() * 0.3);
+          }
+
+          state.boats.forEach((boat) => {
+            boat.x += boat.speed * dt;
+          });
+
+          const remaining = [];
+          state.boats.forEach((boat) => {
+            if (boat.x >= harborX) {
+              resolveBoat(boat);
+            } else {
+              remaining.push(boat);
+            }
+          });
+          state.boats = remaining;
+
+          if (state.timeLeft <= 0) {
+            state.timeLeft = 0;
+            syncHud();
+            endGame();
+          }
+        }
+
+        state.boats.forEach((boat) => drawBoat(boat, now / 1000));
+        drawParticles(dt);
+        syncHud();
+        requestAnimationFrame(render);
+      }
+
+      arena.addEventListener("pointerdown", (event) => {
+        if (event.target.closest("button, a")) {
+          return;
+        }
+        if (!state.started) {
+          startGame();
+          return;
+        }
+        swapMode();
+      });
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      window.addEventListener("resize", fitCanvas);
+
+      fitCanvas();
+      syncHud();
+      resetState();
+      requestAnimationFrame(render);
+    })();
+  </script>
+</body>
+</html>
