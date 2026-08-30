@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+  <title>フロストブルーム</title>
+  <meta name="description" content="霜の温室に咲く青い花だけをタップで収穫し、赤い棘花を避けて60秒でスコアを競うゲーム。" />
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6743751614716161" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg-top: #08131c;
+      --bg-bottom: #02060a;
+      --panel: rgba(9, 24, 33, 0.8);
+      --line: rgba(193, 242, 255, 0.16);
+      --text: #eefbff;
+      --muted: rgba(238, 251, 255, 0.72);
+      --ice: #9cefff;
+      --mint: #b8ffd2;
+      --gold: #ffe39a;
+      --thorn: #ff7a90;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Trebuchet MS", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(156, 239, 255, 0.16), transparent 24%),
+        radial-gradient(circle at 100% 18%, rgba(255, 227, 154, 0.12), transparent 24%),
+        linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+      color: var(--text);
+      touch-action: manipulation;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+    }
+
+    .shell {
+      position: relative;
+      width: min(100vw, 430px);
+      height: 100dvh;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+    }
+
+    .shell::before,
+    .shell::after {
+      content: "";
+      position: absolute;
+      inset: auto;
+      border-radius: 999px;
+      pointer-events: none;
+      filter: blur(30px);
+      opacity: 0.6;
+    }
+
+    .shell::before {
+      width: 180px;
+      height: 180px;
+      top: 18%;
+      left: -28px;
+      background: rgba(156, 239, 255, 0.16);
+    }
+
+    .shell::after {
+      width: 140px;
+      height: 140px;
+      right: -18px;
+      bottom: 20%;
+      background: rgba(255, 122, 144, 0.12);
+    }
+
+    .panel,
+    .hud,
+    .controls,
+    .garden {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 40px var(--shadow);
+    }
+
+    .panel {
+      padding: 14px 16px 12px;
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(238, 251, 255, 0.58);
+    }
+
+    h1 {
+      margin: 4px 0 0;
+      font-size: 1.72rem;
+      line-height: 1.04;
+      letter-spacing: 0.04em;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 0.94rem;
+      line-height: 1.55;
+    }
+
+    .hud {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .stat {
+      padding: 8px 4px;
+      border-radius: 14px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .label {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(238, 251, 255, 0.5);
+    }
+
+    .value {
+      font-size: 0.84rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .garden {
+      min-height: 0;
+      padding: 12px;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 10px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 24%),
+        linear-gradient(180deg, rgba(10, 28, 39, 0.96), rgba(2, 10, 15, 0.98));
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(4, 1fr);
+      gap: 10px;
+      min-height: 0;
+    }
+
+    .cell {
+      position: relative;
+      border-radius: 22px;
+      border: 1px solid rgba(193, 242, 255, 0.12);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at 30% 24%, rgba(255, 255, 255, 0.08), transparent 30%),
+        rgba(8, 22, 30, 0.92);
+      overflow: hidden;
+      transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .cell:active {
+      transform: scale(0.97);
+    }
+
+    .cell::before,
+    .cell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      transition: opacity 0.12s ease, transform 0.12s ease;
+    }
+
+    .cell::before {
+      background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.12), transparent 48%);
+      opacity: 0.6;
+    }
+
+    .cell::after {
+      inset: auto 18% 12% 18%;
+      height: 18%;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.26);
+      filter: blur(8px);
+      opacity: 0.4;
+    }
+
+    .cell.idle {
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .cell.blue {
+      border-color: rgba(156, 239, 255, 0.54);
+      box-shadow: 0 0 0 1px rgba(156, 239, 255, 0.1), 0 0 22px rgba(156, 239, 255, 0.18);
+    }
+
+    .cell.red {
+      border-color: rgba(255, 122, 144, 0.46);
+      box-shadow: 0 0 0 1px rgba(255, 122, 144, 0.08), 0 0 20px rgba(255, 122, 144, 0.14);
+    }
+
+    .cell.hit {
+      transform: scale(1.03);
+    }
+
+    .cell.bad {
+      transform: scale(0.98);
+    }
+
+    .bloom {
+      position: absolute;
+      inset: 14% 14% 18%;
+      display: grid;
+      place-items: center;
+      font-size: clamp(2rem, 8vw, 2.5rem);
+      transform: scale(0.4);
+      opacity: 0;
+      transition: transform 0.14s ease, opacity 0.14s ease, filter 0.14s ease;
+      filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.16));
+    }
+
+    .cell.blue .bloom,
+    .cell.red .bloom {
+      transform: scale(1);
+      opacity: 1;
+    }
+
+    .cell.blue .bloom {
+      filter: drop-shadow(0 0 20px rgba(156, 239, 255, 0.42));
+    }
+
+    .cell.red .bloom {
+      filter: drop-shadow(0 0 18px rgba(255, 122, 144, 0.34));
+    }
+
+    .spark {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      min-width: 34px;
+      padding: 4px 6px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(10px) scale(0.86);
+      transition: opacity 0.16s ease, transform 0.16s ease;
+      background: rgba(6, 18, 24, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .spark.show {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .spark.good {
+      color: var(--mint);
+    }
+
+    .spark.bad {
+      color: var(--thorn);
+    }
+
+    .legend {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 2px;
+      color: rgba(238, 251, 255, 0.74);
+      font-size: 12px;
+    }
+
+    .legend span {
+      flex: 1;
+      text-align: center;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .controls {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: center;
+    }
+
+    button,
+    .back-link {
+      appearance: none;
+      border: none;
+      border-radius: 16px;
+      min-height: 50px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-decoration: none;
+    }
+
+    button {
+      color: #041119;
+      background: linear-gradient(135deg, var(--gold), var(--ice));
+      box-shadow: 0 12px 24px rgba(156, 239, 255, 0.16);
+    }
+
+    button.secondary {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(3, 10, 16, 0.18), rgba(3, 10, 16, 0.88));
+      transition: opacity 0.2s ease;
+    }
+
+    .overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-card {
+      width: 100%;
+      padding: 22px 18px;
+      border-radius: 24px;
+      background: rgba(5, 18, 24, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 14px 42px rgba(0, 0, 0, 0.32);
+    }
+
+    .overlay-card h2 {
+      margin: 0 0 10px;
+      font-size: 1.34rem;
+    }
+
+    .overlay-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.62;
+    }
+
+    @media (max-width: 380px) {
+      .shell {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      h1 {
+        font-size: 1.48rem;
+      }
+
+      .sub {
+        font-size: 0.88rem;
+      }
+
+      .hud {
+        gap: 6px;
+      }
+
+      .value {
+        font-size: 0.76rem;
+      }
+
+      .grid {
+        gap: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="panel">
+      <div class="eyebrow">FROSTHOUSE TAP</div>
+      <h1>フロストブルーム</h1>
+      <p class="sub">青い霜花だけを摘み取り、赤い棘花は見送る。静かな温室が60秒だけ反射神経の仕事場になる。</p>
+    </section>
+
+    <section class="hud" aria-label="ゲーム情報">
+      <div class="stat"><div class="label">Score</div><div class="value" id="scoreValue">0</div></div>
+      <div class="stat"><div class="label">Time</div><div class="value" id="timeValue">60.0</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="bestValue">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="comboValue">x1</div></div>
+      <div class="stat"><div class="label">Bloom</div><div class="value" id="bloomValue">Calm</div></div>
+    </section>
+
+    <section class="garden" aria-label="フロストブルームの盤面">
+      <div class="grid" id="grid"></div>
+      <div class="legend">
+        <span>❄️ 青い花で加点</span>
+        <span>🌹 赤い花で失点</span>
+      </div>
+      <div class="overlay" id="overlay">
+        <div class="overlay-card">
+          <h2 id="overlayTitle">静かな温室、始業前。</h2>
+          <p id="overlayText">青い霜花だけを素早くタップ。赤い棘花は触らず、60秒でどこまでコンボを伸ばせるか。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button type="button" id="startButton">スタート</button>
+      <button type="button" class="secondary" id="retryButton">リトライ</button>
+      <a class="back-link" href="../../">戻る</a>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "webgame-frost-bloom-best";
+      const GAME_MS = 60000;
+      const COMBO_BONUS = 2;
+      const cells = [];
+      const scoreValue = document.getElementById("scoreValue");
+      const timeValue = document.getElementById("timeValue");
+      const bestValue = document.getElementById("bestValue");
+      const comboValue = document.getElementById("comboValue");
+      const bloomValue = document.getElementById("bloomValue");
+      const overlay = document.getElementById("overlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const overlayText = document.getElementById("overlayText");
+      const startButton = document.getElementById("startButton");
+      const retryButton = document.getElementById("retryButton");
+      const grid = document.getElementById("grid");
+
+      const state = {
+        running: false,
+        score: 0,
+        combo: 0,
+        bestCombo: 0,
+        timeLeft: GAME_MS,
+        lastFrame: 0,
+        spawnClock: 0,
+        highScore: Number(localStorage.getItem(STORAGE_KEY) || 0)
+      };
+
+      function phaseConfig() {
+        const elapsed = GAME_MS - state.timeLeft;
+        if (elapsed < 30000) {
+          return { label: "Calm", interval: 700, lifetime: 1100, redChance: 0.2, maxActive: 3, burstChance: 0.12 };
+        }
+        if (elapsed < 45000) {
+          return { label: "Sharp", interval: 540, lifetime: 900, redChance: 0.3, maxActive: 4, burstChance: 0.22 };
+        }
+        return { label: "Whiteout", interval: 390, lifetime: 720, redChance: 0.4, maxActive: 5, burstChance: 0.36 };
+      }
+
+      function updateHud() {
+        scoreValue.textContent = String(state.score);
+        timeValue.textContent = (state.timeLeft / 1000).toFixed(1);
+        bestValue.textContent = String(state.highScore);
+        comboValue.textContent = `x${Math.max(1, state.combo)}`;
+        comboValue.style.color = state.combo >= 6 ? "var(--gold)" : "";
+        bloomValue.textContent = phaseConfig().label;
+      }
+
+      function createCell(index) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "cell idle";
+        button.setAttribute("aria-label", `panel ${index + 1}`);
+
+        const bloom = document.createElement("div");
+        bloom.className = "bloom";
+        bloom.textContent = "·";
+
+        const spark = document.createElement("div");
+        spark.className = "spark";
+
+        button.appendChild(bloom);
+        button.appendChild(spark);
+        grid.appendChild(button);
+
+        const cell = {
+          index,
+          element: button,
+          bloom,
+          spark,
+          type: "idle",
+          expiresAt: 0,
+          sparkTimer: 0,
+          flashTimer: 0
+        };
+
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          handleTap(cell);
+        });
+
+        cells.push(cell);
+      }
+
+      function setCell(cell, type, expiresAt) {
+        cell.type = type;
+        cell.expiresAt = expiresAt;
+        cell.element.className = `cell ${type}`;
+        cell.bloom.textContent = type === "blue" ? "❄️" : type === "red" ? "🌹" : "·";
+      }
+
+      function clearCell(cell) {
+        setCell(cell, "idle", 0);
+      }
+
+      function flashCell(cell, className) {
+        cell.element.classList.add(className);
+        clearTimeout(cell.flashTimer);
+        cell.flashTimer = setTimeout(() => {
+          cell.element.classList.remove(className);
+        }, 130);
+      }
+
+      function showSpark(cell, text, kind) {
+        cell.spark.textContent = text;
+        cell.spark.className = `spark ${kind} show`;
+        clearTimeout(cell.sparkTimer);
+        cell.sparkTimer = setTimeout(() => {
+          cell.spark.className = `spark ${kind}`;
+        }, 220);
+      }
+
+      function handleTap(cell) {
+        if (!state.running) {
+          return;
+        }
+
+        if (cell.type === "blue") {
+          state.combo += 1;
+          state.bestCombo = Math.max(state.bestCombo, state.combo);
+          const gain = 10 + Math.max(0, state.combo - 1) * COMBO_BONUS;
+          state.score += gain;
+          clearCell(cell);
+          flashCell(cell, "hit");
+          showSpark(cell, `+${gain}`, "good");
+        } else if (cell.type === "red") {
+          state.score = Math.max(0, state.score - 10);
+          state.combo = 0;
+          clearCell(cell);
+          flashCell(cell, "bad");
+          showSpark(cell, "-10", "bad");
+        } else {
+          flashCell(cell, "bad");
+          showSpark(cell, "miss", "bad");
+        }
+
+        updateHud();
+      }
+
+      function spawnBloom(now) {
+        const config = phaseConfig();
+        const idleCells = cells.filter((cell) => cell.type === "idle");
+        const activeCount = cells.length - idleCells.length;
+        if (!idleCells.length || activeCount >= config.maxActive) {
+          return;
+        }
+
+        const spawnCount = Math.min(
+          idleCells.length,
+          activeCount <= config.maxActive - 2 && Math.random() < config.burstChance ? 2 : 1
+        );
+
+        for (let i = 0; i < spawnCount; i += 1) {
+          const pool = cells.filter((cell) => cell.type === "idle");
+          if (!pool.length) {
+            break;
+          }
+          const cell = pool[Math.floor(Math.random() * pool.length)];
+          const type = Math.random() < config.redChance ? "red" : "blue";
+          setCell(cell, type, now + config.lifetime + Math.random() * 220);
+        }
+      }
+
+      function endGame() {
+        state.running = false;
+        cells.forEach(clearCell);
+        const isNewHighScore = state.score > state.highScore;
+        if (isNewHighScore) {
+          state.highScore = state.score;
+          localStorage.setItem(STORAGE_KEY, String(state.highScore));
+        }
+        overlayTitle.textContent = isNewHighScore ? "温室の新記録。" : "収穫終了。";
+        overlayText.textContent = `スコア ${state.score} / ベストコンボ ${state.bestCombo}。もう一度タップの流れを整えるならリトライ。`;
+        overlay.classList.remove("hidden");
+        startButton.textContent = "スタート";
+        updateHud();
+      }
+
+      function startGame() {
+        state.running = true;
+        state.score = 0;
+        state.combo = 0;
+        state.bestCombo = 0;
+        state.timeLeft = GAME_MS;
+        state.lastFrame = performance.now();
+        state.spawnClock = 0;
+        cells.forEach(clearCell);
+        overlay.classList.add("hidden");
+        startButton.textContent = "プレイ中";
+        updateHud();
+      }
+
+      function tick(now) {
+        if (state.running) {
+          const delta = Math.min(32, now - state.lastFrame);
+          state.lastFrame = now;
+          state.timeLeft = Math.max(0, state.timeLeft - delta);
+          state.spawnClock += delta;
+
+          const config = phaseConfig();
+          if (state.spawnClock >= config.interval) {
+            state.spawnClock -= config.interval;
+            spawnBloom(now);
+          }
+
+          cells.forEach((cell) => {
+            if (cell.type !== "idle" && now >= cell.expiresAt) {
+              if (cell.type === "blue") {
+                state.combo = 0;
+              }
+              clearCell(cell);
+            }
+          });
+
+          if (state.timeLeft <= 0) {
+            endGame();
+          } else {
+            updateHud();
+          }
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      for (let i = 0; i < 12; i += 1) {
+        createCell(i);
+      }
+
+      bestValue.textContent = String(state.highScore);
+      updateHud();
+
+      startButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        if (!state.running) {
+          startGame();
+        }
+      });
+
+      retryButton.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        startGame();
+      });
+
+      requestAnimationFrame((now) => {
+        state.lastFrame = now;
+        requestAnimationFrame(tick);
+      });
+    })();
+  </script>
+</body>
+</html>
